@@ -1,0 +1,16 @@
+node_modules
+dist
+dist-ssr
+*.local
+.vite
+.vercel
+.DS_Store
+.env
+.env.local
+.env.*.local
+*.log
+coverage
+
+# Local working files
+.claude/
+*.tsbuildinfo
