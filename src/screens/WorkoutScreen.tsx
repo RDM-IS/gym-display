@@ -2,6 +2,7 @@ import { useEffect, useReducer, useRef, useState } from "react";
 import {
   formatMMSS,
   initTimer,
+  isFirstInterval,
   selectCurrent,
   selectElapsedSec,
   selectNext,
@@ -32,14 +33,16 @@ const KIND_CLASS: Record<IntervalKind, string> = {
 interface Props {
   intervals: Interval[];
   onDone: (total_elapsed_sec: number) => void;
+  onBackToHome: () => void;
 }
 
-export default function WorkoutScreen({ intervals, onDone }: Props) {
+export default function WorkoutScreen({ intervals, onDone, onBackToHome }: Props) {
   const [state, dispatch] = useReducer(timerReducer, intervals, initTimer);
   const [now, setNow] = useState(() => performance.now());
   const [muted, setMuted] = useState(isMuted());
   const lastIndexRef = useRef(0);
   const lastBeepSecRef = useRef<number | null>(null);
+  const suppressIndexAudioRef = useRef(false);
   const doneFiredRef = useRef(false);
 
   useEffect(() => {
@@ -57,59 +60,55 @@ export default function WorkoutScreen({ intervals, onDone }: Props) {
     };
   }, []);
 
+  // Ticker — setInterval so it survives background-tab throttling (rAF gets paused).
+  // 100ms gives smooth seconds; performance.now() drives actual timing accuracy.
   useEffect(() => {
-    let raf = 0;
-    function tick() {
+    if (state.status !== "running") return;
+    const id = window.setInterval(() => {
       const t = performance.now();
       setNow(t);
       dispatch({ type: "TICK", now_ms: t });
-      raf = requestAnimationFrame(tick);
-    }
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, []);
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "m" || e.key === "M") {
-        const next = toggleMuted();
-        setMuted(next);
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+    }, 100);
+    return () => window.clearInterval(id);
+  }, [state.status]);
 
   const current = selectCurrent(state);
   const upNext = selectNext(state);
   const remaining = selectRemainingSec(state, now);
   const elapsed = selectElapsedSec(state, now);
 
-  // Audio: end-of-interval cues fire when current_index changes
+  // Audio: end-of-prev-interval cue on index change (unless suppressed)
   useEffect(() => {
     if (state.current_index === lastIndexRef.current) return;
-    const prev = state.intervals[lastIndexRef.current];
-    if (prev) {
-      switch (prev.kind) {
-        case "warmup":
-        case "work":
-          beepEndOfWork();
-          break;
-        case "rest":
-          beepEndOfRest();
-          break;
-        case "round_break":
-          beepEndOfRound();
-          break;
-        case "cooldown":
-          break;
+    if (!suppressIndexAudioRef.current) {
+      const prev = state.intervals[lastIndexRef.current];
+      if (prev) {
+        switch (prev.kind) {
+          case "warmup":
+          case "work":
+            beepEndOfWork();
+            break;
+          case "rest":
+            beepEndOfRest();
+            break;
+          case "round_break":
+            beepEndOfRound();
+            break;
+          case "cooldown":
+            break;
+        }
       }
     }
+    suppressIndexAudioRef.current = false;
     lastIndexRef.current = state.current_index;
-    lastBeepSecRef.current = null;
   }, [state.current_index, state.intervals]);
 
-  // Audio: 3-2-1 countdown beeps
+  // Reset countdown-beep ref whenever the current interval restarts (any cause)
+  useEffect(() => {
+    lastBeepSecRef.current = null;
+  }, [state.interval_started_at_ms]);
+
+  // Audio: 3-2-1 countdown
   useEffect(() => {
     if (state.status !== "running") return;
     const sec = Math.ceil(remaining);
@@ -128,13 +127,97 @@ export default function WorkoutScreen({ intervals, onDone }: Props) {
     }
   }, [state.status, elapsed, onDone]);
 
+  // Action helpers
+  const isPaused = state.status === "paused";
+
+  function togglePause() {
+    if (state.status === "running") {
+      dispatch({ type: "PAUSE", now_ms: performance.now() });
+    } else if (state.status === "paused") {
+      dispatch({ type: "RESUME", now_ms: performance.now() });
+    }
+  }
+  function restartInterval() {
+    dispatch({ type: "RESTART_INTERVAL", now_ms: performance.now() });
+  }
+  function prevInterval() {
+    // Reducer clamps at 0; no closure-state guard (would go stale inside the keyboard handler).
+    suppressIndexAudioRef.current = true;
+    dispatch({ type: "PREV_INTERVAL", now_ms: performance.now() });
+  }
+  function nextInterval() {
+    dispatch({ type: "NEXT_INTERVAL", now_ms: performance.now() });
+  }
+  function restartWorkout() {
+    suppressIndexAudioRef.current = true;
+    dispatch({ type: "RESTART_WORKOUT", now_ms: performance.now() });
+  }
+  function endWorkout() {
+    suppressIndexAudioRef.current = true;
+    dispatch({ type: "END_WORKOUT" });
+  }
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.target instanceof HTMLElement && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      switch (e.key) {
+        case " ":
+          e.preventDefault();
+          togglePause();
+          return;
+        case "ArrowRight":
+        case "n":
+        case "N":
+          e.preventDefault();
+          nextInterval();
+          return;
+        case "ArrowLeft":
+        case "p":
+        case "P":
+          e.preventDefault();
+          prevInterval();
+          return;
+        case "r":
+          e.preventDefault();
+          restartInterval();
+          return;
+        case "R":
+          e.preventDefault();
+          restartWorkout();
+          return;
+        case "e":
+        case "E":
+          e.preventDefault();
+          endWorkout();
+          return;
+        case "h":
+        case "H":
+          e.preventDefault();
+          onBackToHome();
+          return;
+        case "m":
+        case "M":
+          setMuted(toggleMuted());
+          return;
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.status, onBackToHome]);
+
   if (!current) return null;
 
-  const flashCountdown = state.status === "running" && Math.ceil(remaining) <= 3 && remaining > 0;
-  const containerClass = `workout ${flashCountdown ? "tv--countdown" : KIND_CLASS[current.kind]}`;
+  const flashCountdown =
+    state.status === "running" && Math.ceil(remaining) <= 3 && remaining > 0;
+  const containerClass = `workout ${
+    flashCountdown ? "tv--countdown" : KIND_CLASS[current.kind]
+  } ${isPaused ? "workout--paused" : ""}`;
 
   return (
-    <div className={containerClass} style={{ transition: "background-color 200ms ease" }}>
+    <div className={containerClass}>
       <div className="workout-top">
         <div>
           {current.round && current.total_rounds
@@ -160,10 +243,45 @@ export default function WorkoutScreen({ intervals, onDone }: Props) {
         {current.description && (
           <div className="workout-desc">{current.description}</div>
         )}
+        {isPaused && <div className="paused-badge">Paused</div>}
       </div>
 
       <div className="workout-bottom">
         {upNext ? `Up next: ${upNext.name}` : "Last interval"}
+      </div>
+
+      <div className="controls">
+        <button
+          className="control-btn"
+          onClick={prevInterval}
+          disabled={isFirstInterval(state)}
+          aria-label="Previous exercise"
+        >
+          ◀ Prev
+        </button>
+        <button className="control-btn" onClick={restartInterval} aria-label="Restart exercise">
+          ↻ Restart
+        </button>
+        <button
+          className="control-btn control-btn--primary"
+          onClick={togglePause}
+          aria-label={isPaused ? "Resume" : "Pause"}
+        >
+          {isPaused ? "▶ Resume" : "⏸ Pause"}
+        </button>
+        <button className="control-btn" onClick={nextInterval} aria-label="Skip to next">
+          Skip ▶
+        </button>
+        <div className="control-spacer" />
+        <button className="control-btn" onClick={restartWorkout} aria-label="Restart workout">
+          ⟲ Restart workout
+        </button>
+        <button className="control-btn control-btn--danger" onClick={endWorkout} aria-label="End workout">
+          End
+        </button>
+        <button className="control-btn" onClick={onBackToHome} aria-label="Back to home">
+          ⌂ Home
+        </button>
       </div>
 
       {muted && <div className="muted-badge">Muted</div>}

@@ -147,7 +147,7 @@ export function buildIntervalsForPlan(plan: Plan): Interval[] {
   return buildIntervals(plan.blocks);
 }
 
-export type TimerStatus = "idle" | "running" | "done";
+export type TimerStatus = "idle" | "running" | "paused" | "done";
 
 export interface TimerState {
   intervals: Interval[];
@@ -155,11 +155,19 @@ export interface TimerState {
   status: TimerStatus;
   workout_started_at_ms: number | null;
   interval_started_at_ms: number | null;
+  paused_at_ms: number | null;
 }
 
 export type TimerAction =
   | { type: "START"; now_ms: number }
   | { type: "TICK"; now_ms: number }
+  | { type: "PAUSE"; now_ms: number }
+  | { type: "RESUME"; now_ms: number }
+  | { type: "RESTART_INTERVAL"; now_ms: number }
+  | { type: "PREV_INTERVAL"; now_ms: number }
+  | { type: "NEXT_INTERVAL"; now_ms: number }
+  | { type: "RESTART_WORKOUT"; now_ms: number }
+  | { type: "END_WORKOUT" }
   | { type: "RESET" };
 
 export function initTimer(intervals: Interval[]): TimerState {
@@ -169,7 +177,14 @@ export function initTimer(intervals: Interval[]): TimerState {
     status: "idle",
     workout_started_at_ms: null,
     interval_started_at_ms: null,
+    paused_at_ms: null,
   };
+}
+
+function effectiveNow(state: TimerState, now_ms: number): number {
+  return state.status === "paused" && state.paused_at_ms !== null
+    ? state.paused_at_ms
+    : now_ms;
 }
 
 export function timerReducer(state: TimerState, action: TimerAction): TimerState {
@@ -184,6 +199,7 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
         status: "running",
         workout_started_at_ms: action.now_ms,
         interval_started_at_ms: action.now_ms,
+        paused_at_ms: null,
       };
     }
     case "TICK": {
@@ -209,6 +225,74 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
       if (idx === state.current_index) return state;
       return { ...state, current_index: idx, interval_started_at_ms: interval_start };
     }
+    case "PAUSE": {
+      if (state.status !== "running") return state;
+      return { ...state, status: "paused", paused_at_ms: action.now_ms };
+    }
+    case "RESUME": {
+      if (state.status !== "paused" || state.paused_at_ms === null) return state;
+      const shift = action.now_ms - state.paused_at_ms;
+      return {
+        ...state,
+        status: "running",
+        interval_started_at_ms:
+          state.interval_started_at_ms !== null
+            ? state.interval_started_at_ms + shift
+            : action.now_ms,
+        workout_started_at_ms:
+          state.workout_started_at_ms !== null
+            ? state.workout_started_at_ms + shift
+            : action.now_ms,
+        paused_at_ms: null,
+      };
+    }
+    case "RESTART_INTERVAL": {
+      if (state.status === "idle" || state.status === "done") return state;
+      return {
+        ...state,
+        interval_started_at_ms: action.now_ms,
+        paused_at_ms: state.status === "paused" ? action.now_ms : null,
+      };
+    }
+    case "PREV_INTERVAL": {
+      if (state.status === "idle" || state.status === "done") return state;
+      const idx = Math.max(0, state.current_index - 1);
+      return {
+        ...state,
+        current_index: idx,
+        interval_started_at_ms: action.now_ms,
+        paused_at_ms: state.status === "paused" ? action.now_ms : null,
+      };
+    }
+    case "NEXT_INTERVAL": {
+      if (state.status === "idle" || state.status === "done") return state;
+      const next_idx = state.current_index + 1;
+      if (next_idx >= state.intervals.length) {
+        return { ...state, status: "done", interval_started_at_ms: null, paused_at_ms: null };
+      }
+      return {
+        ...state,
+        current_index: next_idx,
+        interval_started_at_ms: action.now_ms,
+        paused_at_ms: state.status === "paused" ? action.now_ms : null,
+      };
+    }
+    case "RESTART_WORKOUT": {
+      if (state.intervals.length === 0) {
+        return { ...state, status: "done", paused_at_ms: null };
+      }
+      return {
+        ...state,
+        status: "running",
+        current_index: 0,
+        workout_started_at_ms: action.now_ms,
+        interval_started_at_ms: action.now_ms,
+        paused_at_ms: null,
+      };
+    }
+    case "END_WORKOUT": {
+      return { ...state, status: "done", interval_started_at_ms: null, paused_at_ms: null };
+    }
     case "RESET":
       return initTimer(state.intervals);
   }
@@ -219,12 +303,22 @@ export function selectRemainingSec(state: TimerState, now_ms: number): number {
   if (state.status === "done") return 0;
   const cur = state.intervals[state.current_index];
   if (!cur || state.interval_started_at_ms === null) return 0;
-  return Math.max(0, cur.duration_sec - (now_ms - state.interval_started_at_ms) / 1000);
+  const t = effectiveNow(state, now_ms);
+  return Math.max(0, cur.duration_sec - (t - state.interval_started_at_ms) / 1000);
 }
 
 export function selectElapsedSec(state: TimerState, now_ms: number): number {
   if (state.workout_started_at_ms === null) return 0;
-  return Math.max(0, (now_ms - state.workout_started_at_ms) / 1000);
+  const t = effectiveNow(state, now_ms);
+  return Math.max(0, (t - state.workout_started_at_ms) / 1000);
+}
+
+export function isFirstInterval(state: TimerState): boolean {
+  return state.current_index <= 0;
+}
+
+export function isLastInterval(state: TimerState): boolean {
+  return state.current_index >= state.intervals.length - 1;
 }
 
 export function selectCurrent(state: TimerState): Interval | null {

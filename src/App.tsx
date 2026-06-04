@@ -60,6 +60,12 @@ export default function App() {
     setScreen("setup");
   }, []);
 
+  const onBackToHome = useCallback(() => {
+    try { localStorage.removeItem(IN_PROGRESS_KEY); } catch { /* ignore */ }
+    setInterrupted(false);
+    setScreen("setup");
+  }, []);
+
   if (load.loading) {
     return (
       <div className="tv" style={{ justifyContent: "center", alignItems: "center" }}>
@@ -112,7 +118,12 @@ export default function App() {
         <SetupScreen plan={result.plan} interrupted={interrupted} onStart={onStart} />
       )}
       {screen === "workout" && (
-        <WorkoutScreen intervals={intervals} onDone={onDone} />
+        <WorkoutScreen
+          key={`workout-${result.plan.plan_id}`}
+          intervals={intervals}
+          onDone={onDone}
+          onBackToHome={onBackToHome}
+        />
       )}
       {screen === "done" && (
         <DoneScreen total_elapsed_sec={totalElapsedSec} onBack={onBackToStart} />
