@@ -1,42 +1,91 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import SetupScreen from "./screens/SetupScreen";
 import WorkoutScreen from "./screens/WorkoutScreen";
 import DoneScreen from "./screens/DoneScreen";
 import ErrorScreen from "./screens/ErrorScreen";
 import RestDayScreen from "./screens/RestDayScreen";
-import { fetchTodayPlan, type FetchTodayResult } from "./lib/api";
+import StatusScreen from "./screens/StatusScreen";
+import Nav from "./components/Nav";
+import {
+  fetchStatus,
+  fetchTodayPlan,
+  type FetchStatusResult,
+  type FetchTodayResult,
+} from "./lib/api";
 import { buildIntervalsForPlan } from "./lib/timer";
 import { initAudio } from "./lib/audio";
+import { shouldRedirectTodayToStatus, usePath } from "./lib/routing";
 import type { Plan } from "./lib/types";
 
-type Screen = "setup" | "workout" | "done";
+type WorkoutFlow = "setup" | "workout" | "done";
 
 const IN_PROGRESS_KEY = "gym_in_progress";
 
-interface LoadState {
+interface PlanLoad {
   loading: boolean;
   result: FetchTodayResult | null;
 }
 
+interface StatusLoad {
+  loading: boolean;
+  result: FetchStatusResult | null;
+}
+
 export default function App() {
-  const [load, setLoad] = useState<LoadState>({ loading: true, result: null });
-  const [screen, setScreen] = useState<Screen>("setup");
+  const [route, navigate] = usePath();
+  const [planLoad, setPlanLoad] = useState<PlanLoad>({ loading: true, result: null });
+  const [statusLoad, setStatusLoad] = useState<StatusLoad>({ loading: true, result: null });
+  const [flow, setFlow] = useState<WorkoutFlow>("setup");
   const [totalElapsedSec, setTotalElapsedSec] = useState(0);
   const [interrupted, setInterrupted] = useState(
-    () => typeof localStorage !== "undefined" && localStorage.getItem(IN_PROGRESS_KEY) === "1"
+    () =>
+      typeof localStorage !== "undefined" &&
+      localStorage.getItem(IN_PROGRESS_KEY) === "1"
   );
+  const autoRedirectedRef = useRef(false);
 
-  const refresh = useCallback(async () => {
-    setLoad({ loading: true, result: null });
+  const refreshPlan = useCallback(async () => {
+    setPlanLoad({ loading: true, result: null });
     const result = await fetchTodayPlan();
-    setLoad({ loading: false, result });
+    setPlanLoad({ loading: false, result });
+  }, []);
+
+  const refreshStatus = useCallback(async () => {
+    setStatusLoad({ loading: true, result: null });
+    const result = await fetchStatus();
+    setStatusLoad({ loading: false, result });
   }, []);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    void refreshPlan();
+    void refreshStatus();
+  }, [refreshPlan, refreshStatus]);
 
-  const plan: Plan | null = load.result?.status === "ok" ? load.result.plan : null;
+  // Auto-redirect /today → /status when today is rest / missing / already logged.
+  // Fires once after status loads. Skipped if user is mid-workout flow.
+  useEffect(() => {
+    if (autoRedirectedRef.current) return;
+    if (route !== "today") return;
+    if (flow !== "setup") return;
+    if (statusLoad.loading) return;
+    if (statusLoad.result?.status !== "ok") return;
+    const t = statusLoad.result.data.today_summary;
+    if (!t) return;
+    if (
+      shouldRedirectTodayToStatus({
+        exists: t.exists,
+        is_skipped: t.is_skipped,
+        is_logged: t.is_logged,
+        session_type: t.session_type,
+      })
+    ) {
+      autoRedirectedRef.current = true;
+      navigate("status", { replace: true });
+    }
+  }, [route, flow, statusLoad, navigate]);
+
+  const plan: Plan | null =
+    planLoad.result?.status === "ok" ? planLoad.result.plan : null;
   const intervals = useMemo(
     () => (plan ? buildIntervalsForPlan(plan) : []),
     [plan]
@@ -47,46 +96,100 @@ export default function App() {
     initAudio();
     try { localStorage.setItem(IN_PROGRESS_KEY, "1"); } catch { /* ignore */ }
     setInterrupted(false);
-    setScreen("workout");
+    setFlow("workout");
   }, [plan]);
 
   const onDone = useCallback((elapsed_sec: number) => {
     setTotalElapsedSec(elapsed_sec);
     try { localStorage.removeItem(IN_PROGRESS_KEY); } catch { /* ignore */ }
-    setScreen("done");
+    setFlow("done");
   }, []);
 
   const onBackToStart = useCallback(() => {
-    setScreen("setup");
+    setFlow("setup");
   }, []);
 
   const onBackToHome = useCallback(() => {
     try { localStorage.removeItem(IN_PROGRESS_KEY); } catch { /* ignore */ }
     setInterrupted(false);
-    setScreen("setup");
+    setFlow("setup");
   }, []);
 
-  if (load.loading) {
+  // Render --------------------------------------------------------------
+
+  // The workout screen is full-immersive — never show nav over it.
+  const showNav = route === "status" || flow !== "workout";
+
+  // ---- /status route ----
+  if (route === "status") {
+    if (statusLoad.loading) {
+      return (
+        <>
+          {showNav && <Nav route={route} onNavigate={navigate} />}
+          <div className="tv" style={{ justifyContent: "center", alignItems: "center" }}>
+            <div className="tv-h2 tv-meta">Loading…</div>
+          </div>
+        </>
+      );
+    }
+    const sr = statusLoad.result;
+    if (!sr || sr.status === "error") {
+      return (
+        <>
+          {showNav && <Nav route={route} onNavigate={navigate} />}
+          <ErrorScreen
+            title="Status unavailable"
+            message={sr?.status === "error" ? sr.message : "Failed to load status."}
+            onRetry={refreshStatus}
+          />
+        </>
+      );
+    }
     return (
-      <div className="tv" style={{ justifyContent: "center", alignItems: "center" }}>
-        <div className="tv-h2 tv-meta">Loading…</div>
-      </div>
+      <>
+        {showNav && <Nav route={route} onNavigate={navigate} />}
+        <StatusScreen data={sr.data} />
+      </>
     );
   }
 
-  const result = load.result;
+  // ---- /today route (default) ----
+  if (planLoad.loading) {
+    return (
+      <>
+        {showNav && <Nav route={route} onNavigate={navigate} />}
+        <div className="tv" style={{ justifyContent: "center", alignItems: "center" }}>
+          <div className="tv-h2 tv-meta">Loading…</div>
+        </div>
+      </>
+    );
+  }
+
+  const result = planLoad.result;
   if (!result) return null;
 
   if (result.status === "no_plan") {
-    return <ErrorScreen title="No plan today" message={result.message} onRetry={refresh} />;
+    return (
+      <>
+        {showNav && <Nav route={route} onNavigate={navigate} />}
+        <ErrorScreen
+          title="No plan today"
+          message={result.message}
+          onRetry={refreshPlan}
+        />
+      </>
+    );
   }
   if (result.status === "error") {
     return (
-      <ErrorScreen
-        title="No plan available"
-        message={result.message}
-        onRetry={refresh}
-      />
+      <>
+        {showNav && <Nav route={route} onNavigate={navigate} />}
+        <ErrorScreen
+          title="No plan available"
+          message={result.message}
+          onRetry={refreshPlan}
+        />
+      </>
     );
   }
 
@@ -95,6 +198,7 @@ export default function App() {
   if (result.plan.is_skipped || result.plan.session_type === "rest_mobility") {
     return (
       <>
+        {showNav && <Nav route={route} onNavigate={navigate} />}
         {offline && <div className="offline-badge">Offline</div>}
         <RestDayScreen plan={result.plan} />
       </>
@@ -103,21 +207,29 @@ export default function App() {
 
   if (intervals.length === 0) {
     return (
-      <ErrorScreen
-        title="Plan has no intervals"
-        message="Plan loaded but produced no intervals. Check the plan in Artemis."
-        onRetry={refresh}
-      />
+      <>
+        {showNav && <Nav route={route} onNavigate={navigate} />}
+        <ErrorScreen
+          title="Plan has no intervals"
+          message="Plan loaded but produced no intervals. Check the plan in Artemis."
+          onRetry={refreshPlan}
+        />
+      </>
     );
   }
 
   return (
     <>
+      {showNav && <Nav route={route} onNavigate={navigate} />}
       {offline && <div className="offline-badge">Offline</div>}
-      {screen === "setup" && (
-        <SetupScreen plan={result.plan} interrupted={interrupted} onStart={onStart} />
+      {flow === "setup" && (
+        <SetupScreen
+          plan={result.plan}
+          interrupted={interrupted}
+          onStart={onStart}
+        />
       )}
-      {screen === "workout" && (
+      {flow === "workout" && (
         <WorkoutScreen
           key={`workout-${result.plan.plan_id}`}
           intervals={intervals}
@@ -125,7 +237,7 @@ export default function App() {
           onBackToHome={onBackToHome}
         />
       )}
-      {screen === "done" && (
+      {flow === "done" && (
         <DoneScreen total_elapsed_sec={totalElapsedSec} onBack={onBackToStart} />
       )}
     </>

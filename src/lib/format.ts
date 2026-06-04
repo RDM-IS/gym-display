@@ -1,5 +1,7 @@
 import type { Plan, SessionType } from "./types";
 
+export type { SessionType } from "./types";
+
 const SESSION_LABELS: Record<SessionType, string> = {
   strength_a: "Strength A",
   strength_b: "Strength B",
@@ -10,7 +12,7 @@ const SESSION_LABELS: Record<SessionType, string> = {
   rest_mobility: "Rest / Mobility",
 };
 
-export function sessionLabel(plan: Plan): string {
+export function sessionLabel(plan: Plan | { session_type: SessionType }): string {
   return SESSION_LABELS[plan.session_type] ?? plan.session_type;
 }
 

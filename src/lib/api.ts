@@ -1,4 +1,4 @@
-import type { NoPlanResponse, Plan } from "./types";
+import type { NoPlanResponse, Plan, StatusResponse } from "./types";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_KEY ?? "";
@@ -66,6 +66,26 @@ export async function fetchTodayPlan(): Promise<FetchTodayResult> {
     return {
       status: "error",
       message: err instanceof Error ? err.message : "Failed to load plan.",
+    };
+  }
+}
+
+export type FetchStatusResult =
+  | { status: "ok"; data: StatusResponse }
+  | { status: "error"; message: string };
+
+export async function fetchStatus(): Promise<FetchStatusResult> {
+  try {
+    const headers: Record<string, string> = { Accept: "application/json" };
+    if (API_KEY) headers["X-API-Key"] = API_KEY;
+    const res = await fetch(`${API_BASE}/api/health/status`, { headers });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = (await res.json()) as StatusResponse;
+    return { status: "ok", data };
+  } catch (err) {
+    return {
+      status: "error",
+      message: err instanceof Error ? err.message : "Failed to load status.",
     };
   }
 }

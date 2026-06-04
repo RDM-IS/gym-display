@@ -92,3 +92,76 @@ export interface Interval {
   round?: number;
   total_rounds?: number;
 }
+
+// ---------------------------------------------------------------------------
+// /api/health/status payload
+// ---------------------------------------------------------------------------
+
+export interface DayStripEntry {
+  plan_date: string;
+  session_type: SessionType | null;
+  is_skipped: boolean;
+  is_logged: boolean;
+  is_today: boolean;
+  phase: number | null;
+  week_num: number | null;
+}
+
+export interface ExerciseLog {
+  log_type: "strength_set" | "cardio_block";
+  exercise: string | null;
+  set_num: number | null;
+  reps_done: number | null;
+  weight_lbs: number | null;
+  duration_sec: number | null;
+  distance_m: number | null;
+  hr_avg: number | null;
+  hr_peak: number | null;
+  rpe_actual: number | null;
+  notes: string | null;
+}
+
+export interface LoggedSession {
+  plan_id: number;
+  plan_date: string;
+  session_type: SessionType;
+  phase: number;
+  week_num: number;
+  rpe_actual: number | null;
+  logged_at: string;
+  notes: string | null;
+  exercises: ExerciseLog[];
+}
+
+export interface Banner {
+  phase: number;
+  week_num: number;
+  phase_name: string | null;
+  as_of_date: string;
+}
+
+export interface TodaySummary {
+  plan_id: number | null;
+  session_type: SessionType | null;
+  is_skipped: boolean;
+  is_logged: boolean;
+  exists: boolean;
+}
+
+export interface TrendPoint {
+  date: string;
+  value: number;
+}
+
+export interface StatusResponse {
+  today: string;
+  window_start: string;
+  window_end: string;
+  today_summary: TodaySummary;
+  banner: Banner | null;
+  day_strip: DayStripEntry[];
+  most_recent_session: LoggedSession | null;
+  same_type_history: LoggedSession[];
+  rpe_trend: TrendPoint[];
+  weight_trend: TrendPoint[];
+}
