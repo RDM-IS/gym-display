@@ -3,6 +3,7 @@ import {
   buildIntervals,
   initTimer,
   selectCurrent,
+  selectElapsedSec,
   selectRemainingSec,
   timerReducer,
 } from "../src/lib/timer";
@@ -169,4 +170,83 @@ describe("timerReducer", () => {
     expect(s.status).toBe("idle");
     expect(s.current_index).toBe(0);
   });
+});
+
+describe("timerReducer — controls", () => {
+  function start() {
+    return timerReducer(initTimer(buildIntervals(circuit)), { type: "START", now_ms: 0 });
+  }
+
+  it("PAUSE freezes remaining_sec; later ticks don't advance it", () => {
+    let s = start(); // warmup, 300s
+    // 100s in
+    expect(selectRemainingSec(s, 100_000)).toBe(200);
+    s = timerReducer(s, { type: "PAUSE", now_ms: 100_000 });
+    expect(s.status).toBe("paused");
+    // even with now_ms much later, remaining still 200s
+    expect(selectRemainingSec(s, 500_000)).toBe(200);
+    expect(selectElapsedSec(s, 500_000)).toBe(100);
+  });
+
+  it("RESUME shifts anchors so the pause gap doesn't count toward elapsed", () => {
+    let s = start();
+    s = timerReducer(s, { type: "PAUSE", now_ms: 100_000 });
+    // 60 seconds pass while paused
+    s = timerReducer(s, { type: "RESUME", now_ms: 160_000 });
+    expect(s.status).toBe("running");
+    // 30 more seconds tick in running state → elapsed = 130, remaining = 170
+    expect(selectElapsedSec(s, 190_000)).toBe(130);
+    expect(selectRemainingSec(s, 190_000)).toBe(170);
+  });
+
+  it("RESTART_INTERVAL resets the current interval's remaining without resetting total elapsed", () => {
+    let s = start();
+    // advance into warmup
+    s = timerReducer(s, { type: "TICK", now_ms: 200_000 });
+    expect(selectRemainingSec(s, 200_000)).toBe(100);
+    s = timerReducer(s, { type: "RESTART_INTERVAL", now_ms: 200_000 });
+    expect(selectRemainingSec(s, 200_000)).toBe(300);
+    // total elapsed since workout start is still 200s
+    expect(selectElapsedSec(s, 200_000)).toBe(200);
+  });
+
+  it("PREV_INTERVAL goes back one and clamps at zero", () => {
+    let s = start();
+    s = timerReducer(s, { type: "TICK", now_ms: 340_001 }); // into goblet squat rest? past warmup+work
+    expect(s.current_index).toBeGreaterThan(0);
+    const before = s.current_index;
+    s = timerReducer(s, { type: "PREV_INTERVAL", now_ms: 340_001 });
+    expect(s.current_index).toBe(before - 1);
+    // calling PREV at index 0 stays at 0
+    s = timerReducer(s, { type: "PREV_INTERVAL", now_ms: 340_001 });
+    s = timerReducer(s, { type: "PREV_INTERVAL", now_ms: 340_001 });
+    s = timerReducer(s, { type: "PREV_INTERVAL", now_ms: 340_001 });
+    expect(s.current_index).toBe(0);
+  });
+
+  it("NEXT_INTERVAL advances; past last interval transitions to done", () => {
+    const intervals = buildIntervals(walk);
+    let s = timerReducer(initTimer(intervals), { type: "START", now_ms: 0 });
+    expect(s.current_index).toBe(0);
+    s = timerReducer(s, { type: "NEXT_INTERVAL", now_ms: 1_000 });
+    expect(s.status).toBe("done");
+  });
+
+  it("RESTART_WORKOUT returns to index 0 and resets elapsed", () => {
+    let s = start();
+    s = timerReducer(s, { type: "TICK", now_ms: 500_000 });
+    expect(s.current_index).toBeGreaterThan(0);
+    s = timerReducer(s, { type: "RESTART_WORKOUT", now_ms: 600_000 });
+    expect(s.status).toBe("running");
+    expect(s.current_index).toBe(0);
+    expect(selectElapsedSec(s, 600_000)).toBe(0);
+  });
+
+  it("END_WORKOUT immediately sets status=done", () => {
+    let s = start();
+    s = timerReducer(s, { type: "TICK", now_ms: 100_000 });
+    s = timerReducer(s, { type: "END_WORKOUT" });
+    expect(s.status).toBe("done");
+  });
+
 });
