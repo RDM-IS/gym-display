@@ -1,11 +1,15 @@
 import type { ExerciseLog, LoggedSession } from "./types";
 
+function exerciseRows(session: LoggedSession): ExerciseLog[] {
+  return Array.isArray(session.exercises) ? session.exercises : [];
+}
+
 /** Best (heaviest) strength set per exercise within a session. */
 export function bestStrengthSetsByExercise(
   session: LoggedSession
 ): Map<string, ExerciseLog> {
   const out = new Map<string, ExerciseLog>();
-  for (const ex of session.exercises) {
+  for (const ex of exerciseRows(session)) {
     if (ex.log_type !== "strength_set" || !ex.exercise) continue;
     const prev = out.get(ex.exercise);
     if (!prev || (ex.weight_lbs ?? 0) > (prev.weight_lbs ?? 0)) {
@@ -20,7 +24,7 @@ export function cardioBlocksByExercise(
   session: LoggedSession
 ): Map<string, ExerciseLog> {
   const out = new Map<string, ExerciseLog>();
-  for (const ex of session.exercises) {
+  for (const ex of exerciseRows(session)) {
     if (ex.log_type !== "cardio_block" || !ex.exercise) continue;
     out.set(ex.exercise, ex);
   }
@@ -45,11 +49,12 @@ function avgOf(values: (number | null | undefined)[]): number | null {
 
 export function perExerciseDeltas(
   current: LoggedSession,
-  history: LoggedSession[]
+  history: LoggedSession[] | null | undefined
 ): PerExerciseDelta[] {
   const currentBests = bestStrengthSetsByExercise(current);
   const historyBestsByName: Map<string, ExerciseLog[]> = new Map();
-  for (const h of history) {
+  const hist = Array.isArray(history) ? history : [];
+  for (const h of hist) {
     const bests = bestStrengthSetsByExercise(h);
     bests.forEach((ex, name) => {
       const arr = historyBestsByName.get(name) ?? [];

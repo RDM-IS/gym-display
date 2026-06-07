@@ -16,6 +16,15 @@ export function sessionLabel(plan: Plan | { session_type: SessionType }): string
   return SESSION_LABELS[plan.session_type] ?? plan.session_type;
 }
 
+/** Title shown on Setup and elsewhere. Prefers blocks.display_name
+ * (e.g. "Long Z2 Bike") since two days can share session_type but be
+ * different workouts (Sat/Sun both cardio_z2). Falls back to the
+ * session_type label. */
+export function displayTitle(plan: Plan): string {
+  const name = plan.blocks?.display_name?.trim();
+  return name ? name : sessionLabel(plan);
+}
+
 export function dedupe(items: string[] | undefined): string[] {
   if (!items) return [];
   const seen = new Set<string>();

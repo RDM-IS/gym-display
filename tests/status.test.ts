@@ -22,6 +22,12 @@ describe("shouldRedirectTodayToStatus", () => {
     expect(shouldRedirectTodayToStatus({ ...base, is_logged: true })).toBe(true);
   });
 
+  it("redirects when blocks_type is mobility (even if session_type isn't)", () => {
+    expect(
+      shouldRedirectTodayToStatus({ ...base, blocks_type: "mobility" })
+    ).toBe(true);
+  });
+
   it("does NOT redirect when today is a normal unlogged session", () => {
     expect(shouldRedirectTodayToStatus(base)).toBe(false);
   });
@@ -89,5 +95,30 @@ describe("perExerciseDeltas", () => {
     expect(d.weight_delta).toBeNull();
     expect(d.reps_delta).toBeNull();
     expect(d.n_history).toBe(0);
+  });
+
+  it("does not crash when current.exercises is undefined", () => {
+    const broken = {
+      plan_id: 1,
+      plan_date: "2026-05-12",
+      session_type: "strength_a" as const,
+      phase: 1,
+      week_num: 1,
+      rpe_actual: null,
+      logged_at: "2026-05-12T19:00:00Z",
+      notes: null,
+      // exercises field omitted entirely
+    } as unknown as LoggedSession;
+    expect(() => perExerciseDeltas(broken, [])).not.toThrow();
+    expect(perExerciseDeltas(broken, [])).toEqual([]);
+  });
+
+  it("does not crash when history itself is undefined", () => {
+    const current = mkSession("strength_a", "2026-05-12", [
+      { log_type: "strength_set", exercise: "X", set_num: 1, reps_done: 10, weight_lbs: 25, duration_sec: null, distance_m: null, hr_avg: null, hr_peak: null, rpe_actual: null, notes: null },
+    ]);
+    expect(() =>
+      perExerciseDeltas(current, undefined as unknown as LoggedSession[])
+    ).not.toThrow();
   });
 });

@@ -7,7 +7,14 @@ import {
   selectRemainingSec,
   timerReducer,
 } from "../src/lib/timer";
-import type { CircuitBlocks, IntervalsBlocks, WalkBlocks } from "../src/lib/types";
+import type {
+  Blocks,
+  CircuitBlocks,
+  IntervalsBlocks,
+  MobilityBlocks,
+  SteadyBlocks,
+  WalkBlocks,
+} from "../src/lib/types";
 
 const circuit: CircuitBlocks = {
   type: "circuit",
@@ -102,6 +109,130 @@ describe("buildIntervals — walk", () => {
     expect(intervals).toHaveLength(1);
     expect(intervals[0].kind).toBe("work");
     expect(intervals[0].duration_sec).toBe(45 * 60);
+  });
+});
+
+describe("buildIntervals — steady (cardio steady — no top-level exercises)", () => {
+  const steady: SteadyBlocks = {
+    type: "steady",
+    display_name: "Long Z2 Bike",
+    warmup_sec: 300,
+    duration_min: 45,
+    cooldown_sec: 300,
+    intensity: "Z2 — conversational",
+    target_range_min: [40, 50],
+  };
+
+  it("does NOT crash on missing exercises array — produces warmup + main + cooldown", () => {
+    const intervals = buildIntervals(steady);
+    expect(intervals.map((i) => i.kind)).toEqual(["warmup", "work", "cooldown"]);
+  });
+
+  it("uses display_name as the main interval name", () => {
+    const intervals = buildIntervals(steady);
+    expect(intervals[1].name).toBe("Long Z2 Bike");
+    expect(intervals[1].duration_sec).toBe(45 * 60);
+  });
+
+  it("falls back to 'Steady cardio' when display_name is absent", () => {
+    const noName: SteadyBlocks = { ...steady, display_name: undefined };
+    const intervals = buildIntervals(noName);
+    expect(intervals[1].name).toBe("Steady cardio");
+  });
+
+  it("renders target_range_min as N–M min when intensity is absent", () => {
+    const noIntensity: SteadyBlocks = { ...steady, intensity: undefined };
+    const intervals = buildIntervals(noIntensity);
+    expect(intervals[1].description).toBe("40–50 min");
+  });
+});
+
+describe("buildIntervals — mobility (rest day)", () => {
+  const mob: MobilityBlocks = {
+    type: "mobility",
+    notes: "20 min of T-spine + hip mobility",
+    duration_min: 20,
+  };
+
+  it("produces a single work interval and does not crash", () => {
+    const intervals = buildIntervals(mob);
+    expect(intervals).toHaveLength(1);
+    expect(intervals[0].kind).toBe("work");
+    expect(intervals[0].duration_sec).toBe(20 * 60);
+    expect(intervals[0].description).toBe("20 min of T-spine + hip mobility");
+  });
+});
+
+describe("buildIntervals — defensive guards", () => {
+  it("does not crash when a circuit block has no exercises field at all", () => {
+    const broken = {
+      type: "circuit",
+      warmup: "5 min easy",
+      cooldown: "5 min easy",
+    } as unknown as CircuitBlocks;
+    const intervals = buildIntervals(broken);
+    // warmup + cooldown only — no exercises to add
+    expect(intervals.map((i) => i.kind)).toEqual(["warmup", "cooldown"]);
+  });
+
+  it("does not crash when a circuit block has exercises = null", () => {
+    const broken = {
+      type: "circuit",
+      exercises: null,
+    } as unknown as CircuitBlocks;
+    const intervals = buildIntervals(broken);
+    expect(intervals).toEqual([]);
+  });
+
+  it("does not crash when an intervals block lacks intervals_template", () => {
+    const broken = {
+      type: "intervals",
+      warmup_sec: 300,
+      rounds: 5,
+      cooldown_sec: 300,
+    } as unknown as IntervalsBlocks;
+    const intervals = buildIntervals(broken);
+    // warmup + cooldown only; template missing → no work/rest blocks
+    expect(intervals.map((i) => i.kind)).toEqual(["warmup", "cooldown"]);
+  });
+});
+
+describe("buildIntervals — finisher", () => {
+  const cardioWithFinisher: IntervalsBlocks = {
+    type: "intervals",
+    warmup_sec: 0,
+    intervals_template: { work_sec: 60, rest_sec: 60 },
+    rounds: 2,
+    cooldown_sec: 0,
+    finisher: {
+      type: "core_circuit",
+      rounds: 2,
+      rest_after_sec: 60,
+      exercises: [
+        { name: "Dead bug", format: "reps", target_reps: 10 },
+        { name: "Hollow hold", format: "duration", duration_sec: 20 },
+      ],
+    },
+  };
+
+  it("appends finisher exercises after the main block", () => {
+    const intervals = buildIntervals(cardioWithFinisher);
+    const names = intervals.map((i) => i.name);
+    // 2 rounds × (work + rest), last rest skipped → work, rest, work
+    // Then finisher: dead bug, rest, hollow hold, round_break, dead bug, rest, hollow hold
+    expect(names).toContain("Dead bug");
+    expect(names).toContain("Hollow hold");
+    // round_break between finisher rounds present
+    expect(intervals.some((i) => i.kind === "round_break")).toBe(true);
+  });
+
+  it("treats an empty finisher.exercises as no-op", () => {
+    const noEx = {
+      ...cardioWithFinisher,
+      finisher: { type: "x", rounds: 2, exercises: [] },
+    } satisfies Blocks;
+    const intervals = buildIntervals(noEx);
+    expect(intervals.every((i) => i.name !== "Dead bug")).toBe(true);
   });
 });
 

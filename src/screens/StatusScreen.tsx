@@ -14,18 +14,24 @@ interface Props {
 }
 
 export default function StatusScreen({ data }: Props) {
+  // Guard every array — the payload comes from a server we don't control
+  // at runtime; missing/null arrays must not crash the page.
+  const history = Array.isArray(data?.same_type_history) ? data.same_type_history : [];
+  const day_strip = Array.isArray(data?.day_strip) ? data.day_strip : [];
+  const rpe_trend = Array.isArray(data?.rpe_trend) ? data.rpe_trend : [];
+  const weight_trend = Array.isArray(data?.weight_trend) ? data.weight_trend : [];
   return (
     <div className="status">
       <div className="status-grid">
         <LeftPanel
-          mostRecent={data.most_recent_session}
-          history={data.same_type_history}
+          mostRecent={data?.most_recent_session ?? null}
+          history={history}
         />
         <RightPanel
-          banner={data.banner}
-          day_strip={data.day_strip}
-          rpe_trend={data.rpe_trend}
-          weight_trend={data.weight_trend}
+          banner={data?.banner ?? null}
+          day_strip={day_strip}
+          rpe_trend={rpe_trend}
+          weight_trend={weight_trend}
         />
       </div>
     </div>
@@ -81,11 +87,13 @@ function ExerciseTable({
   history: LoggedSession[];
 }) {
   const deltas = useMemo(() => perExerciseDeltas(current, history), [current, history]);
+  // current.exercises may be undefined / null from the server; never .filter() raw.
+  const exerciseRows = Array.isArray(current.exercises) ? current.exercises : [];
 
   if (deltas.length === 0) {
-    // Cardio session or no strength sets logged. Show raw blocks.
-    const blocks = current.exercises.filter((e) => e.log_type === "cardio_block");
-    if (blocks.length === 0) {
+    // No strength sets — fall back to cardio block rows.
+    const cardioRows = exerciseRows.filter((e) => e.log_type === "cardio_block");
+    if (cardioRows.length === 0) {
       return <Empty text="No exercise rows in this session." />;
     }
     return (
@@ -100,7 +108,7 @@ function ExerciseTable({
           </tr>
         </thead>
         <tbody>
-          {blocks.map((b, i) => (
+          {cardioRows.map((b, i) => (
             <tr key={i}>
               <td>{b.exercise ?? "—"}</td>
               <td className="num">{b.duration_sec != null ? `${b.duration_sec}s` : "—"}</td>

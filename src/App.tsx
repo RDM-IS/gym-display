@@ -71,18 +71,25 @@ export default function App() {
     if (statusLoad.result?.status !== "ok") return;
     const t = statusLoad.result.data.today_summary;
     if (!t) return;
+    // Use blocks.type from the plan payload when available — session_type
+    // alone can't distinguish a mobility/walk variant on a shared label.
+    const blocks_type =
+      planLoad.result?.status === "ok"
+        ? planLoad.result.plan.blocks?.type ?? null
+        : null;
     if (
       shouldRedirectTodayToStatus({
         exists: t.exists,
         is_skipped: t.is_skipped,
         is_logged: t.is_logged,
         session_type: t.session_type,
+        blocks_type,
       })
     ) {
       autoRedirectedRef.current = true;
       navigate("status", { replace: true });
     }
-  }, [route, flow, statusLoad, navigate]);
+  }, [route, flow, statusLoad, planLoad, navigate]);
 
   const plan: Plan | null =
     planLoad.result?.status === "ok" ? planLoad.result.plan : null;
@@ -173,8 +180,8 @@ export default function App() {
       <>
         {showNav && <Nav route={route} onNavigate={navigate} />}
         <ErrorScreen
-          title="No plan today"
-          message={result.message}
+          title="No workout today"
+          message={`${result.message} Open Status to see this week.`}
           onRetry={refreshPlan}
         />
       </>
@@ -195,7 +202,16 @@ export default function App() {
 
   const offline = result.from_cache;
 
-  if (result.plan.is_skipped || result.plan.session_type === "rest_mobility") {
+  // Rest-day classification: session_type alone is unreliable (Sat/Sun may
+  // both be cardio_z2 but different workouts). Authoritative signals:
+  // is_skipped, session_type='rest_mobility', or blocks.type='mobility'.
+  const blocksType = result.plan.blocks?.type;
+  const isRestDay =
+    result.plan.is_skipped ||
+    result.plan.session_type === "rest_mobility" ||
+    blocksType === "mobility";
+
+  if (isRestDay) {
     return (
       <>
         {showNav && <Nav route={route} onNavigate={navigate} />}

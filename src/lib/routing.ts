@@ -39,16 +39,21 @@ export function usePath(): [Route, (next: Route, opts?: { replace?: boolean }) =
 }
 
 /** Decide whether /today should auto-redirect to /status.
- * Triggers when: rest day (is_skipped or rest_mobility), missing plan,
- * or today's session is already logged. */
+ * Triggers when: rest day (is_skipped, session_type='rest_mobility', or
+ * blocks.type='mobility'), missing plan, or today's session is already
+ * logged. blocks_type is the authoritative classifier when present —
+ * session_type alone is ambiguous (Sat/Sun cardio_z2 share session_type
+ * but are different workouts). */
 export function shouldRedirectTodayToStatus(t: {
   exists: boolean;
   is_skipped: boolean;
   is_logged: boolean;
   session_type: string | null;
+  blocks_type?: string | null;
 }): boolean {
   if (!t.exists) return true;
   if (t.is_skipped) return true;
+  if (t.blocks_type === "mobility") return true;
   if (t.session_type === "rest_mobility") return true;
   if (t.is_logged) return true;
   return false;

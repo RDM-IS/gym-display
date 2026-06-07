@@ -118,6 +118,127 @@ describe("App — /today route", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Cardio-steady + mobility regression: with the new block shapes the page
+// must not crash. The setup screen must render and show the display_name.
+// ---------------------------------------------------------------------------
+
+describe("App — cardio steady plan", () => {
+  const STEADY_PLAN: Plan = {
+    plan_id: 51,
+    plan_date: "2026-06-06",
+    phase: 2,
+    week_num: 8,
+    session_type: "cardio_z2",
+    target_rpe: 5.5,
+    est_duration_min: 60,
+    is_skipped: false,
+    blocks: {
+      type: "steady",
+      display_name: "Long Z2 Bike",
+      warmup_sec: 300,
+      duration_min: 45,
+      cooldown_sec: 300,
+      intensity: "Z2 — conversational",
+      target_range_min: [40, 50],
+    },
+  };
+
+  beforeEach(() => {
+    localStorage.clear();
+    window.history.replaceState(null, "", "/today");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.includes("/api/health/today")) {
+          return new Response(JSON.stringify(STEADY_PLAN), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        if (url.includes("/api/health/status")) {
+          return new Response(JSON.stringify(statusFixture({
+            today_summary: { plan_id: 51, session_type: "cardio_z2", is_skipped: false, is_logged: false, exists: true },
+          })), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        return Response.error();
+      })
+    );
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it("renders without crashing and shows blocks.display_name as the title", async () => {
+    render(<App />);
+    expect(await screen.findByText("Long Z2 Bike")).toBeDefined();
+    // The Setup screen's START button should be present (no crash)
+    expect(await screen.findByRole("button", { name: /start workout/i })).toBeDefined();
+  });
+});
+
+describe("App — mobility plan is treated as rest day", () => {
+  const MOBILITY_PLAN: Plan = {
+    plan_id: 60,
+    plan_date: "2026-06-07",
+    phase: 2,
+    week_num: 8,
+    session_type: "cardio_z2",      // session_type may not match block type
+    target_rpe: 3,
+    est_duration_min: 20,
+    is_skipped: false,
+    blocks: {
+      type: "mobility",
+      display_name: "Easy Recovery Mobility",
+      notes: "Foam roll + T-spine + hip openers",
+      duration_min: 20,
+    },
+  };
+
+  beforeEach(() => {
+    localStorage.clear();
+    window.history.replaceState(null, "", "/today");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.includes("/api/health/today")) {
+          return new Response(JSON.stringify(MOBILITY_PLAN), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        if (url.includes("/api/health/status")) {
+          return new Response(JSON.stringify(statusFixture({
+            today_summary: { plan_id: 60, session_type: "cardio_z2", is_skipped: false, is_logged: false, exists: true },
+          })), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        return Response.error();
+      })
+    );
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it("redirects mobility days to /status (auto-redirect rule)", async () => {
+    render(<App />);
+    expect(await screen.findByText(/last 11 days/i)).toBeDefined();
+    expect(window.location.pathname).toBe("/status");
+  });
+});
+
 describe("App — /status route", () => {
   beforeEach(() => {
     localStorage.clear();

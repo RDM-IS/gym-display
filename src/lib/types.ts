@@ -9,54 +9,103 @@ export type SessionType =
 
 export type ExerciseFormat = "reps" | "duration";
 
-export interface CircuitExercise {
+/** Planned (target) exercise — appears in main blocks and in finishers. */
+export interface PlannedExercise {
   name: string;
   format: ExerciseFormat;
-  target_reps?: number;
-  target_load_lbs?: number;
-  duration_sec?: number;
-  rest_after_sec: number;
+  target_reps?: number | null;
+  target_load_lbs?: number | null;
+  duration_sec?: number | null;
+  rest_after_sec?: number | null;
+  notes?: string | null;
 }
 
-export interface CircuitBlocks {
-  type: "circuit";
-  warmup?: string;
-  rounds: number;
-  rest_between_rounds_sec: number;
-  exercises: CircuitExercise[];
-  cooldown?: string;
-  equipment?: string[];
-  setup_notes?: string[];
+/** Legacy name kept as alias for the circuit-exercise tests. */
+export type CircuitExercise = PlannedExercise;
+
+/** Finisher block — can attach to any main block. */
+export interface Finisher {
+  type?: string | null;
+  rounds?: number | null;
+  exercises?: PlannedExercise[] | null;
+  rest_after_sec?: number | null;
+  display_name?: string | null;
+}
+
+/** Fields shared by every blocks variant. */
+interface BlocksBase {
+  display_name?: string | null;
+  equipment?: string[] | null;
+  setup_notes?: string[] | null;
+  finisher?: Finisher | null;
 }
 
 export interface IntervalsTemplate {
   work_sec: number;
-  work_settings?: string;
+  work_settings?: string | null;
   rest_sec: number;
-  rest_settings?: string;
+  rest_settings?: string | null;
 }
 
-export interface IntervalsBlocks {
+export interface CircuitBlocks extends BlocksBase {
+  type: "circuit";
+  warmup?: string | null;
+  rounds?: number | null;
+  rest_between_rounds_sec?: number | null;
+  /** May be absent — earlier seed plans always carried this, but the
+   * runtime payload is JSONB and not enforced. Treat as optional. */
+  exercises?: PlannedExercise[] | null;
+  cooldown?: string | null;
+}
+
+export interface IntervalsBlocks extends BlocksBase {
   type: "intervals";
-  warmup_sec: number;
-  warmup_settings?: string;
+  warmup_sec?: number | null;
+  warmup_settings?: string | null;
   intervals_template: IntervalsTemplate;
-  rounds: number;
-  cooldown_sec: number;
-  cooldown_settings?: string;
-  equipment?: string[];
-  setup_notes?: string[];
+  rounds?: number | null;
+  cooldown_sec?: number | null;
+  cooldown_settings?: string | null;
 }
 
-export interface WalkBlocks {
+/** Cardio steady block (e.g. "Long Z2 Bike"). NO top-level exercises array. */
+export interface SteadyBlocks extends BlocksBase {
+  type: "steady";
+  warmup_sec?: number | null;
+  warmup_settings?: string | null;
+  cooldown_sec?: number | null;
+  cooldown_settings?: string | null;
+  intensity?: string | null;
+  duration_min: number;
+  target_range_min?: [number, number] | string | null;
+}
+
+/** Mobility / rest day block. */
+export interface MobilityBlocks extends BlocksBase {
+  type: "mobility";
+  notes?: string | null;
+  duration_min?: number | null;
+}
+
+/** Legacy walk block — pre-dates the `steady`/`mobility` split. */
+export interface WalkBlocks extends BlocksBase {
   type: "walk";
   duration_min: number;
-  intensity?: string;
-  equipment?: string[];
-  setup_notes?: string[];
+  intensity?: string | null;
 }
 
-export type Blocks = CircuitBlocks | IntervalsBlocks | WalkBlocks;
+export type Blocks =
+  | CircuitBlocks
+  | IntervalsBlocks
+  | SteadyBlocks
+  | MobilityBlocks
+  | WalkBlocks;
+
+/** Compile-time exhaustiveness helper — any new Blocks variant that isn't
+ * handled in a switch will hit this and fail to type-check. */
+export function assertNeverBlock(b: never): never {
+  throw new Error(`Unhandled blocks.type: ${(b as { type?: string }).type}`);
+}
 
 export interface Plan {
   plan_id: number;
