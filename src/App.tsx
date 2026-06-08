@@ -248,6 +248,7 @@ export default function App() {
       {flow === "workout" && (
         <WorkoutScreen
           key={`workout-${result.plan.plan_id}`}
+          plan={result.plan}
           intervals={intervals}
           onDone={onDone}
           onBackToHome={onBackToHome}

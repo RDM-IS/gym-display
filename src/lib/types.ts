@@ -214,3 +214,71 @@ export interface StatusResponse {
   rpe_trend: TrendPoint[];
   weight_trend: TrendPoint[];
 }
+
+// ---------------------------------------------------------------------------
+// POST /api/health/log — write path
+// ---------------------------------------------------------------------------
+
+export type LogType = "strength_set" | "cardio_block" | "session_summary";
+
+export interface LogSetIn {
+  set_num?: number | null;
+  reps_done?: number | null;
+  weight_lbs?: number | null;
+  rpe_actual?: number | null;
+  duration_sec?: number | null;
+  distance_m?: number | null;
+  hr_avg?: number | null;
+  hr_peak?: number | null;
+  is_skipped?: boolean;
+  notes?: string | null;
+}
+
+export interface LogExerciseIn {
+  plan_id?: number | null;
+  exercise?: string | null;
+  log_type: LogType;
+  sets: LogSetIn[];
+  notes?: string | null;
+}
+
+export interface LogRowOut {
+  log_id: number;
+  plan_id: number | null;
+  log_type: LogType;
+  exercise: string | null;
+  set_num: number | null;
+  reps_done: number | null;
+  weight_lbs: number | null;
+  duration_sec: number | null;
+  distance_m: number | null;
+  hr_avg: number | null;
+  hr_peak: number | null;
+  rpe_actual: number | null;
+  notes: string | null;
+  is_skipped: boolean;
+  logged_at: string;
+  logged_via: string;
+}
+
+export interface LogResponse {
+  plan_id: number | null;
+  inserted: number;
+  rows: LogRowOut[];
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/health/today/logged — completion state for the UI
+// ---------------------------------------------------------------------------
+
+export interface LoggedExerciseEntry {
+  exercise: string;
+  log_type: "strength_set" | "cardio_block";
+  set_count: number;
+}
+
+export interface LoggedTodayResponse {
+  plan_id: number | null;
+  exercises: LoggedExerciseEntry[];
+  has_session_summary: boolean;
+}

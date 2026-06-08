@@ -1,0 +1,220 @@
+/* /workout — Log mode panel (writeable inputs). Touch-friendly. */
+
+.log-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: #0a0a0a;
+  color: #f5f5f5;
+  display: flex;
+  flex-direction: column;
+  padding: 2vh 3vw;
+  gap: 1.5vh;
+}
+
+.log-top {
+  display: flex;
+  align-items: center;
+  gap: 1.5vw;
+  padding-bottom: 1vh;
+  border-bottom: 1px solid rgba(245, 245, 245, 0.15);
+}
+
+.log-title {
+  font-size: clamp(22px, 2.4vw, 38px);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  flex: 1;
+}
+
+.log-meta {
+  font-size: clamp(11px, 1.1vw, 16px);
+  color: rgba(245, 245, 245, 0.55);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.log-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2vh;
+  padding-right: 1vw;
+}
+
+.log-section-title {
+  font-size: clamp(13px, 1.3vw, 20px);
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(245, 245, 245, 0.55);
+  margin-bottom: 1vh;
+}
+
+.log-empty {
+  padding: 4vh;
+  text-align: center;
+  color: rgba(245, 245, 245, 0.55);
+  font-style: italic;
+}
+
+.log-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5vh;
+}
+
+.log-exercise {
+  background: rgba(245, 245, 245, 0.04);
+  border: 1px solid rgba(245, 245, 245, 0.12);
+  border-radius: 12px;
+  padding: 2vh 2vw;
+  transition: opacity 200ms ease;
+}
+
+.log-exercise--done {
+  border-color: rgba(109, 213, 140, 0.5);
+  background: rgba(26, 95, 58, 0.18);
+}
+
+.log-exercise-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 2vw;
+  margin-bottom: 1.2vh;
+  flex-wrap: wrap;
+}
+
+.log-exercise-name {
+  font-size: clamp(20px, 2.2vw, 36px);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.log-check {
+  color: #6dd58c;
+  font-weight: 900;
+}
+
+.log-exercise-target {
+  font-size: clamp(13px, 1.3vw, 20px);
+  color: rgba(245, 245, 245, 0.6);
+}
+
+.log-sets {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2vh;
+  margin-bottom: 1.5vh;
+}
+
+.log-set-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 1.5vw;
+  flex-wrap: wrap;
+}
+
+.log-set-label {
+  font-size: clamp(14px, 1.4vw, 22px);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: rgba(245, 245, 245, 0.85);
+  min-width: 6vw;
+}
+
+.log-input {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4vh;
+  flex: 1;
+  min-width: 80px;
+}
+
+.log-input-label {
+  font-size: clamp(10px, 0.95vw, 14px);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(245, 245, 245, 0.55);
+}
+
+.log-input input {
+  font: inherit;
+  font-size: clamp(20px, 2vw, 32px);
+  font-weight: 700;
+  padding: 1.2vh 1.2vw;
+  min-height: 7vh;
+  background: rgba(0, 0, 0, 0.45);
+  color: #f5f5f5;
+  border: 2px solid rgba(245, 245, 245, 0.2);
+  border-radius: 8px;
+  font-variant-numeric: tabular-nums;
+  width: 100%;
+}
+
+.log-input input:focus {
+  outline: none;
+  border-color: #ffd166;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.log-input input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.log-save {
+  width: 100%;
+  font-size: clamp(18px, 2vw, 32px);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 2vh;
+  min-height: 8vh;
+}
+
+.log-finish {
+  background: #6dd58c;
+  border-color: #6dd58c;
+  color: #0a0a0a;
+}
+
+.log-error {
+  background: #6b1a1a;
+  color: #ffd1d1;
+  font-size: clamp(13px, 1.2vw, 18px);
+  padding: 1vh 1.5vw;
+  border-radius: 8px;
+  margin-bottom: 1vh;
+  font-weight: 600;
+}
+
+.log-summary {
+  border-color: rgba(255, 209, 102, 0.4);
+  background: rgba(255, 209, 102, 0.08);
+}
+
+.log-notes-row {
+  display: flex;
+  flex-direction: column;
+}
+
+.log-notes {
+  font: inherit;
+  font-size: clamp(16px, 1.6vw, 24px);
+  padding: 1.2vh 1.5vw;
+  min-height: 8vh;
+  background: rgba(0, 0, 0, 0.45);
+  color: #f5f5f5;
+  border: 2px solid rgba(245, 245, 245, 0.2);
+  border-radius: 8px;
+  resize: vertical;
+  width: 100%;
+}
+
+.log-notes:focus {
+  outline: none;
+  border-color: #ffd166;
+}

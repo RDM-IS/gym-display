@@ -9,7 +9,7 @@ import {
   selectRemainingSec,
   timerReducer,
 } from "../lib/timer";
-import type { Interval, IntervalKind } from "../lib/types";
+import type { Interval, IntervalKind, Plan } from "../lib/types";
 import {
   beepCountdown,
   beepEndOfRest,
@@ -21,6 +21,7 @@ import {
   toggleMuted,
 } from "../lib/audio";
 import { acquireWakeLock, releaseWakeLock } from "../lib/wake-lock";
+import LogPanel from "./LogPanel";
 
 const KIND_CLASS: Record<IntervalKind, string> = {
   warmup: "tv--warmup",
@@ -31,15 +32,19 @@ const KIND_CLASS: Record<IntervalKind, string> = {
 };
 
 interface Props {
+  plan: Plan;
   intervals: Interval[];
   onDone: (total_elapsed_sec: number) => void;
   onBackToHome: () => void;
 }
 
-export default function WorkoutScreen({ intervals, onDone, onBackToHome }: Props) {
+type Mode = "timer" | "log";
+
+export default function WorkoutScreen({ plan, intervals, onDone, onBackToHome }: Props) {
   const [state, dispatch] = useReducer(timerReducer, intervals, initTimer);
   const [now, setNow] = useState(() => performance.now());
   const [muted, setMuted] = useState(isMuted());
+  const [mode, setMode] = useState<Mode>("timer");
   const lastIndexRef = useRef(0);
   const lastBeepSecRef = useRef<number | null>(null);
   const suppressIndexAudioRef = useRef(false);
@@ -282,9 +287,25 @@ export default function WorkoutScreen({ intervals, onDone, onBackToHome }: Props
         <button className="control-btn" onClick={onBackToHome} aria-label="Back to home">
           ⌂ Home
         </button>
+        <button
+          className="control-btn control-btn--primary"
+          onClick={() => setMode("log")}
+          aria-label="Open log panel"
+        >
+          ✎ Log
+        </button>
       </div>
 
       {muted && <div className="muted-badge">Muted</div>}
+
+      {mode === "log" && (
+        <LogPanel
+          plan={plan}
+          elapsed_sec={elapsed}
+          onBackToTimer={() => setMode("timer")}
+          onFinish={() => onDone(elapsed)}
+        />
+      )}
     </div>
   );
 }

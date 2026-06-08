@@ -1,4 +1,11 @@
-import type { NoPlanResponse, Plan, StatusResponse } from "./types";
+import type {
+  LogExerciseIn,
+  LogResponse,
+  LoggedTodayResponse,
+  NoPlanResponse,
+  Plan,
+  StatusResponse,
+} from "./types";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_KEY ?? "";
@@ -86,6 +93,74 @@ export async function fetchStatus(): Promise<FetchStatusResult> {
     return {
       status: "error",
       message: err instanceof Error ? err.message : "Failed to load status.",
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Logging — POST /log + GET /today/logged
+// ---------------------------------------------------------------------------
+// Same-origin requests (gym.rdm.is/api/...) carry Cloudflare Access cookies
+// automatically. No `credentials: "include"` needed; no cookie clearing in
+// this client.
+
+export type PostLogResult =
+  | { status: "ok"; data: LogResponse }
+  | { status: "error"; message: string };
+
+export async function postLog(body: LogExerciseIn): Promise<PostLogResult> {
+  try {
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    };
+    if (API_KEY) headers["X-API-Key"] = API_KEY;
+    const res = await fetch(`${API_BASE}/api/health/log`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`;
+      try {
+        const j = await res.json();
+        const detail = (j as { detail?: unknown }).detail;
+        if (detail && typeof detail === "object") {
+          msg = JSON.stringify(detail);
+        } else if (typeof detail === "string") {
+          msg = detail;
+        }
+      } catch {
+        /* keep HTTP status */
+      }
+      throw new Error(msg);
+    }
+    const data = (await res.json()) as LogResponse;
+    return { status: "ok", data };
+  } catch (err) {
+    return {
+      status: "error",
+      message: err instanceof Error ? err.message : "Failed to log.",
+    };
+  }
+}
+
+export type FetchLoggedResult =
+  | { status: "ok"; data: LoggedTodayResponse }
+  | { status: "error"; message: string };
+
+export async function fetchLoggedToday(): Promise<FetchLoggedResult> {
+  try {
+    const headers: Record<string, string> = { Accept: "application/json" };
+    if (API_KEY) headers["X-API-Key"] = API_KEY;
+    const res = await fetch(`${API_BASE}/api/health/today/logged`, { headers });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = (await res.json()) as LoggedTodayResponse;
+    return { status: "ok", data };
+  } catch (err) {
+    return {
+      status: "error",
+      message: err instanceof Error ? err.message : "Failed to load logged state.",
     };
   }
 }
