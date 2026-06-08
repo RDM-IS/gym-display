@@ -240,6 +240,10 @@ export interface LogExerciseIn {
   log_type: LogType;
   sets: LogSetIn[];
   notes?: string | null;
+  /** When set, the Lambda also INSERTs one session_summary row carrying
+   * this RPE in the same transaction. Used by Finish-workout to make
+   * the last log + summary a single round-trip. */
+  session_rpe?: number | null;
 }
 
 export interface LogRowOut {
@@ -281,4 +285,20 @@ export interface LoggedTodayResponse {
   plan_id: number | null;
   exercises: LoggedExerciseEntry[];
   has_session_summary: boolean;
+}
+
+export interface LastLoggedEntry {
+  exercise: string;
+  plan_date: string | null;
+  weight_lbs: number | null;
+  reps_done: number | null;
+  rpe_actual: number | null;
+  duration_sec: number | null;
+  distance_m: number | null;
+  hr_avg: number | null;
+  hr_peak: number | null;
+}
+
+export interface LastLoggedResponse {
+  by_exercise: Record<string, LastLoggedEntry>;
 }

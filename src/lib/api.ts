@@ -1,4 +1,5 @@
 import type {
+  LastLoggedResponse,
   LogExerciseIn,
   LogResponse,
   LoggedTodayResponse,
@@ -161,6 +162,34 @@ export async function fetchLoggedToday(): Promise<FetchLoggedResult> {
     return {
       status: "error",
       message: err instanceof Error ? err.message : "Failed to load logged state.",
+    };
+  }
+}
+
+export type FetchLastLoggedResult =
+  | { status: "ok"; data: LastLoggedResponse }
+  | { status: "error"; message: string };
+
+/** Batch lookup of most-recent prior set per exercise. Used to pre-fill
+ * stepper defaults so the common case needs zero edits. Empty list →
+ * skips the network call and returns an empty map. */
+export async function fetchLastLogged(exerciseNames: string[]): Promise<FetchLastLoggedResult> {
+  const clean = exerciseNames.map((n) => n.trim()).filter(Boolean);
+  if (clean.length === 0) {
+    return { status: "ok", data: { by_exercise: {} } };
+  }
+  try {
+    const headers: Record<string, string> = { Accept: "application/json" };
+    if (API_KEY) headers["X-API-Key"] = API_KEY;
+    const qs = encodeURIComponent(clean.join(","));
+    const res = await fetch(`${API_BASE}/api/health/last_logged?exercises=${qs}`, { headers });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = (await res.json()) as LastLoggedResponse;
+    return { status: "ok", data };
+  } catch (err) {
+    return {
+      status: "error",
+      message: err instanceof Error ? err.message : "Failed to load last-logged.",
     };
   }
 }

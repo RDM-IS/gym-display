@@ -1,4 +1,6 @@
-/* /workout — Log mode panel (writeable inputs). Touch-friendly. */
+/* /workout — Log mode panel.
+ * Stepper UX optimized for tap-only use on a gym laptop. No mouse required.
+ * Touch targets: stepper buttons clamp(56px,7vw,96px); Log button >= 8vh. */
 
 .log-panel {
   position: fixed;
@@ -44,13 +46,18 @@
   padding-right: 1vw;
 }
 
+.log-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5vh;
+}
+
 .log-section-title {
   font-size: clamp(13px, 1.3vw, 20px);
   font-weight: 700;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: rgba(245, 245, 245, 0.55);
-  margin-bottom: 1vh;
 }
 
 .log-empty {
@@ -60,35 +67,33 @@
   font-style: italic;
 }
 
-.log-section {
+/* --- Cards -------------------------------------------------------------- */
+
+.log-card {
+  background: rgba(245, 245, 245, 0.04);
+  border: 1px solid rgba(245, 245, 245, 0.12);
+  border-radius: 12px;
+  padding: 1.8vh 2vw;
+  transition: opacity 200ms ease, border-color 200ms ease;
   display: flex;
   flex-direction: column;
   gap: 1.5vh;
 }
 
-.log-exercise {
-  background: rgba(245, 245, 245, 0.04);
-  border: 1px solid rgba(245, 245, 245, 0.12);
-  border-radius: 12px;
-  padding: 2vh 2vw;
-  transition: opacity 200ms ease;
-}
-
-.log-exercise--done {
+.log-card--done {
   border-color: rgba(109, 213, 140, 0.5);
   background: rgba(26, 95, 58, 0.18);
 }
 
-.log-exercise-head {
+.log-card-head {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
   gap: 2vw;
-  margin-bottom: 1.2vh;
   flex-wrap: wrap;
 }
 
-.log-exercise-name {
+.log-card-name {
   font-size: clamp(20px, 2.2vw, 36px);
   font-weight: 800;
   letter-spacing: -0.01em;
@@ -99,80 +104,202 @@
   font-weight: 900;
 }
 
-.log-exercise-target {
+.log-card-target {
   font-size: clamp(13px, 1.3vw, 20px);
   color: rgba(245, 245, 245, 0.6);
 }
 
-.log-sets {
-  display: flex;
-  flex-direction: column;
-  gap: 1.2vh;
-  margin-bottom: 1.5vh;
-}
+/* --- Steppers ----------------------------------------------------------- */
 
-.log-set-row {
+.log-steppers {
   display: flex;
-  align-items: flex-end;
   gap: 1.5vw;
   flex-wrap: wrap;
+  align-items: flex-start;
 }
 
-.log-set-label {
-  font-size: clamp(14px, 1.4vw, 22px);
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  color: rgba(245, 245, 245, 0.85);
-  min-width: 6vw;
-}
-
-.log-input {
+.stepper {
   display: flex;
   flex-direction: column;
-  gap: 0.4vh;
-  flex: 1;
-  min-width: 80px;
+  gap: 0.6vh;
+  flex: 1 1 0;
+  min-width: 180px;
 }
 
-.log-input-label {
-  font-size: clamp(10px, 0.95vw, 14px);
+.stepper-label {
+  font-size: clamp(11px, 1vw, 16px);
+  font-weight: 700;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: rgba(245, 245, 245, 0.55);
+  color: rgba(245, 245, 245, 0.6);
 }
 
-.log-input input {
-  font: inherit;
-  font-size: clamp(20px, 2vw, 32px);
-  font-weight: 700;
-  padding: 1.2vh 1.2vw;
-  min-height: 7vh;
+.stepper-unit {
+  color: rgba(245, 245, 245, 0.4);
+  font-weight: 600;
+}
+
+.stepper-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.8vw;
+}
+
+.stepper-btn {
+  flex: 0 0 auto;
+  width: clamp(56px, 7vw, 96px);
+  min-height: clamp(56px, 7vw, 96px);
+  font-size: clamp(28px, 3vw, 48px);
+  font-weight: 900;
   background: rgba(0, 0, 0, 0.45);
   color: #f5f5f5;
-  border: 2px solid rgba(245, 245, 245, 0.2);
-  border-radius: 8px;
-  font-variant-numeric: tabular-nums;
-  width: 100%;
+  border: 2px solid rgba(245, 245, 245, 0.25);
+  border-radius: 10px;
+  transition: background 80ms ease, border-color 80ms ease, transform 60ms ease;
+  user-select: none;
 }
 
-.log-input input:focus {
+.stepper-btn:hover,
+.stepper-btn:focus-visible {
+  background: rgba(0, 0, 0, 0.7);
+  border-color: rgba(245, 245, 245, 0.6);
   outline: none;
-  border-color: #ffd166;
-  background: rgba(0, 0, 0, 0.6);
 }
 
-.log-input input:disabled {
+.stepper-btn:active {
+  transform: scale(0.94);
+}
+
+.stepper-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.stepper-value {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(32px, 4vw, 64px);
+  font-weight: 800;
+  background: rgba(0, 0, 0, 0.55);
+  border: 2px solid rgba(245, 245, 245, 0.2);
+  border-radius: 10px;
+  padding: 0 1vw;
+  min-width: 0;
+}
+
+.stepper--disabled .stepper-value {
   opacity: 0.5;
+}
+
+.stepper-hint {
+  align-self: flex-start;
+  font: inherit;
+  font-size: clamp(11px, 1.1vw, 16px);
+  background: transparent;
+  border: none;
+  color: #ffd166;
+  padding: 0.4vh 0;
+  cursor: pointer;
+  text-decoration: underline dotted;
+}
+
+/* --- Per-set expanded view --------------------------------------------- */
+
+.log-per-set {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5vh;
+}
+
+.log-per-set-row {
+  display: flex;
+  gap: 1.5vw;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  padding: 1vh 0;
+  border-top: 1px dashed rgba(245, 245, 245, 0.1);
+}
+
+.log-per-set-row:first-child {
+  border-top: none;
+}
+
+.log-per-set-label {
+  font-size: clamp(13px, 1.3vw, 20px);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(245, 245, 245, 0.85);
+  min-width: 6vw;
+  align-self: center;
+}
+
+/* --- Foot (Expand toggle, error, Log button) --------------------------- */
+
+.log-card-foot {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 1.5vw;
+  align-items: center;
+}
+
+.log-expand-toggle {
+  font: inherit;
+  font-size: clamp(12px, 1.1vw, 16px);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(245, 245, 245, 0.7);
+  background: transparent;
+  border: 1px dashed rgba(245, 245, 245, 0.25);
+  border-radius: 6px;
+  padding: 1vh 1.2vw;
+  cursor: pointer;
+}
+
+.log-expand-toggle:hover:not(:disabled) {
+  color: #f5f5f5;
+  border-color: rgba(245, 245, 245, 0.6);
+}
+
+.log-expand-toggle:disabled {
+  opacity: 0.35;
   cursor: not-allowed;
 }
 
 .log-save {
-  width: 100%;
-  font-size: clamp(18px, 2vw, 32px);
+  font: inherit;
+  font-size: clamp(16px, 1.8vw, 26px);
   font-weight: 800;
-  letter-spacing: 0.08em;
-  padding: 2vh;
+  letter-spacing: 0.05em;
+  padding: 1.6vh 2.2vw;
   min-height: 8vh;
+  background: #f5f5f5;
+  color: #0a0a0a;
+  border: 2px solid #f5f5f5;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 100ms ease, border-color 100ms ease, transform 60ms ease;
+}
+
+.log-save:hover:not(:disabled),
+.log-save:focus-visible:not(:disabled) {
+  background: #ffd166;
+  border-color: #ffd166;
+  outline: none;
+}
+
+.log-save:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.log-save:disabled {
+  background: rgba(245, 245, 245, 0.25);
+  border-color: rgba(245, 245, 245, 0.25);
+  color: #0a0a0a;
+  cursor: not-allowed;
 }
 
 .log-finish {
@@ -181,14 +308,22 @@
   color: #0a0a0a;
 }
 
+.log-finish:hover:not(:disabled),
+.log-finish:focus-visible:not(:disabled) {
+  background: #8be0a4;
+  border-color: #8be0a4;
+}
+
+/* --- Error + summary --------------------------------------------------- */
+
 .log-error {
   background: #6b1a1a;
   color: #ffd1d1;
-  font-size: clamp(13px, 1.2vw, 18px);
+  font-size: clamp(12px, 1.1vw, 16px);
   padding: 1vh 1.5vw;
-  border-radius: 8px;
-  margin-bottom: 1vh;
+  border-radius: 6px;
   font-weight: 600;
+  text-align: center;
 }
 
 .log-summary {
@@ -196,16 +331,11 @@
   background: rgba(255, 209, 102, 0.08);
 }
 
-.log-notes-row {
-  display: flex;
-  flex-direction: column;
-}
-
 .log-notes {
   font: inherit;
-  font-size: clamp(16px, 1.6vw, 24px);
+  font-size: clamp(15px, 1.5vw, 22px);
   padding: 1.2vh 1.5vw;
-  min-height: 8vh;
+  min-height: 7vh;
   background: rgba(0, 0, 0, 0.45);
   color: #f5f5f5;
   border: 2px solid rgba(245, 245, 245, 0.2);

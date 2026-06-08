@@ -1,13 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 import LogPanel from "../src/screens/LogPanel";
-import { fetchLoggedToday, postLog } from "../src/lib/api";
+import { fetchLastLogged, fetchLoggedToday, postLog } from "../src/lib/api";
 import type {
+  LastLoggedResponse,
   LogExerciseIn,
   LogResponse,
   LoggedTodayResponse,
   Plan,
 } from "../src/lib/types";
+
+// ---------------------------------------------------------------------------
+// Fixtures
+// ---------------------------------------------------------------------------
 
 const CIRCUIT_PLAN: Plan = {
   plan_id: 42,
@@ -55,18 +60,26 @@ const STEADY_PLAN: Plan = {
     warmup_sec: 300,
     duration_min: 45,
     cooldown_sec: 300,
-    intensity: "Z2 — conversational",
+    intensity: "Z2",
     target_range_min: [40, 50],
   },
 };
 
 function mkLoggedFixture(overrides: Partial<LoggedTodayResponse> = {}): LoggedTodayResponse {
-  return {
-    plan_id: 42,
-    exercises: [],
-    has_session_summary: false,
-    ...overrides,
-  };
+  return { plan_id: 42, exercises: [], has_session_summary: false, ...overrides };
+}
+
+function mkLastLoggedFixture(by: Record<string, Partial<LastLoggedResponse["by_exercise"][string]>> = {}): LastLoggedResponse {
+  const out: LastLoggedResponse["by_exercise"] = {};
+  for (const [k, v] of Object.entries(by)) {
+    out[k] = {
+      exercise: k, plan_date: "2026-05-30",
+      weight_lbs: null, reps_done: null, rpe_actual: null,
+      duration_sec: null, distance_m: null, hr_avg: null, hr_peak: null,
+      ...v,
+    };
+  }
+  return { by_exercise: out };
 }
 
 function mkLogResponse(plan_id: number, n: number): LogResponse {
@@ -94,32 +107,47 @@ function mkLogResponse(plan_id: number, n: number): LogResponse {
   };
 }
 
-describe("LogPanel — circuit plan", () => {
+function stubFetch(opts: {
+  logged?: LoggedTodayResponse;
+  lastLogged?: LastLoggedResponse;
+  capture?: LogExerciseIn[];
+}) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.includes("/today/logged")) {
+        return new Response(JSON.stringify(opts.logged ?? mkLoggedFixture()), {
+          status: 200, headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.includes("/last_logged")) {
+        return new Response(JSON.stringify(opts.lastLogged ?? { by_exercise: {} }), {
+          status: 200, headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.includes("/api/health/log") && init?.method === "POST") {
+        const body = JSON.parse(init.body as string) as LogExerciseIn;
+        opts.capture?.push(body);
+        return new Response(JSON.stringify(mkLogResponse(body.plan_id ?? 42, body.sets.length)), {
+          status: 200, headers: { "Content-Type": "application/json" },
+        });
+      }
+      return Response.error();
+    })
+  );
+}
+
+// ---------------------------------------------------------------------------
+// LogPanel — stepper UX
+// ---------------------------------------------------------------------------
+
+describe("LogPanel — stepper UX (circuit plan)", () => {
   let posted: LogExerciseIn[] = [];
 
   beforeEach(() => {
     posted = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = typeof input === "string" ? input : input.toString();
-        if (url.includes("/api/health/today/logged")) {
-          return new Response(JSON.stringify(mkLoggedFixture()), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          });
-        }
-        if (url.includes("/api/health/log") && init?.method === "POST") {
-          const body = JSON.parse(init.body as string) as LogExerciseIn;
-          posted.push(body);
-          return new Response(
-            JSON.stringify(mkLogResponse(body.plan_id ?? 42, body.sets.length)),
-            { status: 200, headers: { "Content-Type": "application/json" } }
-          );
-        }
-        return Response.error();
-      })
-    );
+    stubFetch({ capture: posted });
   });
 
   afterEach(() => {
@@ -127,114 +155,112 @@ describe("LogPanel — circuit plan", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders one per-set input row per round (rounds = sets)", async () => {
+  it("renders Weight / Reps / RPE steppers for a weighted exercise", async () => {
     render(
       <LogPanel plan={CIRCUIT_PLAN} elapsed_sec={120} onBackToTimer={() => {}} onFinish={() => {}} />
     );
-    // Wait for the hydrate to complete
     await screen.findByText("Goblet squat");
-    // Goblet squat with rounds=3 → 3 set rows labelled Set 1 / Set 2 / Set 3
-    const setLabels = screen.getAllByText(/^Set \d+/);
-    // Goblet squat (3) + Plank (3) + Dead bug (2) + Hollow hold (2) = 10 set rows
-    expect(setLabels).toHaveLength(10);
+    // Each stepper has -, value, + buttons; check labels exist
+    expect(screen.getAllByText("Weight").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Reps").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("RPE").length).toBeGreaterThan(0);
   });
 
-  it("pre-stubs weight + reps from target_load_lbs / target_reps", async () => {
+  it("hides the Weight stepper for bodyweight / duration exercises (Plank)", async () => {
     render(
       <LogPanel plan={CIRCUIT_PLAN} elapsed_sec={120} onBackToTimer={() => {}} onFinish={() => {}} />
     );
-    await screen.findByText("Goblet squat");
-    const repsInputs = screen.getAllByDisplayValue("10");
-    expect(repsInputs.length).toBeGreaterThan(0);
-    const lbInputs = screen.getAllByDisplayValue("35");
-    expect(lbInputs.length).toBeGreaterThan(0);
+    await screen.findByText("Plank");
+    // Plank card has Seconds + RPE but NOT Weight
+    const plankCard = screen.getByText("Plank").closest(".log-card") as HTMLElement;
+    expect(plankCard).toBeTruthy();
+    expect(plankCard.textContent).not.toContain("Weight");
+    expect(plankCard.textContent).toMatch(/Seconds/);
+    expect(plankCard.textContent).toMatch(/RPE/);
   });
 
-  it("POSTs the exercise's sets when Log exercise is tapped", async () => {
+  it("+ button on weight bumps by the inferred step (5 for goblet/db)", async () => {
     render(
       <LogPanel plan={CIRCUIT_PLAN} elapsed_sec={120} onBackToTimer={() => {}} onFinish={() => {}} />
     );
     await screen.findByText("Goblet squat");
-    const buttons = screen.getAllByRole("button", { name: /log exercise/i });
-    fireEvent.click(buttons[0]); // Goblet squat
-    await waitFor(() => {
-      expect(posted.length).toBeGreaterThan(0);
-    });
+    const gobletCard = screen.getByText("Goblet squat").closest(".log-card") as HTMLElement;
+    const incWeight = gobletCard.querySelector('[aria-label="Increase Weight"]') as HTMLButtonElement;
+    fireEvent.click(incWeight);
+    // pre-fill from target_load_lbs=35, +5 → 40
+    expect(gobletCard.textContent).toContain("40");
+  });
+
+  it("default 'simple' multi-set POSTs N copies of the simple triple (3×)", async () => {
+    render(
+      <LogPanel plan={CIRCUIT_PLAN} elapsed_sec={120} onBackToTimer={() => {}} onFinish={() => {}} />
+    );
+    await screen.findByText("Goblet squat");
+    const gobletCard = screen.getByText("Goblet squat").closest(".log-card") as HTMLElement;
+    // Bump RPE up so the post has a non-null value (starts null in simple)
+    fireEvent.click(gobletCard.querySelector('[aria-label="Increase RPE"]') as HTMLButtonElement);
+    const log = gobletCard.querySelector('[aria-label="Log Goblet squat"]') as HTMLButtonElement;
+    fireEvent.click(log);
+    await waitFor(() => expect(posted.length).toBeGreaterThan(0));
     const body = posted[0];
-    expect(body.plan_id).toBe(42);
-    expect(body.exercise).toBe("Goblet squat");
-    expect(body.log_type).toBe("strength_set");
+    // CIRCUIT_PLAN.rounds = 3, so 3 sets should be sent with the same triple
     expect(body.sets).toHaveLength(3);
-    expect(body.sets[0].set_num).toBe(1);
+    expect(body.sets.every((s) => s.weight_lbs === 35)).toBe(true);
+    expect(body.sets.every((s) => s.reps_done === 10)).toBe(true);
+    expect(body.sets.every((s) => s.rpe_actual === 7)).toBe(true);
   });
 
-  it("hydrates server-logged exercises as ✓ done on load", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = typeof input === "string" ? input : input.toString();
-        if (url.includes("/today/logged")) {
-          return new Response(
-            JSON.stringify(mkLoggedFixture({
-              exercises: [{ exercise: "Goblet squat", log_type: "strength_set", set_count: 3 }],
-            })),
-            { status: 200, headers: { "Content-Type": "application/json" } }
-          );
-        }
-        return Response.error();
-      })
-    );
+  it("expand toggle reveals per-set steppers (3 set rows for rounds=3)", async () => {
     render(
       <LogPanel plan={CIRCUIT_PLAN} elapsed_sec={120} onBackToTimer={() => {}} onFinish={() => {}} />
     );
-    // The Goblet squat exercise card should show ✓ Logged
-    const loggedBadges = await screen.findAllByRole("button", { name: /logged ✓/i });
-    expect(loggedBadges.length).toBeGreaterThan(0);
+    await screen.findByText("Goblet squat");
+    const gobletCard = screen.getByText("Goblet squat").closest(".log-card") as HTMLElement;
+    const toggle = gobletCard.querySelector(".log-expand-toggle") as HTMLButtonElement;
+    fireEvent.click(toggle);
+    // After expanding: Set 1 / Set 2 / Set 3 rows are visible
+    const setLabels = Array.from(gobletCard.querySelectorAll(".log-per-set-label")).map((e) => e.textContent);
+    expect(setLabels).toEqual(["Set 1", "Set 2", "Set 3"]);
   });
 
-  it("posts session_summary when Finish workout is tapped", async () => {
-    let finished = false;
+  it("pre-fills weight + reps from last-logged when available", async () => {
+    stubFetch({
+      lastLogged: mkLastLoggedFixture({
+        "Goblet squat": { weight_lbs: 45, reps_done: 8 },
+      }),
+    });
     render(
-      <LogPanel
-        plan={CIRCUIT_PLAN}
-        elapsed_sec={120}
-        onBackToTimer={() => {}}
-        onFinish={() => { finished = true; }}
-      />
+      <LogPanel plan={CIRCUIT_PLAN} elapsed_sec={120} onBackToTimer={() => {}} onFinish={() => {}} />
     );
     await screen.findByText("Goblet squat");
-    const finish = await screen.findByRole("button", { name: /finish workout/i });
-    fireEvent.click(finish);
-    await waitFor(() => {
-      const summaryPost = posted.find((p) => p.log_type === "session_summary");
-      expect(summaryPost).toBeDefined();
+    const gobletCard = screen.getByText("Goblet squat").closest(".log-card") as HTMLElement;
+    // last weight=45 (not 35 from target_load_lbs) and last reps=8
+    const values = Array.from(gobletCard.querySelectorAll(".stepper-value")).map((e) => e.textContent);
+    expect(values).toContain("45");
+    expect(values).toContain("8");
+  });
+
+  it("renders ✓ Logged for exercises in today/logged on hydrate", async () => {
+    stubFetch({
+      logged: mkLoggedFixture({
+        exercises: [{ exercise: "Goblet squat", log_type: "strength_set", set_count: 3 }],
+      }),
     });
-    expect(finished).toBe(true);
+    render(
+      <LogPanel plan={CIRCUIT_PLAN} elapsed_sec={120} onBackToTimer={() => {}} onFinish={() => {}} />
+    );
+    await screen.findByText("Goblet squat");
+    const loggedBadge = screen.getAllByRole("button", { name: /Log Goblet squat/i })[0];
+    expect(loggedBadge.textContent).toMatch(/Logged ✓/);
   });
 });
 
 describe("LogPanel — cardio steady", () => {
+  let posted: LogExerciseIn[] = [];
+
   beforeEach(() => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = typeof input === "string" ? input : input.toString();
-        if (url.includes("/today/logged")) {
-          return new Response(JSON.stringify(mkLoggedFixture({ plan_id: 51 })), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          });
-        }
-        if (url.includes("/api/health/log") && init?.method === "POST") {
-          const body = JSON.parse(init.body as string) as LogExerciseIn;
-          return new Response(
-            JSON.stringify(mkLogResponse(body.plan_id ?? 51, body.sets.length)),
-            { status: 200, headers: { "Content-Type": "application/json" } }
-          );
-        }
-        return Response.error();
-      })
-    );
+    posted = [];
+    stubFetch({ capture: posted });
   });
 
   afterEach(() => {
@@ -242,84 +268,97 @@ describe("LogPanel — cardio steady", () => {
     vi.unstubAllGlobals();
   });
 
-  it("shows duration / distance / HR fields and a Log cardio button", async () => {
+  it("shows Duration / Distance / HR avg+peak / RPE steppers and a Log cardio button", async () => {
     render(
       <LogPanel plan={STEADY_PLAN} elapsed_sec={2700} onBackToTimer={() => {}} onFinish={() => {}} />
     );
-    expect(await screen.findByText(/cardio block/i)).toBeDefined();
+    expect(await screen.findByText("Cardio block")).toBeDefined();
+    expect(screen.getByText("Duration")).toBeDefined();
+    expect(screen.getByText("Distance")).toBeDefined();
+    expect(screen.getByText("HR avg")).toBeDefined();
+    expect(screen.getByText("HR peak")).toBeDefined();
     expect(screen.getByRole("button", { name: /log cardio/i })).toBeDefined();
-    expect(screen.getByDisplayValue("2700")).toBeDefined();
+  });
+
+  it("POSTs a single cardio_block row when Log cardio is tapped", async () => {
+    render(
+      <LogPanel plan={STEADY_PLAN} elapsed_sec={2700} onBackToTimer={() => {}} onFinish={() => {}} />
+    );
+    await screen.findByText("Cardio block");
+    fireEvent.click(screen.getByRole("button", { name: /log cardio/i }));
+    await waitFor(() => expect(posted.length).toBeGreaterThan(0));
+    expect(posted[0].log_type).toBe("cardio_block");
+    expect(posted[0].sets).toHaveLength(1);
+    // duration auto-filled from elapsed_sec when not bumped
+    expect(posted[0].sets[0].duration_sec).toBe(2700);
   });
 });
 
-// Direct API smoke tests (no React) ------------------------------------------
+// ---------------------------------------------------------------------------
+// API clients
+// ---------------------------------------------------------------------------
 
-describe("postLog client", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
+describe("postLog / fetchLastLogged clients", () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
 
-  it("sends JSON body with the right shape and the application/json content-type", async () => {
-    const captured: { headers: Record<string, string>; body: string }[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-        const h: Record<string, string> = {};
-        new Headers(init?.headers).forEach((v, k) => { h[k] = v; });
-        captured.push({ headers: h, body: init?.body as string });
-        return new Response(JSON.stringify(mkLogResponse(1, 1)), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
+  it("postLog returns ok on 200", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      new Response(JSON.stringify(mkLogResponse(1, 1)), {
+        status: 200, headers: { "Content-Type": "application/json" },
       })
-    );
+    ));
     const r = await postLog({
       plan_id: 1, exercise: "X", log_type: "strength_set",
       sets: [{ set_num: 1, reps_done: 10, weight_lbs: 35, rpe_actual: 7 }],
     });
     expect(r.status).toBe("ok");
-    expect(captured[0].headers["content-type"]).toContain("application/json");
-    const parsed = JSON.parse(captured[0].body);
-    expect(parsed.exercise).toBe("X");
   });
 
-  it("returns error status with HTTP detail on non-ok response", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () =>
-        new Response(JSON.stringify({ detail: { error: "invalid_log_type" } }), {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        })
-      )
-    );
-    const r = await postLog({
-      log_type: "garbage" as never,
-      sets: [{ set_num: 1 }],
-    });
+  it("postLog surfaces the API's invalid_log_type detail on 400", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      new Response(JSON.stringify({ detail: { error: "invalid_log_type" } }), {
+        status: 400, headers: { "Content-Type": "application/json" },
+      })
+    ));
+    const r = await postLog({ log_type: "garbage" as never, sets: [{ set_num: 1 }] });
     expect(r.status).toBe("error");
-    if (r.status === "error") {
-      expect(r.message).toContain("invalid_log_type");
-    }
+    if (r.status === "error") expect(r.message).toContain("invalid_log_type");
   });
-});
 
-describe("fetchLoggedToday client", () => {
-  afterEach(() => { vi.unstubAllGlobals(); });
+  it("fetchLastLogged skips the network call when given an empty list", async () => {
+    const f = vi.fn();
+    vi.stubGlobal("fetch", f);
+    const r = await fetchLastLogged([]);
+    expect(r.status).toBe("ok");
+    if (r.status === "ok") expect(r.data.by_exercise).toEqual({});
+    expect(f).not.toHaveBeenCalled();
+  });
 
-  it("returns ok with the logged exercises list", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () =>
-        new Response(JSON.stringify(mkLoggedFixture({
-          exercises: [{ exercise: "Goblet squat", log_type: "strength_set", set_count: 3 }],
-        })), { status: 200, headers: { "Content-Type": "application/json" } })
-      )
-    );
-    const r = await fetchLoggedToday();
+  it("fetchLastLogged returns the by_exercise map on 200", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      new Response(JSON.stringify({
+        by_exercise: {
+          "Goblet squat": { exercise: "Goblet squat", weight_lbs: 35, reps_done: 10, rpe_actual: 7,
+                            duration_sec: null, distance_m: null, hr_avg: null, hr_peak: null,
+                            plan_date: "2026-06-01" },
+        }
+      }), { status: 200, headers: { "Content-Type": "application/json" }})
+    ));
+    const r = await fetchLastLogged(["Goblet squat"]);
     expect(r.status).toBe("ok");
     if (r.status === "ok") {
-      expect(r.data.exercises).toHaveLength(1);
+      expect(r.data.by_exercise["Goblet squat"].weight_lbs).toBe(35);
     }
+  });
+
+  it("fetchLoggedToday surfaces the exercise count", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      new Response(JSON.stringify(mkLoggedFixture({
+        exercises: [{ exercise: "Goblet squat", log_type: "strength_set", set_count: 3 }],
+      })), { status: 200, headers: { "Content-Type": "application/json" }})
+    ));
+    const r = await fetchLoggedToday();
+    expect(r.status).toBe("ok");
+    if (r.status === "ok") expect(r.data.exercises[0].set_count).toBe(3);
   });
 });

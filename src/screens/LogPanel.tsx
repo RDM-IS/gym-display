@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useReducer, useState } from "react";
-import { fetchLoggedToday, postLog } from "../lib/api";
+import Stepper from "../components/Stepper";
+import { fetchLastLogged, fetchLoggedToday, postLog } from "../lib/api";
 import { displayTitle, formatPlanDate } from "../lib/format";
+import { weightStepFor } from "../lib/weight-step";
 import type {
   Blocks,
   Finisher,
+  LastLoggedEntry,
   LogExerciseIn,
   LogSetIn,
   LoggedExerciseEntry,
@@ -12,99 +15,48 @@ import type {
 } from "../lib/types";
 
 // ---------------------------------------------------------------------------
-// Types & helpers
+// Card model — "simple" (one stepper triple applies to all rounds)
+//             vs "expanded" (per-set steppers).
 // ---------------------------------------------------------------------------
 
 type Status = "idle" | "saving" | "ok" | "error";
 
 interface ExerciseFormState {
-  sets: LogSetIn[];
+  rounds: number;
+  mode: "simple" | "expanded";
+  /** Simple mode value (applied to all rounds on submit). */
+  simple: { weight: number | null; reps: number | null; rpe: number | null };
+  /** Per-set values (used in expanded mode). Always length = rounds. */
+  perSet: Array<{ weight: number | null; reps: number | null; rpe: number | null }>;
   status: Status;
   error: string | null;
+  /** Pre-fill source for hints + initial values. */
+  last: LastLoggedEntry | null;
 }
 
 interface CardioFormState {
-  block: LogSetIn;
+  duration_sec: number | null;
+  distance_m: number | null;
+  hr_avg: number | null;
+  hr_peak: number | null;
+  rpe: number | null;
   status: Status;
   error: string | null;
-}
-
-interface SummaryFormState {
-  rpe_actual: number | null;
-  notes: string;
-  status: Status;
-  error: string | null;
+  last: LastLoggedEntry | null;
 }
 
 interface State {
-  exercises: Record<string, ExerciseFormState>;  // key = exercise name
+  exercises: Record<string, ExerciseFormState>;
   cardio: CardioFormState | null;
   loggedFromServer: Set<string>;
   hasSummary: boolean;
-  summary: SummaryFormState;
+  summary: { rpe: number | null; notes: string; status: Status; error: string | null };
+  hydrated: boolean;
 }
 
-type Action =
-  | { type: "set_rep"; key: string; idx: number; value: number | null }
-  | { type: "set_weight"; key: string; idx: number; value: number | null }
-  | { type: "set_rpe"; key: string; idx: number; value: number | null }
-  | { type: "set_cardio"; field: keyof LogSetIn; value: number | null }
-  | { type: "set_summary_rpe"; value: number | null }
-  | { type: "set_summary_notes"; value: string }
-  | { type: "save_start"; key: string }
-  | { type: "save_ok"; key: string }
-  | { type: "save_err"; key: string; message: string }
-  | { type: "cardio_save_start" }
-  | { type: "cardio_save_ok" }
-  | { type: "cardio_save_err"; message: string }
-  | { type: "summary_save_start" }
-  | { type: "summary_save_ok" }
-  | { type: "summary_save_err"; message: string }
-  | { type: "hydrate_logged"; logged: LoggedExerciseEntry[]; hasSummary: boolean };
-
-function buildInitialState(plan: Plan): State {
-  const exercises: Record<string, ExerciseFormState> = {};
-  const rounds = circuitRounds(plan.blocks);
-  for (const ex of mainExercises(plan.blocks)) {
-    exercises[ex.name] = blankExerciseForm(ex, rounds);
-  }
-  for (const ex of finisherExercises(plan.blocks?.finisher)) {
-    // Same-name collisions between main + finisher: prefix finisher key so
-    // both forms exist independently.
-    exercises[`finisher:${ex.name}`] = blankExerciseForm(
-      ex,
-      Math.max(1, plan.blocks?.finisher?.rounds ?? 1)
-    );
-  }
-  const blockType = plan.blocks?.type;
-  const cardio: CardioFormState | null =
-    blockType === "steady" || blockType === "intervals" || blockType === "walk"
-      ? {
-          block: { duration_sec: null, distance_m: null, hr_avg: null, hr_peak: null, rpe_actual: null },
-          status: "idle",
-          error: null,
-        }
-      : null;
-  return {
-    exercises,
-    cardio,
-    loggedFromServer: new Set(),
-    hasSummary: false,
-    summary: { rpe_actual: null, notes: "", status: "idle", error: null },
-  };
-}
-
-function blankExerciseForm(ex: PlannedExercise, rounds: number): ExerciseFormState {
-  const n = Math.max(1, rounds);
-  const sets: LogSetIn[] = Array.from({ length: n }, (_, i) => ({
-    set_num: i + 1,
-    reps_done: ex.format === "reps" ? ex.target_reps ?? null : null,
-    weight_lbs: ex.target_load_lbs ?? null,
-    duration_sec: ex.format === "duration" ? ex.duration_sec ?? null : null,
-    rpe_actual: null,
-  }));
-  return { sets, status: "idle", error: null };
-}
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function mainExercises(blocks: Blocks | undefined): PlannedExercise[] {
   if (!blocks) return [];
@@ -125,36 +77,173 @@ function circuitRounds(blocks: Blocks | undefined): number {
   return 1;
 }
 
+function finisherRounds(f: Finisher | null | undefined): number {
+  return Math.max(1, f?.rounds ?? 1);
+}
+
+function blankExerciseForm(ex: PlannedExercise, rounds: number): ExerciseFormState {
+  const n = Math.max(1, rounds);
+  const simple = {
+    weight: ex.target_load_lbs ?? null,
+    reps: ex.format === "reps" ? ex.target_reps ?? null : null,
+    rpe: null as number | null,
+  };
+  return {
+    rounds: n,
+    mode: "simple",
+    simple,
+    perSet: Array.from({ length: n }, () => ({ ...simple })),
+    status: "idle",
+    error: null,
+    last: null,
+  };
+}
+
+function buildInitialState(plan: Plan): State {
+  const exercises: Record<string, ExerciseFormState> = {};
+  const rMain = circuitRounds(plan.blocks);
+  for (const ex of mainExercises(plan.blocks)) {
+    exercises[ex.name] = blankExerciseForm(ex, rMain);
+  }
+  const rFin = finisherRounds(plan.blocks?.finisher);
+  for (const ex of finisherExercises(plan.blocks?.finisher)) {
+    exercises[`finisher:${ex.name}`] = blankExerciseForm(ex, rFin);
+  }
+  const t = plan.blocks?.type;
+  const cardio: CardioFormState | null =
+    t === "steady" || t === "intervals" || t === "walk"
+      ? {
+          duration_sec: null,
+          distance_m: null,
+          hr_avg: null,
+          hr_peak: null,
+          rpe: null,
+          status: "idle",
+          error: null,
+          last: null,
+        }
+      : null;
+  return {
+    exercises,
+    cardio,
+    loggedFromServer: new Set(),
+    hasSummary: false,
+    summary: { rpe: null, notes: "", status: "idle", error: null },
+    hydrated: false,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Reducer
 // ---------------------------------------------------------------------------
 
+type Field = "weight" | "reps" | "rpe";
+
+type Action =
+  | { type: "set_simple"; key: string; field: Field; value: number | null }
+  | { type: "set_perset"; key: string; idx: number; field: Field; value: number | null }
+  | { type: "toggle_expand"; key: string }
+  | { type: "save_start"; key: string }
+  | { type: "save_ok"; key: string }
+  | { type: "save_err"; key: string; message: string }
+  | { type: "set_cardio_field"; field: keyof Omit<CardioFormState, "status" | "error" | "last">; value: number | null }
+  | { type: "cardio_save_start" }
+  | { type: "cardio_save_ok" }
+  | { type: "cardio_save_err"; message: string }
+  | { type: "set_summary_rpe"; value: number | null }
+  | { type: "set_summary_notes"; value: string }
+  | { type: "summary_save_start" }
+  | { type: "summary_save_ok" }
+  | { type: "summary_save_err"; message: string }
+  | { type: "hydrate";
+      logged: LoggedExerciseEntry[];
+      hasSummary: boolean;
+      lastByExercise: Record<string, LastLoggedEntry>;
+    };
+
 function reducer(state: State, action: Action): State {
   switch (action.type) {
-    case "set_rep":   return setField(state, action.key, action.idx, "reps_done", action.value);
-    case "set_weight": return setField(state, action.key, action.idx, "weight_lbs", action.value);
-    case "set_rpe":   return setField(state, action.key, action.idx, "rpe_actual", action.value);
-    case "set_cardio": {
-      if (!state.cardio) return state;
-      return { ...state, cardio: { ...state.cardio, block: { ...state.cardio.block, [action.field]: action.value }, status: "idle", error: null } };
+    case "set_simple": {
+      const f = state.exercises[action.key];
+      if (!f) return state;
+      const simple = { ...f.simple, [action.field]: action.value };
+      // Keep per-set in sync as the user edits the simple triple
+      const perSet = f.perSet.map(() => ({ ...simple }));
+      return {
+        ...state,
+        exercises: { ...state.exercises, [action.key]: { ...f, simple, perSet, status: "idle", error: null } },
+      };
     }
-    case "set_summary_rpe":   return { ...state, summary: { ...state.summary, rpe_actual: action.value, status: "idle", error: null } };
+    case "set_perset": {
+      const f = state.exercises[action.key];
+      if (!f) return state;
+      const perSet = f.perSet.map((s, i) =>
+        i === action.idx ? { ...s, [action.field]: action.value } : s
+      );
+      return {
+        ...state,
+        exercises: { ...state.exercises, [action.key]: { ...f, perSet, status: "idle", error: null } },
+      };
+    }
+    case "toggle_expand": {
+      const f = state.exercises[action.key];
+      if (!f) return state;
+      const nextMode = f.mode === "simple" ? "expanded" : "simple";
+      // When collapsing, snap perSet back to the simple triple so the next
+      // POST sends what's visible.
+      const perSet =
+        nextMode === "simple" ? f.perSet.map(() => ({ ...f.simple })) : f.perSet;
+      return {
+        ...state,
+        exercises: { ...state.exercises, [action.key]: { ...f, mode: nextMode, perSet } },
+      };
+    }
+    case "save_start":  return mut(state, action.key, (f) => ({ ...f, status: "saving", error: null }));
+    case "save_ok":     return mut(state, action.key, (f) => ({ ...f, status: "ok", error: null }));
+    case "save_err":    return mut(state, action.key, (f) => ({ ...f, status: "error", error: action.message }));
+    case "set_cardio_field": {
+      if (!state.cardio) return state;
+      return { ...state, cardio: { ...state.cardio, [action.field]: action.value, status: "idle", error: null } };
+    }
+    case "cardio_save_start": return state.cardio ? { ...state, cardio: { ...state.cardio, status: "saving", error: null } } : state;
+    case "cardio_save_ok":    return state.cardio ? { ...state, cardio: { ...state.cardio, status: "ok", error: null } } : state;
+    case "cardio_save_err":   return state.cardio ? { ...state, cardio: { ...state.cardio, status: "error", error: action.message } } : state;
+    case "set_summary_rpe":   return { ...state, summary: { ...state.summary, rpe: action.value, status: "idle", error: null } };
     case "set_summary_notes": return { ...state, summary: { ...state.summary, notes: action.value, status: "idle", error: null } };
-    case "save_start": return mut(state, action.key, (f) => ({ ...f, status: "saving", error: null }));
-    case "save_ok":    return mut(state, action.key, (f) => ({ ...f, status: "ok", error: null }));
-    case "save_err":   return mut(state, action.key, (f) => ({ ...f, status: "error", error: action.message }));
-    case "cardio_save_start":
-      return state.cardio ? { ...state, cardio: { ...state.cardio, status: "saving", error: null } } : state;
-    case "cardio_save_ok":
-      return state.cardio ? { ...state, cardio: { ...state.cardio, status: "ok", error: null } } : state;
-    case "cardio_save_err":
-      return state.cardio ? { ...state, cardio: { ...state.cardio, status: "error", error: action.message } } : state;
     case "summary_save_start": return { ...state, summary: { ...state.summary, status: "saving", error: null } };
     case "summary_save_ok":    return { ...state, summary: { ...state.summary, status: "ok", error: null }, hasSummary: true };
     case "summary_save_err":   return { ...state, summary: { ...state.summary, status: "error", error: action.message } };
-    case "hydrate_logged": {
+    case "hydrate": {
       const fromServer = new Set<string>(action.logged.map((e) => e.exercise));
-      return { ...state, loggedFromServer: fromServer, hasSummary: action.hasSummary };
+      // Pre-fill defaults from last_logged. Lookup tries both raw exercise
+      // name and the finisher: prefix.
+      const exercises = { ...state.exercises };
+      for (const [key, form] of Object.entries(exercises)) {
+        const rawName = key.startsWith("finisher:") ? key.slice("finisher:".length) : key;
+        const last = action.lastByExercise[rawName] ?? null;
+        if (last) {
+          const simple = {
+            weight: last.weight_lbs ?? form.simple.weight,
+            reps: last.reps_done ?? form.simple.reps,
+            rpe: form.simple.rpe, // never override last RPE — user enters fresh
+          };
+          exercises[key] = {
+            ...form,
+            simple,
+            perSet: form.perSet.map(() => ({ ...simple })),
+            last,
+          };
+        }
+      }
+      const cardio = state.cardio;
+      return {
+        ...state,
+        exercises,
+        cardio,
+        loggedFromServer: fromServer,
+        hasSummary: action.hasSummary,
+        hydrated: true,
+      };
     }
   }
 }
@@ -165,22 +254,15 @@ function mut(state: State, key: string, fn: (f: ExerciseFormState) => ExerciseFo
   return { ...state, exercises: { ...state.exercises, [key]: fn(f) } };
 }
 
-function setField(state: State, key: string, idx: number, field: keyof LogSetIn, value: number | null): State {
-  const f = state.exercises[key];
-  if (!f) return state;
-  const nextSets = f.sets.map((s, i) => (i === idx ? { ...s, [field]: value } : s));
-  return { ...state, exercises: { ...state.exercises, [key]: { ...f, sets: nextSets, status: "idle", error: null } } };
-}
-
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
 interface Props {
   plan: Plan;
-  elapsed_sec: number;       // for auto-filling cardio duration
+  elapsed_sec: number;
   onBackToTimer: () => void;
-  onFinish: () => void;      // call after session_summary saved
+  onFinish: () => void;
 }
 
 export default function LogPanel({ plan, elapsed_sec, onBackToTimer, onFinish }: Props) {
@@ -188,67 +270,71 @@ export default function LogPanel({ plan, elapsed_sec, onBackToTimer, onFinish }:
   const [state, dispatch] = useReducer(reducer, initial);
   const [loading, setLoading] = useState(true);
 
-  // Hydrate logged-state on mount
+  // Pre-fetch logged state + last-logged for every named exercise
   useEffect(() => {
     let cancelled = false;
+    const names = [
+      ...mainExercises(plan.blocks).map((e) => e.name),
+      ...finisherExercises(plan.blocks?.finisher).map((e) => e.name),
+    ];
     (async () => {
-      const r = await fetchLoggedToday();
+      const [loggedR, lastR] = await Promise.all([
+        fetchLoggedToday(),
+        fetchLastLogged(names),
+      ]);
       if (cancelled) return;
-      if (r.status === "ok") {
-        dispatch({ type: "hydrate_logged", logged: r.data.exercises, hasSummary: r.data.has_session_summary });
-      }
+      dispatch({
+        type: "hydrate",
+        logged: loggedR.status === "ok" ? loggedR.data.exercises : [],
+        hasSummary: loggedR.status === "ok" ? loggedR.data.has_session_summary : false,
+        lastByExercise: lastR.status === "ok" ? lastR.data.by_exercise : {},
+      });
       setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [plan]);
 
   async function saveExercise(key: string, exerciseName: string, isFinisher: boolean) {
     const form = state.exercises[key];
     if (!form) return;
     dispatch({ type: "save_start", key });
+    const sets: LogSetIn[] = (form.mode === "expanded" ? form.perSet : form.perSet).map((s, i) => ({
+      set_num: i + 1,
+      reps_done: s.reps ?? null,
+      weight_lbs: s.weight ?? null,
+      rpe_actual: s.rpe ?? null,
+    }));
     const body: LogExerciseIn = {
       plan_id: plan.plan_id,
       exercise: exerciseName,
       log_type: "strength_set",
-      sets: form.sets.map((s, i) => ({
-        set_num: i + 1,
-        reps_done: s.reps_done ?? null,
-        weight_lbs: s.weight_lbs ?? null,
-        rpe_actual: s.rpe_actual ?? null,
-        duration_sec: s.duration_sec ?? null,
-      })),
+      sets,
       notes: isFinisher ? "finisher" : null,
     };
     const r = await postLog(body);
-    if (r.status === "ok") {
-      dispatch({ type: "save_ok", key });
-    } else {
-      dispatch({ type: "save_err", key, message: r.message });
-    }
+    if (r.status === "ok") dispatch({ type: "save_ok", key });
+    else dispatch({ type: "save_err", key, message: r.message });
   }
 
   async function saveCardio() {
     if (!state.cardio) return;
     dispatch({ type: "cardio_save_start" });
-    const b = state.cardio.block;
+    const c = state.cardio;
     const body: LogExerciseIn = {
       plan_id: plan.plan_id,
       exercise: plan.blocks?.display_name ?? displayTitle(plan),
       log_type: "cardio_block",
       sets: [{
-        duration_sec: b.duration_sec ?? Math.round(elapsed_sec),
-        distance_m: b.distance_m ?? null,
-        hr_avg: b.hr_avg ?? null,
-        hr_peak: b.hr_peak ?? null,
-        rpe_actual: b.rpe_actual ?? null,
+        duration_sec: c.duration_sec ?? Math.round(elapsed_sec),
+        distance_m: c.distance_m ?? null,
+        hr_avg: c.hr_avg ?? null,
+        hr_peak: c.hr_peak ?? null,
+        rpe_actual: c.rpe ?? null,
       }],
     };
     const r = await postLog(body);
-    if (r.status === "ok") {
-      dispatch({ type: "cardio_save_ok" });
-    } else {
-      dispatch({ type: "cardio_save_err", message: r.message });
-    }
+    if (r.status === "ok") dispatch({ type: "cardio_save_ok" });
+    else dispatch({ type: "cardio_save_err", message: r.message });
   }
 
   async function saveSummary() {
@@ -256,7 +342,7 @@ export default function LogPanel({ plan, elapsed_sec, onBackToTimer, onFinish }:
     const body: LogExerciseIn = {
       plan_id: plan.plan_id,
       log_type: "session_summary",
-      sets: [{ rpe_actual: state.summary.rpe_actual ?? null }],
+      sets: [{ rpe_actual: state.summary.rpe ?? null }],
       notes: state.summary.notes.trim() || null,
     };
     const r = await postLog(body);
@@ -270,7 +356,6 @@ export default function LogPanel({ plan, elapsed_sec, onBackToTimer, onFinish }:
 
   const mains = mainExercises(plan.blocks);
   const fins = finisherExercises(plan.blocks?.finisher);
-  const cardio = state.cardio;
   const blockType = plan.blocks?.type;
 
   return (
@@ -286,59 +371,58 @@ export default function LogPanel({ plan, elapsed_sec, onBackToTimer, onFinish }:
       <div className="log-scroll">
         {loading && <div className="log-empty">Loading current state…</div>}
 
-        {cardio && (
-          <CardioBlockForm
+        {state.cardio && (
+          <CardioCard
             blockType={blockType}
-            form={cardio}
+            form={state.cardio}
             elapsed_sec={elapsed_sec}
-            onChange={(field, value) => dispatch({ type: "set_cardio", field, value })}
+            onField={(field, value) => dispatch({ type: "set_cardio_field", field, value })}
             onSave={saveCardio}
           />
         )}
 
         {mains.length > 0 && (
-          <div className="log-section">
-            <div className="log-section-title">Main</div>
+          <Section title="Main">
             {mains.map((ex) => (
-              <ExerciseForm
+              <ExerciseCard
                 key={ex.name}
                 exercise={ex}
                 form={state.exercises[ex.name]}
-                alreadyLogged={state.loggedFromServer.has(ex.name)}
-                onSetField={(idx, field, value) => dispatchField(dispatch, ex.name, idx, field, value)}
+                alreadyLoggedOnServer={state.loggedFromServer.has(ex.name)}
+                onSimple={(field, value) => dispatch({ type: "set_simple", key: ex.name, field, value })}
+                onPerSet={(idx, field, value) => dispatch({ type: "set_perset", key: ex.name, idx, field, value })}
+                onToggleExpand={() => dispatch({ type: "toggle_expand", key: ex.name })}
                 onSave={() => saveExercise(ex.name, ex.name, false)}
               />
             ))}
-          </div>
+          </Section>
         )}
 
         {fins.length > 0 && (
-          <div className="log-section">
-            <div className="log-section-title">
-              Finisher{plan.blocks?.finisher?.rounds && plan.blocks.finisher.rounds > 1
-                ? ` — ${plan.blocks.finisher.rounds} rounds`
-                : ""}
-            </div>
+          <Section title={`Finisher${plan.blocks?.finisher?.rounds && plan.blocks.finisher.rounds > 1
+            ? ` — ${plan.blocks.finisher.rounds} rounds` : ""}`}>
             {fins.map((ex) => {
               const key = `finisher:${ex.name}`;
               return (
-                <ExerciseForm
+                <ExerciseCard
                   key={key}
                   exercise={ex}
                   form={state.exercises[key]}
-                  alreadyLogged={state.loggedFromServer.has(ex.name)}
-                  onSetField={(idx, field, value) => dispatchField(dispatch, key, idx, field, value)}
+                  alreadyLoggedOnServer={state.loggedFromServer.has(ex.name)}
+                  onSimple={(field, value) => dispatch({ type: "set_simple", key, field, value })}
+                  onPerSet={(idx, field, value) => dispatch({ type: "set_perset", key, idx, field, value })}
+                  onToggleExpand={() => dispatch({ type: "toggle_expand", key })}
                   onSave={() => saveExercise(key, ex.name, true)}
                 />
               );
             })}
-          </div>
+          </Section>
         )}
 
-        <SessionSummaryForm
+        <SummaryCard
           state={state}
-          onChangeRpe={(v) => dispatch({ type: "set_summary_rpe", value: v })}
-          onChangeNotes={(v) => dispatch({ type: "set_summary_notes", value: v })}
+          onRpe={(v) => dispatch({ type: "set_summary_rpe", value: v })}
+          onNotes={(v) => dispatch({ type: "set_summary_notes", value: v })}
           onFinish={saveSummary}
         />
       </div>
@@ -346,253 +430,330 @@ export default function LogPanel({ plan, elapsed_sec, onBackToTimer, onFinish }:
   );
 }
 
-function dispatchField(
-  dispatch: React.Dispatch<Action>,
-  key: string,
-  idx: number,
-  field: "reps_done" | "weight_lbs" | "rpe_actual",
-  value: number | null,
-): void {
-  if (field === "reps_done") dispatch({ type: "set_rep", key, idx, value });
-  else if (field === "weight_lbs") dispatch({ type: "set_weight", key, idx, value });
-  else dispatch({ type: "set_rpe", key, idx, value });
-}
-
 // ---------------------------------------------------------------------------
-// Sub-components
+// Card components
 // ---------------------------------------------------------------------------
 
-function ExerciseForm({
-  exercise,
-  form,
-  alreadyLogged,
-  onSetField,
-  onSave,
-}: {
-  exercise: PlannedExercise;
-  form: ExerciseFormState | undefined;
-  alreadyLogged: boolean;
-  onSetField: (idx: number, field: "reps_done" | "weight_lbs" | "rpe_actual", value: number | null) => void;
-  onSave: () => void;
-}) {
-  if (!form) return null;
-  const isDone = form.status === "ok" || alreadyLogged;
-
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className={`log-exercise${isDone ? " log-exercise--done" : ""}`}>
-      <div className="log-exercise-head">
-        <div className="log-exercise-name">
-          {exercise.name}
-          {isDone && <span className="log-check"> ✓</span>}
-        </div>
-        <div className="log-exercise-target tv-mono">
-          {exercise.format === "reps"
-            ? `target ${exercise.target_reps ?? "?"} reps${
-                exercise.target_load_lbs ? ` @ ${exercise.target_load_lbs} lb` : ""
-              }`
-            : `target ${exercise.duration_sec ?? "?"} sec`}
-        </div>
-      </div>
-      <div className="log-sets">
-        {form.sets.map((s, i) => (
-          <div className="log-set-row" key={i}>
-            <div className="log-set-label">Set {i + 1}</div>
-            {exercise.format === "reps" && (
-              <NumberInput
-                label="lb"
-                value={s.weight_lbs ?? null}
-                onChange={(v) => onSetField(i, "weight_lbs", v)}
-                disabled={isDone}
-              />
-            )}
-            <NumberInput
-              label={exercise.format === "reps" ? "reps" : "sec"}
-              value={exercise.format === "reps" ? (s.reps_done ?? null) : (s.duration_sec ?? null)}
-              onChange={(v) => onSetField(i, "reps_done", v)}
-              disabled={isDone}
-            />
-            <NumberInput
-              label="RPE"
-              value={s.rpe_actual ?? null}
-              onChange={(v) => onSetField(i, "rpe_actual", v)}
-              disabled={isDone}
-            />
-          </div>
-        ))}
-      </div>
-      {form.status === "error" && form.error && (
-        <div className="log-error">{form.error} — tap Log to retry</div>
-      )}
-      <button
-        className="control-btn control-btn--primary log-save"
-        onClick={onSave}
-        disabled={isDone || form.status === "saving"}
-      >
-        {isDone ? "Logged ✓" : form.status === "saving" ? "Saving…" : "Log exercise"}
-      </button>
+    <div className="log-section">
+      <div className="log-section-title">{title}</div>
+      {children}
     </div>
   );
 }
 
-function CardioBlockForm({
+function ExerciseCard({
+  exercise,
+  form,
+  alreadyLoggedOnServer,
+  onSimple,
+  onPerSet,
+  onToggleExpand,
+  onSave,
+}: {
+  exercise: PlannedExercise;
+  form: ExerciseFormState | undefined;
+  alreadyLoggedOnServer: boolean;
+  onSimple: (field: Field, value: number | null) => void;
+  onPerSet: (idx: number, field: Field, value: number | null) => void;
+  onToggleExpand: () => void;
+  onSave: () => void;
+}) {
+  if (!form) return null;
+  const isDone = form.status === "ok" || alreadyLoggedOnServer;
+  const w = weightStepFor(exercise);
+  const useReps = exercise.format === "reps";
+  const lastWeight = form.last?.weight_lbs ?? null;
+  const lastReps = form.last?.reps_done ?? null;
+
+  return (
+    <div className={`log-card${isDone ? " log-card--done" : ""}`}>
+      <div className="log-card-head">
+        <div className="log-card-name">
+          {exercise.name}
+          {isDone && <span className="log-check"> ✓</span>}
+        </div>
+        <div className="log-card-target tv-mono">
+          {useReps
+            ? `target ${exercise.target_reps ?? "?"} ${exercise.target_load_lbs ? `@ ${exercise.target_load_lbs} lb` : ""}`
+            : `target ${exercise.duration_sec ?? "?"} sec`}
+        </div>
+      </div>
+
+      {form.mode === "simple" ? (
+        <div className="log-steppers">
+          {!w.isBodyweight && useReps && (
+            <Stepper
+              label="Weight"
+              unit="lb"
+              value={form.simple.weight}
+              step={w.step}
+              min={0}
+              blankStart={exercise.target_load_lbs ?? 0}
+              hint={lastWeight}
+              disabled={isDone}
+              onChange={(v) => onSimple("weight", v)}
+            />
+          )}
+          <Stepper
+            label={useReps ? "Reps" : "Seconds"}
+            value={form.simple.reps}
+            step={useReps ? 1 : 5}
+            min={0}
+            blankStart={useReps ? (exercise.target_reps ?? 0) : (exercise.duration_sec ?? 0)}
+            hint={lastReps}
+            disabled={isDone}
+            onChange={(v) => onSimple("reps", v)}
+          />
+          <Stepper
+            label="RPE"
+            value={form.simple.rpe}
+            step={1}
+            min={1}
+            max={10}
+            blankStart={7}
+            disabled={isDone}
+            onChange={(v) => onSimple("rpe", v)}
+          />
+        </div>
+      ) : (
+        <div className="log-per-set">
+          {form.perSet.map((s, i) => (
+            <div className="log-per-set-row" key={i}>
+              <div className="log-per-set-label">Set {i + 1}</div>
+              {!w.isBodyweight && useReps && (
+                <Stepper
+                  label="Wt"
+                  unit="lb"
+                  value={s.weight}
+                  step={w.step}
+                  min={0}
+                  blankStart={form.simple.weight ?? exercise.target_load_lbs ?? 0}
+                  disabled={isDone}
+                  onChange={(v) => onPerSet(i, "weight", v)}
+                />
+              )}
+              <Stepper
+                label={useReps ? "Reps" : "Sec"}
+                value={s.reps}
+                step={useReps ? 1 : 5}
+                min={0}
+                blankStart={form.simple.reps ?? (useReps ? exercise.target_reps ?? 0 : exercise.duration_sec ?? 0)}
+                disabled={isDone}
+                onChange={(v) => onPerSet(i, "reps", v)}
+              />
+              <Stepper
+                label="RPE"
+                value={s.rpe}
+                step={1}
+                min={1}
+                max={10}
+                blankStart={form.simple.rpe ?? 7}
+                disabled={isDone}
+                onChange={(v) => onPerSet(i, "rpe", v)}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="log-card-foot">
+        <button
+          className="log-expand-toggle"
+          type="button"
+          onClick={onToggleExpand}
+          disabled={isDone || form.rounds <= 1}
+        >
+          {form.rounds <= 1
+            ? "1 set"
+            : form.mode === "simple"
+            ? `Sets: ${form.rounds} (same for all) ▼`
+            : `Sets: per-set ▲`}
+        </button>
+        {form.status === "error" && form.error && (
+          <div className="log-error">{form.error}</div>
+        )}
+        <button
+          className="log-save"
+          type="button"
+          onClick={onSave}
+          disabled={isDone || form.status === "saving"}
+          aria-label={`Log ${exercise.name}`}
+        >
+          {isDone
+            ? "Logged ✓"
+            : form.status === "saving"
+            ? "Saving…"
+            : logButtonLabel(form, useReps, w.isBodyweight)}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function logButtonLabel(form: ExerciseFormState, useReps: boolean, isBw: boolean): string {
+  const { weight, reps, rpe } = form.simple;
+  const parts: string[] = [];
+  if (form.rounds > 1) parts.push(`${form.rounds} ×`);
+  if (!isBw && useReps && weight != null) parts.push(`${prettyN(weight)}lb`);
+  if (reps != null) parts.push(useReps ? `${reps} reps` : `${reps}s`);
+  if (rpe != null) parts.push(`@RPE ${prettyN(rpe)}`);
+  return parts.length > 0 ? `Log ${parts.join(" ")}` : "Log";
+}
+
+function prettyN(n: number): string {
+  return Number.isInteger(n) ? String(n) : n.toFixed(1).replace(/\.0$/, "");
+}
+
+function CardioCard({
   blockType,
   form,
   elapsed_sec,
-  onChange,
+  onField,
   onSave,
 }: {
   blockType: string | undefined;
   form: CardioFormState;
   elapsed_sec: number;
-  onChange: (field: keyof LogSetIn, value: number | null) => void;
+  onField: (field: keyof Omit<CardioFormState, "status" | "error" | "last">, value: number | null) => void;
   onSave: () => void;
 }) {
   const isDone = form.status === "ok";
-  const b = form.block;
   const elapsedDisplay = Math.round(elapsed_sec);
   return (
-    <div className={`log-exercise${isDone ? " log-exercise--done" : ""}`}>
-      <div className="log-exercise-head">
-        <div className="log-exercise-name">
-          Cardio block{isDone && <span className="log-check"> ✓</span>}
-        </div>
-        <div className="log-exercise-target tv-mono">{blockType ?? "cardio"}</div>
+    <div className={`log-card${isDone ? " log-card--done" : ""}`}>
+      <div className="log-card-head">
+        <div className="log-card-name">Cardio block{isDone && <span className="log-check"> ✓</span>}</div>
+        <div className="log-card-target tv-mono">{blockType ?? "cardio"}</div>
       </div>
-      <div className="log-sets">
-        <div className="log-set-row">
-          <div className="log-set-label">Total</div>
-          <NumberInput
-            label="sec"
-            value={b.duration_sec ?? elapsedDisplay}
-            onChange={(v) => onChange("duration_sec", v)}
-            disabled={isDone}
-          />
-          <NumberInput
-            label="m"
-            value={b.distance_m ?? null}
-            onChange={(v) => onChange("distance_m", v)}
-            disabled={isDone}
-          />
-        </div>
-        <div className="log-set-row">
-          <div className="log-set-label">HR</div>
-          <NumberInput
-            label="avg"
-            value={b.hr_avg ?? null}
-            onChange={(v) => onChange("hr_avg", v)}
-            disabled={isDone}
-          />
-          <NumberInput
-            label="peak"
-            value={b.hr_peak ?? null}
-            onChange={(v) => onChange("hr_peak", v)}
-            disabled={isDone}
-          />
-          <NumberInput
-            label="RPE"
-            value={b.rpe_actual ?? null}
-            onChange={(v) => onChange("rpe_actual", v)}
-            disabled={isDone}
-          />
-        </div>
+      <div className="log-steppers">
+        <Stepper
+          label="Duration"
+          unit="sec"
+          value={form.duration_sec}
+          step={60}
+          min={0}
+          blankStart={elapsedDisplay}
+          disabled={isDone}
+          onChange={(v) => onField("duration_sec", v)}
+        />
+        <Stepper
+          label="Distance"
+          unit="m"
+          value={form.distance_m}
+          step={100}
+          min={0}
+          blankStart={0}
+          disabled={isDone}
+          onChange={(v) => onField("distance_m", v)}
+        />
+        <Stepper
+          label="HR avg"
+          value={form.hr_avg}
+          step={1}
+          min={0}
+          max={250}
+          blankStart={130}
+          disabled={isDone}
+          onChange={(v) => onField("hr_avg", v)}
+        />
+        <Stepper
+          label="HR peak"
+          value={form.hr_peak}
+          step={1}
+          min={0}
+          max={250}
+          blankStart={150}
+          disabled={isDone}
+          onChange={(v) => onField("hr_peak", v)}
+        />
+        <Stepper
+          label="RPE"
+          value={form.rpe}
+          step={1}
+          min={1}
+          max={10}
+          blankStart={6}
+          disabled={isDone}
+          onChange={(v) => onField("rpe", v)}
+        />
       </div>
-      {form.status === "error" && form.error && (
-        <div className="log-error">{form.error} — tap Log to retry</div>
-      )}
-      <button
-        className="control-btn control-btn--primary log-save"
-        onClick={onSave}
-        disabled={isDone || form.status === "saving"}
-      >
-        {isDone ? "Logged ✓" : form.status === "saving" ? "Saving…" : "Log cardio"}
-      </button>
+      <div className="log-card-foot">
+        <span />
+        {form.status === "error" && form.error && (
+          <div className="log-error">{form.error}</div>
+        )}
+        <button
+          className="log-save"
+          type="button"
+          onClick={onSave}
+          disabled={isDone || form.status === "saving"}
+          aria-label="Log cardio"
+        >
+          {isDone ? "Logged ✓" : form.status === "saving" ? "Saving…" : "Log cardio"}
+        </button>
+      </div>
     </div>
   );
 }
 
-function SessionSummaryForm({
+function SummaryCard({
   state,
-  onChangeRpe,
-  onChangeNotes,
+  onRpe,
+  onNotes,
   onFinish,
 }: {
   state: State;
-  onChangeRpe: (v: number | null) => void;
-  onChangeNotes: (v: string) => void;
+  onRpe: (v: number | null) => void;
+  onNotes: (v: string) => void;
   onFinish: () => void;
 }) {
   const s = state.summary;
   const isDone = s.status === "ok" || state.hasSummary;
   return (
-    <div className={`log-exercise log-summary${isDone ? " log-exercise--done" : ""}`}>
-      <div className="log-exercise-head">
-        <div className="log-exercise-name">
-          Session summary{isDone && <span className="log-check"> ✓</span>}
-        </div>
+    <div className={`log-card log-summary${isDone ? " log-card--done" : ""}`}>
+      <div className="log-card-head">
+        <div className="log-card-name">Session summary{isDone && <span className="log-check"> ✓</span>}</div>
       </div>
-      <div className="log-sets">
-        <div className="log-set-row">
-          <div className="log-set-label">Overall</div>
-          <NumberInput
-            label="RPE"
-            value={s.rpe_actual}
-            onChange={onChangeRpe}
-            disabled={isDone}
-          />
-        </div>
-        <div className="log-notes-row">
-          <textarea
-            className="log-notes"
-            placeholder="Notes (optional)"
-            value={s.notes}
-            onChange={(e) => onChangeNotes(e.target.value)}
-            disabled={isDone}
-          />
-        </div>
+      <div className="log-steppers">
+        <Stepper
+          label="Overall RPE"
+          value={s.rpe}
+          step={1}
+          min={1}
+          max={10}
+          blankStart={7}
+          disabled={isDone}
+          onChange={onRpe}
+        />
       </div>
-      {s.status === "error" && s.error && (
-        <div className="log-error">{s.error} — tap Finish to retry</div>
-      )}
-      <button
-        className="control-btn control-btn--primary log-save log-finish"
-        onClick={onFinish}
-        disabled={isDone || s.status === "saving"}
-      >
-        {isDone ? "Workout finished ✓" : s.status === "saving" ? "Saving…" : "Finish workout"}
-      </button>
-    </div>
-  );
-}
-
-function NumberInput({
-  label,
-  value,
-  onChange,
-  disabled,
-}: {
-  label: string;
-  value: number | null;
-  onChange: (v: number | null) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <label className="log-input">
-      <span className="log-input-label">{label}</span>
-      <input
-        type="number"
-        inputMode="decimal"
-        step="0.5"
-        value={value ?? ""}
-        onChange={(e) => {
-          const raw = e.target.value;
-          if (raw === "") onChange(null);
-          else {
-            const n = Number(raw);
-            onChange(Number.isFinite(n) ? n : null);
-          }
-        }}
-        disabled={disabled}
+      <textarea
+        className="log-notes"
+        placeholder="Notes (optional)"
+        value={s.notes}
+        onChange={(e) => onNotes(e.target.value)}
+        disabled={isDone}
       />
-    </label>
+      <div className="log-card-foot">
+        <span />
+        {s.status === "error" && s.error && (
+          <div className="log-error">{s.error}</div>
+        )}
+        <button
+          className="log-save log-finish"
+          type="button"
+          onClick={onFinish}
+          disabled={isDone || s.status === "saving"}
+          aria-label="Finish workout"
+        >
+          {isDone
+            ? "Workout finished ✓"
+            : s.status === "saving"
+            ? "Saving…"
+            : "Finish workout"}
+        </button>
+      </div>
+    </div>
   );
 }
