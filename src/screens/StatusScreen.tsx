@@ -8,7 +8,13 @@ import type {
   TrendPoint,
 } from "../lib/types";
 import { fetchSessions } from "../lib/api";
-import { compareToTargetZone, zoneRangeBpm } from "../lib/hr-zone";
+import {
+  classifyHrZone,
+  targetZoneLabel,
+  zoneArrow,
+  zoneLabel,
+  zoneRangeBpm,
+} from "../lib/hr-zone";
 
 interface Props {
   data: StatusResponse;
@@ -212,26 +218,35 @@ function CardioReadback({
   row: SessionSetRow;
   targetHrZone: number | null;
 }) {
-  const parts: string[] = [];
-  if (row.duration_sec != null) parts.push(`${Math.round(row.duration_sec / 60)} min`);
-  if (row.distance_m != null) parts.push(`${(row.distance_m / 1000).toFixed(2)} km`);
-  if (row.hr_avg != null) parts.push(`HR ${row.hr_avg} avg`);
-  if (row.hr_peak != null) parts.push(`${row.hr_peak} peak`);
-  if (row.rpe_actual != null) parts.push(`@RPE ${fmt(row.rpe_actual)}`);
-  // HR vs target zone facts:
-  let zoneNote: string | null = null;
-  if (row.hr_avg != null && targetHrZone != null) {
-    const cmp = compareToTargetZone(row.hr_avg, targetHrZone);
-    if (cmp.targetRangeBpm) {
-      const [lo, hi] = cmp.targetRangeBpm;
-      const arrow = cmp.delta > 0 ? "↑" : cmp.delta < 0 ? "↓" : "≈";
-      zoneNote = `Z${cmp.actualZone} vs target Z${targetHrZone} (${lo}–${hi} bpm) ${arrow}`;
-    }
+  const headParts: string[] = [];
+  if (row.duration_sec != null) headParts.push(`${Math.round(row.duration_sec / 60)} min`);
+  if (row.distance_m != null) headParts.push(`${(row.distance_m / 1000).toFixed(2)} km`);
+  if (row.rpe_actual != null) headParts.push(`@RPE ${fmt(row.rpe_actual)}`);
+
+  const hrLines: Array<{ label: string; bpmLabel: string; arrow: string }> = [];
+  if (row.hr_avg != null) {
+    const avgArrow = targetHrZone != null
+      ? zoneArrow(classifyHrZone(row.hr_avg), targetHrZone)
+      : "";
+    hrLines.push({ label: "avg", bpmLabel: zoneLabel(row.hr_avg), arrow: avgArrow });
   }
+  if (row.hr_peak != null) {
+    const peakArrow = targetHrZone != null
+      ? zoneArrow(classifyHrZone(row.hr_peak), targetHrZone)
+      : "";
+    hrLines.push({ label: "peak", bpmLabel: zoneLabel(row.hr_peak), arrow: peakArrow });
+  }
+  const tgt = targetHrZone != null ? targetZoneLabel(targetHrZone) : null;
+
   return (
-    <span className="set-readback tv-mono">
-      <span className="set-num">cardio:</span> {parts.join(" · ") || "—"}
-      {zoneNote && <span className="zone-note"> · {zoneNote}</span>}
+    <span className="set-readback set-readback--cardio tv-mono">
+      <span className="set-num">cardio:</span> {headParts.join(" · ") || "—"}
+      {hrLines.map((line, i) => (
+        <span key={i} className="hr-line">
+          {" "}· HR {line.label} {line.bpmLabel} {line.arrow}
+        </span>
+      ))}
+      {tgt && <span className="zone-note"> · target {tgt}</span>}
     </span>
   );
 }
@@ -253,7 +268,7 @@ function SevenDayStrip({ days }: { days: SessionDayRow[] }) {
 function DayRow({ day }: { day: SessionDayRow }) {
   const avg = day.avg_set_rpe;
   const target = day.target_rpe;
-  const arrow = avg != null && target != null
+  const rpeArrow = avg != null && target != null
     ? avg > target + 0.1 ? "↑" : avg < target - 0.1 ? "↓" : "≈"
     : null;
   const className = [
@@ -264,6 +279,10 @@ function DayRow({ day }: { day: SessionDayRow }) {
   ].filter(Boolean).join(" ");
   const hrZone = day.target_hr_zone;
   const hrTargetRange = hrZone ? zoneRangeBpm(hrZone) : null;
+  const hrAvgZone = day.hr_avg != null ? classifyHrZone(day.hr_avg) : null;
+  const hrArrow = hrAvgZone != null && hrZone != null
+    ? zoneArrow(hrAvgZone, hrZone)
+    : null;
   return (
     <div className={className}>
       <div className="seven-day-date tv-mono">{shortDate(day.plan_date)}</div>
@@ -278,7 +297,7 @@ function DayRow({ day }: { day: SessionDayRow }) {
       <div className="seven-day-rpe tv-mono">
         {avg != null ? avg.toFixed(1) : "—"}
         {target != null && (
-          <span className="seven-day-target"> / {target.toFixed(1)} {arrow}</span>
+          <span className="seven-day-target"> / {target.toFixed(1)} {rpeArrow}</span>
         )}
       </div>
       <div className="seven-day-sets tv-mono">
@@ -288,10 +307,12 @@ function DayRow({ day }: { day: SessionDayRow }) {
         {day.total_work_sec > 0 ? `${Math.round(day.total_work_sec / 60)}m` : "—"}
       </div>
       <div className="seven-day-hr tv-mono">
-        {day.hr_avg != null ? `${day.hr_avg} avg` : "—"}
-        {hrTargetRange && day.hr_avg != null && (
+        {day.hr_avg != null && hrAvgZone != null
+          ? `${day.hr_avg} = Z${hrAvgZone}${hrArrow ? " " + hrArrow : ""}`
+          : "—"}
+        {hrTargetRange && day.hr_avg != null && hrZone != null && (
           <span className="seven-day-hr-target">
-            {" "}/ Z{hrZone} ({hrTargetRange[0]}–{hrTargetRange[1]})
+            {" "}/ target Z{hrZone} ({hrTargetRange[0]}–{hrTargetRange[1]})
           </span>
         )}
       </div>
