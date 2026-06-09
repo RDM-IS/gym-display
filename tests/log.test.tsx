@@ -3,12 +3,39 @@ import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/re
 import LogPanel from "../src/screens/LogPanel";
 import { fetchLastLogged, fetchLoggedToday, postLog } from "../src/lib/api";
 import type {
+  LastLoggedEntry,
   LastLoggedResponse,
   LogExerciseIn,
   LogResponse,
   LoggedTodayResponse,
   Plan,
 } from "../src/lib/types";
+
+interface RenderOpts {
+  plan: Plan;
+  elapsed_sec?: number;
+  loggedExercises?: Set<string>;
+  lastLogged?: Record<string, LastLoggedEntry>;
+  hasSummary?: boolean;
+  onLogged?: (name: string) => void;
+  onSummaryLogged?: () => void;
+}
+
+function renderLogPanel(opts: RenderOpts) {
+  return render(
+    <LogPanel
+      plan={opts.plan}
+      elapsed_sec={opts.elapsed_sec ?? 120}
+      loggedExercises={opts.loggedExercises ?? new Set()}
+      lastLogged={opts.lastLogged ?? {}}
+      hasSummary={opts.hasSummary ?? false}
+      onLogged={opts.onLogged ?? (() => {})}
+      onSummaryLogged={opts.onSummaryLogged ?? (() => {})}
+      onBackToTimer={() => {}}
+      onFinish={() => {}}
+    />
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -81,6 +108,8 @@ function mkLastLoggedFixture(by: Record<string, Partial<LastLoggedResponse["by_e
   }
   return { by_exercise: out };
 }
+// Keep the fixture builder in the suite scope — used inline elsewhere if needed.
+void mkLastLoggedFixture;
 
 function mkLogResponse(plan_id: number, n: number): LogResponse {
   return {
@@ -156,9 +185,7 @@ describe("LogPanel — stepper UX (circuit plan)", () => {
   });
 
   it("renders Weight / Reps / RPE steppers for a weighted exercise", async () => {
-    render(
-      <LogPanel plan={CIRCUIT_PLAN} elapsed_sec={120} onBackToTimer={() => {}} onFinish={() => {}} />
-    );
+    renderLogPanel({ plan: CIRCUIT_PLAN });
     await screen.findByText("Goblet squat");
     // Each stepper has -, value, + buttons; check labels exist
     expect(screen.getAllByText("Weight").length).toBeGreaterThan(0);
@@ -167,9 +194,7 @@ describe("LogPanel — stepper UX (circuit plan)", () => {
   });
 
   it("hides the Weight stepper for bodyweight / duration exercises (Plank)", async () => {
-    render(
-      <LogPanel plan={CIRCUIT_PLAN} elapsed_sec={120} onBackToTimer={() => {}} onFinish={() => {}} />
-    );
+    renderLogPanel({ plan: CIRCUIT_PLAN });
     await screen.findByText("Plank");
     // Plank card has Seconds + RPE but NOT Weight
     const plankCard = screen.getByText("Plank").closest(".log-card") as HTMLElement;
@@ -180,9 +205,7 @@ describe("LogPanel — stepper UX (circuit plan)", () => {
   });
 
   it("+ button on weight bumps by the inferred step (5 for goblet/db)", async () => {
-    render(
-      <LogPanel plan={CIRCUIT_PLAN} elapsed_sec={120} onBackToTimer={() => {}} onFinish={() => {}} />
-    );
+    renderLogPanel({ plan: CIRCUIT_PLAN });
     await screen.findByText("Goblet squat");
     const gobletCard = screen.getByText("Goblet squat").closest(".log-card") as HTMLElement;
     const incWeight = gobletCard.querySelector('[aria-label="Increase Weight"]') as HTMLButtonElement;
@@ -192,9 +215,7 @@ describe("LogPanel — stepper UX (circuit plan)", () => {
   });
 
   it("default 'simple' multi-set POSTs N copies of the simple triple (3×)", async () => {
-    render(
-      <LogPanel plan={CIRCUIT_PLAN} elapsed_sec={120} onBackToTimer={() => {}} onFinish={() => {}} />
-    );
+    renderLogPanel({ plan: CIRCUIT_PLAN });
     await screen.findByText("Goblet squat");
     const gobletCard = screen.getByText("Goblet squat").closest(".log-card") as HTMLElement;
     // Bump RPE up so the post has a non-null value (starts null in simple)
@@ -211,9 +232,7 @@ describe("LogPanel — stepper UX (circuit plan)", () => {
   });
 
   it("expand toggle reveals per-set steppers (3 set rows for rounds=3)", async () => {
-    render(
-      <LogPanel plan={CIRCUIT_PLAN} elapsed_sec={120} onBackToTimer={() => {}} onFinish={() => {}} />
-    );
+    renderLogPanel({ plan: CIRCUIT_PLAN });
     await screen.findByText("Goblet squat");
     const gobletCard = screen.getByText("Goblet squat").closest(".log-card") as HTMLElement;
     const toggle = gobletCard.querySelector(".log-expand-toggle") as HTMLButtonElement;
@@ -223,35 +242,45 @@ describe("LogPanel — stepper UX (circuit plan)", () => {
     expect(setLabels).toEqual(["Set 1", "Set 2", "Set 3"]);
   });
 
-  it("pre-fills weight + reps from last-logged when available", async () => {
-    stubFetch({
-      lastLogged: mkLastLoggedFixture({
-        "Goblet squat": { weight_lbs: 45, reps_done: 8 },
-      }),
+  it("pre-fills weight + reps from last-logged when supplied via props", async () => {
+    renderLogPanel({
+      plan: CIRCUIT_PLAN,
+      lastLogged: {
+        "Goblet squat": {
+          exercise: "Goblet squat", plan_date: "2026-05-30",
+          weight_lbs: 45, reps_done: 8, rpe_actual: null,
+          duration_sec: null, distance_m: null, hr_avg: null, hr_peak: null,
+        },
+      },
     });
-    render(
-      <LogPanel plan={CIRCUIT_PLAN} elapsed_sec={120} onBackToTimer={() => {}} onFinish={() => {}} />
-    );
     await screen.findByText("Goblet squat");
     const gobletCard = screen.getByText("Goblet squat").closest(".log-card") as HTMLElement;
-    // last weight=45 (not 35 from target_load_lbs) and last reps=8
     const values = Array.from(gobletCard.querySelectorAll(".stepper-value")).map((e) => e.textContent);
     expect(values).toContain("45");
     expect(values).toContain("8");
   });
 
-  it("renders ✓ Logged for exercises in today/logged on hydrate", async () => {
-    stubFetch({
-      logged: mkLoggedFixture({
-        exercises: [{ exercise: "Goblet squat", log_type: "strength_set", set_count: 3 }],
-      }),
+  it("renders ✓ Logged for exercises supplied as already-logged", async () => {
+    renderLogPanel({
+      plan: CIRCUIT_PLAN,
+      loggedExercises: new Set(["Goblet squat"]),
     });
-    render(
-      <LogPanel plan={CIRCUIT_PLAN} elapsed_sec={120} onBackToTimer={() => {}} onFinish={() => {}} />
-    );
     await screen.findByText("Goblet squat");
     const loggedBadge = screen.getAllByRole("button", { name: /Log Goblet squat/i })[0];
     expect(loggedBadge.textContent).toMatch(/Logged ✓/);
+  });
+
+  it("calls onLogged after a successful POST so the parent can update shared state", async () => {
+    const logged: string[] = [];
+    renderLogPanel({
+      plan: CIRCUIT_PLAN,
+      onLogged: (n) => logged.push(n),
+    });
+    await screen.findByText("Goblet squat");
+    const gobletCard = screen.getByText("Goblet squat").closest(".log-card") as HTMLElement;
+    fireEvent.click(gobletCard.querySelector('[aria-label="Increase RPE"]') as HTMLButtonElement);
+    fireEvent.click(gobletCard.querySelector('[aria-label="Log Goblet squat"]') as HTMLButtonElement);
+    await waitFor(() => expect(logged).toContain("Goblet squat"));
   });
 });
 
@@ -269,9 +298,7 @@ describe("LogPanel — cardio steady", () => {
   });
 
   it("shows Duration / Distance / HR avg+peak / RPE steppers and a Log cardio button", async () => {
-    render(
-      <LogPanel plan={STEADY_PLAN} elapsed_sec={2700} onBackToTimer={() => {}} onFinish={() => {}} />
-    );
+    renderLogPanel({ plan: STEADY_PLAN, elapsed_sec: 2700 });
     expect(await screen.findByText("Cardio block")).toBeDefined();
     expect(screen.getByText("Duration")).toBeDefined();
     expect(screen.getByText("Distance")).toBeDefined();
@@ -281,9 +308,7 @@ describe("LogPanel — cardio steady", () => {
   });
 
   it("POSTs a single cardio_block row when Log cardio is tapped", async () => {
-    render(
-      <LogPanel plan={STEADY_PLAN} elapsed_sec={2700} onBackToTimer={() => {}} onFinish={() => {}} />
-    );
+    renderLogPanel({ plan: STEADY_PLAN, elapsed_sec: 2700 });
     await screen.findByText("Cardio block");
     fireEvent.click(screen.getByRole("button", { name: /log cardio/i }));
     await waitFor(() => expect(posted.length).toBeGreaterThan(0));

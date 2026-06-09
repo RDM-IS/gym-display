@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useReducer, useState } from "react";
+import { useMemo, useReducer } from "react";
 import Stepper from "../components/Stepper";
-import { fetchLastLogged, fetchLoggedToday, postLog } from "../lib/api";
+import { postLog } from "../lib/api";
 import { displayTitle, formatPlanDate } from "../lib/format";
 import { weightStepFor } from "../lib/weight-step";
 import type {
@@ -9,7 +9,6 @@ import type {
   LastLoggedEntry,
   LogExerciseIn,
   LogSetIn,
-  LoggedExerciseEntry,
   Plan,
   PlannedExercise,
 } from "../lib/types";
@@ -48,10 +47,7 @@ interface CardioFormState {
 interface State {
   exercises: Record<string, ExerciseFormState>;
   cardio: CardioFormState | null;
-  loggedFromServer: Set<string>;
-  hasSummary: boolean;
   summary: { rpe: number | null; notes: string; status: Status; error: string | null };
-  hydrated: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -81,11 +77,15 @@ function finisherRounds(f: Finisher | null | undefined): number {
   return Math.max(1, f?.rounds ?? 1);
 }
 
-function blankExerciseForm(ex: PlannedExercise, rounds: number): ExerciseFormState {
+function blankExerciseForm(
+  ex: PlannedExercise,
+  rounds: number,
+  last: LastLoggedEntry | null,
+): ExerciseFormState {
   const n = Math.max(1, rounds);
   const simple = {
-    weight: ex.target_load_lbs ?? null,
-    reps: ex.format === "reps" ? ex.target_reps ?? null : null,
+    weight: last?.weight_lbs ?? ex.target_load_lbs ?? null,
+    reps: ex.format === "reps" ? last?.reps_done ?? ex.target_reps ?? null : null,
     rpe: null as number | null,
   };
   return {
@@ -95,19 +95,23 @@ function blankExerciseForm(ex: PlannedExercise, rounds: number): ExerciseFormSta
     perSet: Array.from({ length: n }, () => ({ ...simple })),
     status: "idle",
     error: null,
-    last: null,
+    last,
   };
 }
 
-function buildInitialState(plan: Plan): State {
+function buildInitialState(plan: Plan, lastLogged: Record<string, LastLoggedEntry>): State {
   const exercises: Record<string, ExerciseFormState> = {};
   const rMain = circuitRounds(plan.blocks);
   for (const ex of mainExercises(plan.blocks)) {
-    exercises[ex.name] = blankExerciseForm(ex, rMain);
+    exercises[ex.name] = blankExerciseForm(ex, rMain, lastLogged[ex.name] ?? null);
   }
   const rFin = finisherRounds(plan.blocks?.finisher);
   for (const ex of finisherExercises(plan.blocks?.finisher)) {
-    exercises[`finisher:${ex.name}`] = blankExerciseForm(ex, rFin);
+    exercises[`finisher:${ex.name}`] = blankExerciseForm(
+      ex,
+      rFin,
+      lastLogged[ex.name] ?? null,
+    );
   }
   const t = plan.blocks?.type;
   const cardio: CardioFormState | null =
@@ -126,10 +130,7 @@ function buildInitialState(plan: Plan): State {
   return {
     exercises,
     cardio,
-    loggedFromServer: new Set(),
-    hasSummary: false,
     summary: { rpe: null, notes: "", status: "idle", error: null },
-    hydrated: false,
   };
 }
 
@@ -154,12 +155,7 @@ type Action =
   | { type: "set_summary_notes"; value: string }
   | { type: "summary_save_start" }
   | { type: "summary_save_ok" }
-  | { type: "summary_save_err"; message: string }
-  | { type: "hydrate";
-      logged: LoggedExerciseEntry[];
-      hasSummary: boolean;
-      lastByExercise: Record<string, LastLoggedEntry>;
-    };
+  | { type: "summary_save_err"; message: string };
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
@@ -211,40 +207,8 @@ function reducer(state: State, action: Action): State {
     case "set_summary_rpe":   return { ...state, summary: { ...state.summary, rpe: action.value, status: "idle", error: null } };
     case "set_summary_notes": return { ...state, summary: { ...state.summary, notes: action.value, status: "idle", error: null } };
     case "summary_save_start": return { ...state, summary: { ...state.summary, status: "saving", error: null } };
-    case "summary_save_ok":    return { ...state, summary: { ...state.summary, status: "ok", error: null }, hasSummary: true };
+    case "summary_save_ok":    return { ...state, summary: { ...state.summary, status: "ok", error: null } };
     case "summary_save_err":   return { ...state, summary: { ...state.summary, status: "error", error: action.message } };
-    case "hydrate": {
-      const fromServer = new Set<string>(action.logged.map((e) => e.exercise));
-      // Pre-fill defaults from last_logged. Lookup tries both raw exercise
-      // name and the finisher: prefix.
-      const exercises = { ...state.exercises };
-      for (const [key, form] of Object.entries(exercises)) {
-        const rawName = key.startsWith("finisher:") ? key.slice("finisher:".length) : key;
-        const last = action.lastByExercise[rawName] ?? null;
-        if (last) {
-          const simple = {
-            weight: last.weight_lbs ?? form.simple.weight,
-            reps: last.reps_done ?? form.simple.reps,
-            rpe: form.simple.rpe, // never override last RPE — user enters fresh
-          };
-          exercises[key] = {
-            ...form,
-            simple,
-            perSet: form.perSet.map(() => ({ ...simple })),
-            last,
-          };
-        }
-      }
-      const cardio = state.cardio;
-      return {
-        ...state,
-        exercises,
-        cardio,
-        loggedFromServer: fromServer,
-        hasSummary: action.hasSummary,
-        hydrated: true,
-      };
-    }
   }
 }
 
@@ -261,38 +225,33 @@ function mut(state: State, key: string, fn: (f: ExerciseFormState) => ExerciseFo
 interface Props {
   plan: Plan;
   elapsed_sec: number;
+  /** Hoisted from WorkoutScreen — exercises already logged today. */
+  loggedExercises: Set<string>;
+  /** Hoisted from WorkoutScreen — most-recent logged values per exercise. */
+  lastLogged: Record<string, LastLoggedEntry>;
+  /** Whether a session_summary row already exists for today. */
+  hasSummary: boolean;
+  /** Notify parent on successful exercise log so both panels stay in sync. */
+  onLogged: (exerciseName: string) => void;
+  /** Notify parent on successful session_summary log. */
+  onSummaryLogged: () => void;
   onBackToTimer: () => void;
   onFinish: () => void;
 }
 
-export default function LogPanel({ plan, elapsed_sec, onBackToTimer, onFinish }: Props) {
-  const initial = useMemo(() => buildInitialState(plan), [plan]);
+export default function LogPanel({
+  plan,
+  elapsed_sec,
+  loggedExercises,
+  lastLogged,
+  hasSummary,
+  onLogged,
+  onSummaryLogged,
+  onBackToTimer,
+  onFinish,
+}: Props) {
+  const initial = useMemo(() => buildInitialState(plan, lastLogged), [plan, lastLogged]);
   const [state, dispatch] = useReducer(reducer, initial);
-  const [loading, setLoading] = useState(true);
-
-  // Pre-fetch logged state + last-logged for every named exercise
-  useEffect(() => {
-    let cancelled = false;
-    const names = [
-      ...mainExercises(plan.blocks).map((e) => e.name),
-      ...finisherExercises(plan.blocks?.finisher).map((e) => e.name),
-    ];
-    (async () => {
-      const [loggedR, lastR] = await Promise.all([
-        fetchLoggedToday(),
-        fetchLastLogged(names),
-      ]);
-      if (cancelled) return;
-      dispatch({
-        type: "hydrate",
-        logged: loggedR.status === "ok" ? loggedR.data.exercises : [],
-        hasSummary: loggedR.status === "ok" ? loggedR.data.has_session_summary : false,
-        lastByExercise: lastR.status === "ok" ? lastR.data.by_exercise : {},
-      });
-      setLoading(false);
-    })();
-    return () => { cancelled = true; };
-  }, [plan]);
 
   async function saveExercise(key: string, exerciseName: string, isFinisher: boolean) {
     const form = state.exercises[key];
@@ -312,8 +271,12 @@ export default function LogPanel({ plan, elapsed_sec, onBackToTimer, onFinish }:
       notes: isFinisher ? "finisher" : null,
     };
     const r = await postLog(body);
-    if (r.status === "ok") dispatch({ type: "save_ok", key });
-    else dispatch({ type: "save_err", key, message: r.message });
+    if (r.status === "ok") {
+      dispatch({ type: "save_ok", key });
+      onLogged(exerciseName);
+    } else {
+      dispatch({ type: "save_err", key, message: r.message });
+    }
   }
 
   async function saveCardio() {
@@ -348,6 +311,7 @@ export default function LogPanel({ plan, elapsed_sec, onBackToTimer, onFinish }:
     const r = await postLog(body);
     if (r.status === "ok") {
       dispatch({ type: "summary_save_ok" });
+      onSummaryLogged();
       onFinish();
     } else {
       dispatch({ type: "summary_save_err", message: r.message });
@@ -369,8 +333,6 @@ export default function LogPanel({ plan, elapsed_sec, onBackToTimer, onFinish }:
       </div>
 
       <div className="log-scroll">
-        {loading && <div className="log-empty">Loading current state…</div>}
-
         {state.cardio && (
           <CardioCard
             blockType={blockType}
@@ -388,7 +350,7 @@ export default function LogPanel({ plan, elapsed_sec, onBackToTimer, onFinish }:
                 key={ex.name}
                 exercise={ex}
                 form={state.exercises[ex.name]}
-                alreadyLoggedOnServer={state.loggedFromServer.has(ex.name)}
+                alreadyLoggedOnServer={loggedExercises.has(ex.name)}
                 onSimple={(field, value) => dispatch({ type: "set_simple", key: ex.name, field, value })}
                 onPerSet={(idx, field, value) => dispatch({ type: "set_perset", key: ex.name, idx, field, value })}
                 onToggleExpand={() => dispatch({ type: "toggle_expand", key: ex.name })}
@@ -408,7 +370,7 @@ export default function LogPanel({ plan, elapsed_sec, onBackToTimer, onFinish }:
                   key={key}
                   exercise={ex}
                   form={state.exercises[key]}
-                  alreadyLoggedOnServer={state.loggedFromServer.has(ex.name)}
+                  alreadyLoggedOnServer={loggedExercises.has(ex.name)}
                   onSimple={(field, value) => dispatch({ type: "set_simple", key, field, value })}
                   onPerSet={(idx, field, value) => dispatch({ type: "set_perset", key, idx, field, value })}
                   onToggleExpand={() => dispatch({ type: "toggle_expand", key })}
@@ -421,6 +383,7 @@ export default function LogPanel({ plan, elapsed_sec, onBackToTimer, onFinish }:
 
         <SummaryCard
           state={state}
+          hasSummary={hasSummary}
           onRpe={(v) => dispatch({ type: "set_summary_rpe", value: v })}
           onNotes={(v) => dispatch({ type: "set_summary_notes", value: v })}
           onFinish={saveSummary}
@@ -700,17 +663,19 @@ function CardioCard({
 
 function SummaryCard({
   state,
+  hasSummary,
   onRpe,
   onNotes,
   onFinish,
 }: {
   state: State;
+  hasSummary: boolean;
   onRpe: (v: number | null) => void;
   onNotes: (v: string) => void;
   onFinish: () => void;
 }) {
   const s = state.summary;
-  const isDone = s.status === "ok" || state.hasSummary;
+  const isDone = s.status === "ok" || hasSummary;
   return (
     <div className={`log-card log-summary${isDone ? " log-card--done" : ""}`}>
       <div className="log-card-head">

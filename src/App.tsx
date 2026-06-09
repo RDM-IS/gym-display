@@ -12,7 +12,7 @@ import {
   type FetchStatusResult,
   type FetchTodayResult,
 } from "./lib/api";
-import { buildIntervalsForPlan } from "./lib/timer";
+import { flattenBlocksToSteps } from "./lib/steps";
 import { initAudio } from "./lib/audio";
 import { shouldRedirectTodayToStatus, usePath } from "./lib/routing";
 import type { Plan } from "./lib/types";
@@ -93,8 +93,8 @@ export default function App() {
 
   const plan: Plan | null =
     planLoad.result?.status === "ok" ? planLoad.result.plan : null;
-  const intervals = useMemo(
-    () => (plan ? buildIntervalsForPlan(plan) : []),
+  const stepCount = useMemo(
+    () => (plan ? flattenBlocksToSteps(plan.blocks).steps.length : 0),
     [plan]
   );
 
@@ -221,13 +221,13 @@ export default function App() {
     );
   }
 
-  if (intervals.length === 0) {
+  if (stepCount === 0) {
     return (
       <>
         {showNav && <Nav route={route} onNavigate={navigate} />}
         <ErrorScreen
-          title="Plan has no intervals"
-          message="Plan loaded but produced no intervals. Check the plan in Artemis."
+          title="Plan has no steps"
+          message="Plan loaded but produced no steps. Check the plan in Artemis."
           onRetry={refreshPlan}
         />
       </>
@@ -249,7 +249,6 @@ export default function App() {
         <WorkoutScreen
           key={`workout-${result.plan.plan_id}`}
           plan={result.plan}
-          intervals={intervals}
           onDone={onDone}
           onBackToHome={onBackToHome}
         />
