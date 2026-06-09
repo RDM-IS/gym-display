@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   formatMMSS,
   initTimer,
@@ -24,7 +24,6 @@ import {
   toggleMuted,
 } from "../lib/audio";
 import { acquireWakeLock, releaseWakeLock } from "../lib/wake-lock";
-import { fetchLastLogged, fetchLoggedToday } from "../lib/api";
 import {
   buildCompletionMap,
   computePrefill,
@@ -49,36 +48,39 @@ const TINT_CLASS: Record<Step["kind"], string> = {
 
 interface Props {
   plan: Plan;
+  sessionSets: SessionSets;
+  serverLoggedCount: ServerLoggedCount;
+  lastLogged: Record<string, LastLoggedEntry>;
+  hasSummary: boolean;
+  onLoggedSet: (exerciseName: string, set: SetEntry) => void;
+  onSummaryLogged: () => void;
   onDone: (total_elapsed_sec: number) => void;
   onBackToHome: () => void;
 }
 
 type Mode = "timer" | "log";
 
-export default function WorkoutScreen({ plan, onDone, onBackToHome }: Props) {
+export default function WorkoutScreen({
+  plan,
+  sessionSets,
+  serverLoggedCount,
+  lastLogged,
+  hasSummary,
+  onLoggedSet,
+  onSummaryLogged,
+  onDone,
+  onBackToHome,
+}: Props) {
   const session: FlatSession = useMemo(() => flattenBlocksToSteps(plan.blocks), [plan]);
   const [state, dispatch] = useReducer(timerReducer, session, initTimer);
   const [now, setNow] = useState(() => performance.now());
   const [muted, setMuted] = useState(isMuted());
   const [mode, setMode] = useState<Mode>("timer");
 
-  // Shared per-set logging state — both the rest-panel InlineExerciseLogger
-  // and the LogPanel overlay read and write through here. One row per
-  // exercise per set; each panel always logs the NEXT unlogged set_num.
-  //
-  //   sessionSets       — set entries logged THIS browser session (with
-  //                       actual values, used as prefill for the next set).
-  //   serverLoggedCount — set_count per exercise from /today/logged on
-  //                       mount (used for completion math when the user
-  //                       reloads mid-workout).
-  //
-  // The two are combined via Math.max so a mid-workout reload doesn't
-  // lose completion state, but live values (for prefill) come from
-  // sessionSets only — the server endpoint doesn't return per-set values.
-  const [sessionSets, setSessionSets] = useState<SessionSets>({});
-  const [serverLoggedCount, setServerLoggedCount] = useState<ServerLoggedCount>({});
-  const [lastLogged, setLastLogged] = useState<Record<string, LastLoggedEntry>>({});
-  const [logHasSummary, setLogHasSummary] = useState(false);
+  // Per-set workout state lives in App.tsx now (see App.tsx for the
+  // hydration logic). DoneScreen needs the same state after workout
+  // ends to render the unlogged-set catch-all with the correct prefill
+  // chain, so it must survive the workout → done transition.
 
   const lastIndexRef = useRef(0);
   const lastBeepSecRef = useRef<number | null>(null);
@@ -99,28 +101,7 @@ export default function WorkoutScreen({ plan, onDone, onBackToHome }: Props) {
     };
   }, []);
 
-  // Hydrate shared logging state.
-  useEffect(() => {
-    let cancelled = false;
-    const names = collectExerciseNames(plan);
-    (async () => {
-      const [loggedR, lastR] = await Promise.all([
-        fetchLoggedToday(),
-        fetchLastLogged(names),
-      ]);
-      if (cancelled) return;
-      if (loggedR.status === "ok") {
-        const counts: ServerLoggedCount = {};
-        for (const e of loggedR.data.exercises) counts[e.exercise] = e.set_count;
-        setServerLoggedCount(counts);
-        setLogHasSummary(loggedR.data.has_session_summary);
-      }
-      if (lastR.status === "ok") {
-        setLastLogged(lastR.data.by_exercise);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [plan]);
+  // (Hydration happens in App.tsx now — see hydrateWorkoutState.)
 
   // Ticker — setInterval keeps running when tab is hidden.
   useEffect(() => {
@@ -227,13 +208,6 @@ export default function WorkoutScreen({ plan, onDone, onBackToHome }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.status, onBackToHome]);
 
-  const handleLoggedSet = useCallback((exerciseName: string, set: SetEntry) => {
-    setSessionSets((prev) => {
-      const arr = prev[exerciseName] ?? [];
-      return { ...prev, [exerciseName]: [...arr, set] };
-    });
-  }, []);
-
   // Pre-computed exercise completion map for the JourneyMap.
   const completionMap = useMemo(
     () =>
@@ -312,7 +286,7 @@ export default function WorkoutScreen({ plan, onDone, onBackToHome }: Props) {
                 lastHint={restExerciseLastLogged}
                 alreadyFullyLogged={restFullyLogged}
                 isFinisher={current.circuitId === "finisher"}
-                onLoggedSet={handleLoggedSet}
+                onLoggedSet={onLoggedSet}
               />
             )}
             {(current.kind === "warmup" || current.kind === "cooldown") && (
@@ -368,9 +342,9 @@ export default function WorkoutScreen({ plan, onDone, onBackToHome }: Props) {
           sessionSets={sessionSets}
           serverLoggedCount={serverLoggedCount}
           lastLogged={lastLogged}
-          hasSummary={logHasSummary}
-          onLoggedSet={handleLoggedSet}
-          onSummaryLogged={() => setLogHasSummary(true)}
+          hasSummary={hasSummary}
+          onLoggedSet={onLoggedSet}
+          onSummaryLogged={onSummaryLogged}
           onBackToTimer={() => setMode("timer")}
           onFinish={() => onDone(elapsed)}
         />

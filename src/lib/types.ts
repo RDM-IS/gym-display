@@ -302,3 +302,68 @@ export interface LastLoggedEntry {
 export interface LastLoggedResponse {
   by_exercise: Record<string, LastLoggedEntry>;
 }
+
+// ---------------------------------------------------------------------------
+// GET /api/health/sessions — per-day plan + per-set rows + aggregates
+// ---------------------------------------------------------------------------
+
+export interface SessionSetRow {
+  log_id: number;
+  log_type: "strength_set" | "cardio_block";
+  exercise: string | null;
+  set_num: number | null;
+  reps_done: number | null;
+  weight_lbs: number | null;
+  duration_sec: number | null;
+  distance_m: number | null;
+  hr_avg: number | null;
+  hr_peak: number | null;
+  rpe_actual: number | null;
+  notes: string | null;
+  is_skipped: boolean;
+  logged_at: string;
+  logged_via: string;
+}
+
+export interface SessionSummaryRow {
+  rpe_actual: number | null;
+  notes: string | null;
+  logged_at: string;
+}
+
+export interface OutlierFlags {
+  high_rpe_sets: Array<{ exercise: string | null; set_num: number | null; rpe_actual: number }>;
+  incomplete: boolean;
+  incomplete_logged: number;
+  incomplete_planned: number;
+  pain_notes: string[];
+}
+
+export interface SessionDayRow {
+  plan_date: string;
+  plan_id: number | null;
+  session_type: SessionType | null;
+  display_name: string | null;
+  phase: number | null;
+  week_num: number | null;
+  target_rpe: number | null;
+  target_hr_zone: number | null;
+  is_skipped: boolean;
+  is_today: boolean;
+  planned_set_count: number;
+  logged_set_count: number;
+  sets: SessionSetRow[];
+  session_summary: SessionSummaryRow | null;
+  avg_set_rpe: number | null;
+  hr_avg: number | null;
+  hr_peak: number | null;
+  total_work_sec: number;
+  outliers: OutlierFlags;
+}
+
+export interface SessionsResponse {
+  today: string;
+  window_start: string;
+  window_end: string;
+  days: SessionDayRow[];
+}

@@ -7,6 +7,8 @@ import RestDayScreen from "./screens/RestDayScreen";
 import StatusScreen from "./screens/StatusScreen";
 import Nav from "./components/Nav";
 import {
+  fetchLastLogged,
+  fetchLoggedToday,
   fetchStatus,
   fetchTodayPlan,
   type FetchStatusResult,
@@ -15,7 +17,12 @@ import {
 import { flattenBlocksToSteps } from "./lib/steps";
 import { initAudio } from "./lib/audio";
 import { shouldRedirectTodayToStatus, usePath } from "./lib/routing";
-import type { Plan } from "./lib/types";
+import type { LastLoggedEntry, Plan } from "./lib/types";
+import type {
+  ServerLoggedCount,
+  SessionSets,
+  SetEntry,
+} from "./lib/log-state";
 
 type WorkoutFlow = "setup" | "workout" | "done";
 
@@ -43,6 +50,23 @@ export default function App() {
       localStorage.getItem(IN_PROGRESS_KEY) === "1"
   );
   const autoRedirectedRef = useRef(false);
+
+  // ── Shared per-set workout state — lifted from WorkoutScreen so it
+  //    survives the workout → done transition. DoneScreen uses the same
+  //    sessionSets to compute the unlogged-set catch-all with the same
+  //    prefill chain (prior set this session → last session → target).
+  const [sessionSets, setSessionSets] = useState<SessionSets>({});
+  const [serverLoggedCount, setServerLoggedCount] = useState<ServerLoggedCount>({});
+  const [lastLogged, setLastLogged] = useState<Record<string, LastLoggedEntry>>({});
+  const [logHasSummary, setLogHasSummary] = useState(false);
+
+  const handleLoggedSet = useCallback((exerciseName: string, set: SetEntry) => {
+    setSessionSets((prev) => {
+      const arr = prev[exerciseName] ?? [];
+      return { ...prev, [exerciseName]: [...arr, set] };
+    });
+  }, []);
+  const handleSummaryLogged = useCallback(() => setLogHasSummary(true), []);
 
   const refreshPlan = useCallback(async () => {
     setPlanLoad({ loading: true, result: null });
@@ -98,13 +122,44 @@ export default function App() {
     [plan]
   );
 
+  // Hydrate the shared workout state when a workout starts. Pulls
+  // /today/logged for set counts (mid-workout reload safety) and
+  // /last_logged for prefill from prior sessions.
+  const hydrateWorkoutState = useCallback(async (currentPlan: Plan) => {
+    const names: string[] = [];
+    const b = currentPlan.blocks;
+    if (b?.type === "circuit" && Array.isArray(b.exercises)) {
+      for (const e of b.exercises) names.push(e.name);
+    }
+    const fin = b?.finisher;
+    if (fin && Array.isArray(fin.exercises)) {
+      for (const e of fin.exercises) names.push(e.name);
+    }
+    const [loggedR, lastR] = await Promise.all([
+      fetchLoggedToday(),
+      fetchLastLogged(names),
+    ]);
+    if (loggedR.status === "ok") {
+      const counts: ServerLoggedCount = {};
+      for (const e of loggedR.data.exercises) counts[e.exercise] = e.set_count;
+      setServerLoggedCount(counts);
+      setLogHasSummary(loggedR.data.has_session_summary);
+    }
+    if (lastR.status === "ok") {
+      setLastLogged(lastR.data.by_exercise);
+    }
+  }, []);
+
   const onStart = useCallback(() => {
     if (!plan) return;
     initAudio();
     try { localStorage.setItem(IN_PROGRESS_KEY, "1"); } catch { /* ignore */ }
     setInterrupted(false);
+    setSessionSets({});         // fresh session — discard any stale entries
+    setLogHasSummary(false);
     setFlow("workout");
-  }, [plan]);
+    void hydrateWorkoutState(plan);
+  }, [plan, hydrateWorkoutState]);
 
   const onDone = useCallback((elapsed_sec: number) => {
     setTotalElapsedSec(elapsed_sec);
@@ -249,12 +304,28 @@ export default function App() {
         <WorkoutScreen
           key={`workout-${result.plan.plan_id}`}
           plan={result.plan}
+          sessionSets={sessionSets}
+          serverLoggedCount={serverLoggedCount}
+          lastLogged={lastLogged}
+          hasSummary={logHasSummary}
+          onLoggedSet={handleLoggedSet}
+          onSummaryLogged={handleSummaryLogged}
           onDone={onDone}
           onBackToHome={onBackToHome}
         />
       )}
       {flow === "done" && (
-        <DoneScreen total_elapsed_sec={totalElapsedSec} onBack={onBackToStart} />
+        <DoneScreen
+          plan={result.plan}
+          total_elapsed_sec={totalElapsedSec}
+          sessionSets={sessionSets}
+          serverLoggedCount={serverLoggedCount}
+          lastLogged={lastLogged}
+          hasSummary={logHasSummary}
+          onLoggedSet={handleLoggedSet}
+          onSummaryLogged={handleSummaryLogged}
+          onBack={onBackToStart}
+        />
       )}
     </>
   );

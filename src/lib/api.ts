@@ -5,6 +5,7 @@ import type {
   LoggedTodayResponse,
   NoPlanResponse,
   Plan,
+  SessionsResponse,
   StatusResponse,
 } from "./types";
 
@@ -173,6 +174,28 @@ export type FetchLastLoggedResult =
 /** Batch lookup of most-recent prior set per exercise. Used to pre-fill
  * stepper defaults so the common case needs zero edits. Empty list →
  * skips the network call and returns an empty map. */
+export type FetchSessionsResult =
+  | { status: "ok"; data: SessionsResponse }
+  | { status: "error"; message: string };
+
+/** Per-day plan + per-set rows + computed aggregates for the Status page.
+ * Default 7 days, server clamps to MAX 30. */
+export async function fetchSessions(days = 7): Promise<FetchSessionsResult> {
+  try {
+    const headers: Record<string, string> = { Accept: "application/json" };
+    if (API_KEY) headers["X-API-Key"] = API_KEY;
+    const res = await fetch(`${API_BASE}/api/health/sessions?days=${days}`, { headers });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = (await res.json()) as SessionsResponse;
+    return { status: "ok", data };
+  } catch (err) {
+    return {
+      status: "error",
+      message: err instanceof Error ? err.message : "Failed to load sessions.",
+    };
+  }
+}
+
 export async function fetchLastLogged(exerciseNames: string[]): Promise<FetchLastLoggedResult> {
   const clean = exerciseNames.map((n) => n.trim()).filter(Boolean);
   if (clean.length === 0) {

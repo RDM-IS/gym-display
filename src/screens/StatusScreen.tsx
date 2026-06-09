@@ -1,340 +1,363 @@
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import type {
   Banner,
-  DayStripEntry,
-  LoggedSession,
+  SessionDayRow,
+  SessionsResponse,
+  SessionSetRow,
   StatusResponse,
   TrendPoint,
 } from "../lib/types";
-import { perExerciseDeltas, type PerExerciseDelta } from "../lib/status-analysis";
-import { sessionLabel } from "../lib/format";
+import { fetchSessions } from "../lib/api";
+import { compareToTargetZone, zoneRangeBpm } from "../lib/hr-zone";
 
 interface Props {
   data: StatusResponse;
 }
 
 export default function StatusScreen({ data }: Props) {
-  // Guard every array — the payload comes from a server we don't control
-  // at runtime; missing/null arrays must not crash the page.
-  const history = Array.isArray(data?.same_type_history) ? data.same_type_history : [];
-  const day_strip = Array.isArray(data?.day_strip) ? data.day_strip : [];
-  const rpe_trend = Array.isArray(data?.rpe_trend) ? data.rpe_trend : [];
-  const weight_trend = Array.isArray(data?.weight_trend) ? data.weight_trend : [];
+  const [sessions, setSessions] = useState<SessionsResponse | null>(null);
+  const [sessionsErr, setSessionsErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const r = await fetchSessions(7);
+      if (cancelled) return;
+      if (r.status === "ok") setSessions(r.data);
+      else setSessionsErr(r.message);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const todayRow =
+    sessions?.days.find((d) => d.is_today) ?? sessions?.days[sessions.days.length - 1] ?? null;
+
   return (
     <div className="status">
-      <div className="status-grid">
-        <LeftPanel
-          mostRecent={data?.most_recent_session ?? null}
-          history={history}
-        />
-        <RightPanel
-          banner={data?.banner ?? null}
-          day_strip={day_strip}
-          rpe_trend={rpe_trend}
-          weight_trend={weight_trend}
-        />
-      </div>
-    </div>
-  );
-}
+      {data?.banner && <BannerRow banner={data.banner} />}
 
-// ---------------------------------------------------------------------------
-// Left — most recent session vs same-type history
-// ---------------------------------------------------------------------------
-
-function LeftPanel({
-  mostRecent,
-  history,
-}: {
-  mostRecent: LoggedSession | null;
-  history: LoggedSession[];
-}) {
-  if (!mostRecent) {
-    return (
-      <Panel title="Last session">
-        <Empty text="No sessions logged yet. Debrief Artemis in Mattermost after a workout." />
-      </Panel>
-    );
-  }
-  return (
-    <Panel
-      title={`Last session · ${sessionLabel({ session_type: mostRecent.session_type })}`}
-      subtitle={`${mostRecent.plan_date} · Phase ${mostRecent.phase} · Week ${mostRecent.week_num}${
-        mostRecent.rpe_actual != null ? ` · RPE ${mostRecent.rpe_actual.toFixed(1)}` : ""
-      }`}
-    >
-      <ExerciseTable current={mostRecent} history={history} />
-      {history.length === 0 && (
-        <div className="status-note">
-          No prior {mostRecent.session_type} sessions to compare against.
-        </div>
-      )}
-      {history.length > 0 && (
-        <div className="status-note">
-          Compared against avg of last {history.length} {mostRecent.session_type} session
-          {history.length === 1 ? "" : "s"}: {history.map((h) => h.plan_date).join(", ")}
-        </div>
-      )}
-    </Panel>
-  );
-}
-
-function ExerciseTable({
-  current,
-  history,
-}: {
-  current: LoggedSession;
-  history: LoggedSession[];
-}) {
-  const deltas = useMemo(() => perExerciseDeltas(current, history), [current, history]);
-  // current.exercises may be undefined / null from the server; never .filter() raw.
-  const exerciseRows = Array.isArray(current.exercises) ? current.exercises : [];
-
-  if (deltas.length === 0) {
-    // No strength sets — fall back to cardio block rows.
-    const cardioRows = exerciseRows.filter((e) => e.log_type === "cardio_block");
-    if (cardioRows.length === 0) {
-      return <Empty text="No exercise rows in this session." />;
-    }
-    return (
-      <table className="status-table">
-        <thead>
-          <tr>
-            <th>Block</th>
-            <th>Duration</th>
-            <th>Distance</th>
-            <th>HR avg</th>
-            <th>HR peak</th>
-          </tr>
-        </thead>
-        <tbody>
-          {cardioRows.map((b, i) => (
-            <tr key={i}>
-              <td>{b.exercise ?? "—"}</td>
-              <td className="num">{b.duration_sec != null ? `${b.duration_sec}s` : "—"}</td>
-              <td className="num">{b.distance_m != null ? `${b.distance_m}m` : "—"}</td>
-              <td className="num">{b.hr_avg ?? "—"}</td>
-              <td className="num">{b.hr_peak ?? "—"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    );
-  }
-
-  return (
-    <table className="status-table">
-      <thead>
-        <tr>
-          <th>Exercise</th>
-          <th>Top set</th>
-          <th>Δ weight</th>
-          <th>Δ reps</th>
-          <th>vs avg</th>
-        </tr>
-      </thead>
-      <tbody>
-        {deltas.map((d) => (
-          <DeltaRow key={d.exercise} d={d} />
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
-function DeltaRow({ d }: { d: PerExerciseDelta }) {
-  const cur = d.current;
-  const topSet = [
-    cur.weight_lbs != null ? `${cur.weight_lbs} lb` : null,
-    cur.reps_done != null ? `× ${cur.reps_done}` : null,
-  ]
-    .filter(Boolean)
-    .join(" ");
-  return (
-    <tr>
-      <td>{d.exercise}</td>
-      <td className="num">{topSet || "—"}</td>
-      <td className={`num ${deltaClass(d.weight_delta)}`}>{fmtDelta(d.weight_delta, "lb")}</td>
-      <td className={`num ${deltaClass(d.reps_delta)}`}>{fmtDelta(d.reps_delta, "")}</td>
-      <td className="num muted">
-        {d.n_history === 0
-          ? "—"
-          : `${d.history_avg_weight?.toFixed(1) ?? "—"} lb × ${
-              d.history_avg_reps?.toFixed(1) ?? "—"
-            }`}
-      </td>
-    </tr>
-  );
-}
-
-function fmtDelta(v: number | null, unit: string): string {
-  if (v == null) return "—";
-  const sign = v > 0 ? "+" : "";
-  return `${sign}${v.toFixed(unit === "lb" ? 1 : 1)}${unit ? " " + unit : ""}`;
-}
-
-function deltaClass(v: number | null): string {
-  if (v == null || v === 0) return "muted";
-  return v > 0 ? "delta-up" : "delta-down";
-}
-
-// ---------------------------------------------------------------------------
-// Right — banner + 11-day strip + trends
-// ---------------------------------------------------------------------------
-
-function RightPanel({
-  banner,
-  day_strip,
-  rpe_trend,
-  weight_trend,
-}: {
-  banner: Banner | null;
-  day_strip: DayStripEntry[];
-  rpe_trend: TrendPoint[];
-  weight_trend: TrendPoint[];
-}) {
-  return (
-    <div className="status-right">
-      {banner && (
-        <div className="banner-row">
-          <span className="banner-phase">
-            {banner.phase_name ? `${banner.phase_name} (Phase ${banner.phase})` : `Phase ${banner.phase}`}
-          </span>
-          <span className="banner-week">Week {banner.week_num}</span>
-        </div>
-      )}
-      <Panel title="Last 11 days" subtitle="today ±5">
-        <DayStrip entries={day_strip} />
-      </Panel>
-      <Panel title="RPE trend" subtitle="last 30 days · session_summary rows">
-        {rpe_trend.length === 0 ? (
-          <Empty text="No RPE logged yet." />
-        ) : (
-          <TrendChart points={rpe_trend} yMin={1} yMax={10} unit="" />
-        )}
-      </Panel>
-      <Panel title="Body weight" subtitle="last 30 days · daily_state">
-        {weight_trend.length === 0 ? (
-          <Empty text="No body-weight check-ins yet. Log via Mattermost morning check-in." />
-        ) : (
-          <TrendChart points={weight_trend} unit="lb" />
-        )}
-      </Panel>
-    </div>
-  );
-}
-
-function DayStrip({ entries }: { entries: DayStripEntry[] }) {
-  return (
-    <div className="day-strip">
-      {entries.map((e) => {
-        const dayNum = parseDayNumber(e.plan_date);
-        const cls = [
-          "day-cell",
-          e.is_today ? "day-today" : "",
-          e.session_type ? `day-${e.session_type.split("_")[0]}` : "day-empty",
-          e.is_skipped ? "day-skipped" : "",
-          e.is_logged ? "day-logged" : "",
-        ]
-          .filter(Boolean)
-          .join(" ");
-        return (
-          <div key={e.plan_date} className={cls} title={`${e.plan_date}: ${e.session_type ?? "—"}`}>
-            <div className="day-num">{dayNum}</div>
-            <div className="day-type">{shortType(e.session_type)}</div>
-            <div className="day-marker">
-              {e.is_logged ? "✓" : e.is_skipped ? "·" : ""}
-            </div>
+      <Panel
+        title="Today"
+        subtitle={todayRow ? formatDate(todayRow.plan_date) : "loading"}
+      >
+        {sessionsErr && (
+          <div className="status-error">
+            Sessions endpoint error: {sessionsErr}
           </div>
-        );
-      })}
+        )}
+        {!sessions && !sessionsErr && <Empty text="Loading…" />}
+        {todayRow && (
+          <TodayPanel
+            day={todayRow}
+            planExercises={extractPlannedExerciseNames(todayRow)}
+          />
+        )}
+      </Panel>
+
+      <Panel title="Last 7 days" subtitle="planned vs logged · avg-set RPE vs target">
+        {!sessions ? <Empty text="Loading…" /> : <SevenDayStrip days={sessions.days} />}
+      </Panel>
+
+      <Panel title="Outliers" subtitle="data only · not interpretation">
+        {!sessions ? <Empty text="Loading…" /> : <Outliers days={sessions.days} />}
+      </Panel>
+
+      <Panel title="Body weight" subtitle="last 30 days · daily_state">
+        {data?.weight_trend && data.weight_trend.length > 0 ? (
+          <TrendChart points={data.weight_trend} unit="lb" />
+        ) : (
+          <Empty text="No body-weight check-ins yet." />
+        )}
+      </Panel>
     </div>
   );
 }
 
-function parseDayNumber(iso: string): string {
-  const m = iso.match(/-(\d{2})$/);
-  return m ? m[1] : iso.slice(-2);
+// ---------------------------------------------------------------------------
+// Today — per-exercise per-set read-back + planned-vs-logged gaps
+// ---------------------------------------------------------------------------
+
+interface PlannedExerciseRef {
+  name: string;
+  expected_sets: number;
+  is_finisher: boolean;
 }
 
-function shortType(t: string | null): string {
-  if (!t) return "—";
-  switch (t) {
-    case "strength_a": return "STR A";
-    case "strength_b": return "STR B";
-    case "strength_c": return "STR C";
-    case "cardio_intervals": return "HIIT";
-    case "cardio_z2": return "Z2";
-    case "walk": return "WALK";
-    case "rest_mobility": return "REST";
-    default: return t.toUpperCase().slice(0, 5);
+/** Walk the sets returned by /sessions for today AND any planned exercises
+ * that should have rows. The /sessions payload has the per-set rows; what
+ * it doesn't tell us natively is the planned exercise list. We extract that
+ * by collecting all distinct exercise names that appear in sets + computing
+ * any planned names missing entirely (which would show as "not logged"). */
+function extractPlannedExerciseNames(_day: SessionDayRow): PlannedExerciseRef[] {
+  // For now: planned-list reconciliation happens BACKEND-side via
+  // planned_set_count + per-exercise set rows. The frontend reads back
+  // what's in sets[]; the backend's planned_set_count vs logged_set_count
+  // is the gap signal. Future: have backend return the planned exercise
+  // list as a separate field on SessionDayRow so we can render
+  // "not-logged-at-all" exercises explicitly. For v1, the gap is
+  // visible in the day's logged < planned ratio and Outliers section.
+  return [];
+}
+
+function TodayPanel({ day }: { day: SessionDayRow; planExercises: PlannedExerciseRef[] }) {
+  const sets = Array.isArray(day.sets) ? day.sets : [];
+  // Group by exercise name preserving original order.
+  const grouped = new Map<string, SessionSetRow[]>();
+  for (const s of sets) {
+    const k = s.exercise ?? "—";
+    const arr = grouped.get(k) ?? [];
+    arr.push(s);
+    grouped.set(k, arr);
   }
-}
-
-// ---------------------------------------------------------------------------
-// SVG line chart
-// ---------------------------------------------------------------------------
-
-interface ChartProps {
-  points: TrendPoint[];
-  yMin?: number;
-  yMax?: number;
-  unit?: string;
-}
-
-function TrendChart({ points, yMin, yMax, unit = "" }: ChartProps) {
-  const width = 600;
-  const height = 160;
-  const padX = 36;
-  const padY = 20;
-
-  const values = points.map((p) => p.value);
-  const minY = yMin ?? Math.min(...values);
-  const maxY = yMax ?? Math.max(...values);
-  const range = maxY === minY ? 1 : maxY - minY;
-  const stepX = points.length > 1 ? (width - 2 * padX) / (points.length - 1) : 0;
-
-  const coords = points.map((p, i) => ({
-    x: padX + i * stepX,
-    y: padY + (height - 2 * padY) * (1 - (p.value - minY) / range),
-    p,
-  }));
-
-  const path = coords.map((c, i) => `${i === 0 ? "M" : "L"}${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" ");
-  const latest = points[points.length - 1];
-  const first = points[0];
+  const completionRatio = day.planned_set_count > 0
+    ? `${day.logged_set_count} of ${day.planned_set_count}`
+    : `${day.logged_set_count}`;
+  const targetRpe = day.target_rpe;
+  const avgRpe = day.avg_set_rpe;
+  const arrow = avgRpe != null && targetRpe != null
+    ? avgRpe > targetRpe + 0.1 ? "↑" : avgRpe < targetRpe - 0.1 ? "↓" : "≈"
+    : "";
 
   return (
-    <div className="chart-wrap">
-      <svg viewBox={`0 0 ${width} ${height}`} className="chart" preserveAspectRatio="none">
-        {/* axis */}
-        <line x1={padX} y1={height - padY} x2={width - padX} y2={height - padY} className="chart-axis" />
-        {/* path */}
-        <path d={path} className="chart-path" />
-        {/* dots */}
-        {coords.map((c, i) => (
-          <circle key={i} cx={c.x} cy={c.y} r={3} className="chart-dot" />
+    <div className="today-grid">
+      <div className="today-meta">
+        <div>
+          <div className="today-meta-label">Session</div>
+          <div className="today-meta-value">{day.display_name ?? day.session_type ?? "—"}</div>
+        </div>
+        <div>
+          <div className="today-meta-label">Phase / Week</div>
+          <div className="today-meta-value">
+            {day.phase ? `P${day.phase}` : "—"} · {day.week_num ? `W${day.week_num}` : "—"}
+          </div>
+        </div>
+        <div>
+          <div className="today-meta-label">Sets logged</div>
+          <div className="today-meta-value">{completionRatio}</div>
+        </div>
+        <div>
+          <div className="today-meta-label">Avg-set RPE / target</div>
+          <div className="today-meta-value">
+            {avgRpe != null ? avgRpe.toFixed(1) : "—"}
+            {targetRpe != null && (
+              <span className="today-meta-target"> / {targetRpe.toFixed(1)} {arrow}</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {grouped.size === 0 ? (
+        <Empty text="No sets logged today yet." />
+      ) : (
+        <div className="today-exercises">
+          {[...grouped.entries()].map(([name, rows]) => (
+            <ExerciseReadback key={name} name={name} rows={rows} targetHrZone={day.target_hr_zone} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ExerciseReadback({
+  name,
+  rows,
+  targetHrZone,
+}: {
+  name: string;
+  rows: SessionSetRow[];
+  targetHrZone: number | null;
+}) {
+  return (
+    <div className="today-exercise">
+      <div className="today-exercise-name">{name}</div>
+      <ul className="today-set-list">
+        {rows.map((r) => (
+          <li key={r.log_id} className={r.is_skipped ? "set-skipped" : ""}>
+            {r.log_type === "cardio_block" ? (
+              <CardioReadback row={r} targetHrZone={targetHrZone} />
+            ) : (
+              <StrengthReadback row={r} />
+            )}
+          </li>
         ))}
-        {/* y labels */}
-        <text x={4} y={padY + 4} className="chart-label">{maxY.toFixed(1)}</text>
-        <text x={4} y={height - padY} className="chart-label">{minY.toFixed(1)}</text>
-      </svg>
-      <div className="chart-foot">
-        <span>
-          {first.date} → {latest.date}
-        </span>
-        <span>
-          latest <strong>{latest.value.toFixed(1)}{unit && ` ${unit}`}</strong>
-        </span>
-        <span>n = {points.length}</span>
+      </ul>
+    </div>
+  );
+}
+
+function StrengthReadback({ row }: { row: SessionSetRow }) {
+  if (row.is_skipped) {
+    return (
+      <span className="set-readback set-readback--skipped">
+        set {row.set_num ?? "?"}: skipped
+      </span>
+    );
+  }
+  const parts: string[] = [];
+  if (row.weight_lbs != null) parts.push(`${fmt(row.weight_lbs)} lb`);
+  if (row.reps_done != null) parts.push(`× ${row.reps_done}`);
+  if (row.rpe_actual != null) parts.push(`@RPE ${fmt(row.rpe_actual)}`);
+  return (
+    <span className="set-readback tv-mono">
+      <span className="set-num">set {row.set_num ?? "?"}:</span> {parts.join(" ") || "—"}
+    </span>
+  );
+}
+
+function CardioReadback({
+  row,
+  targetHrZone,
+}: {
+  row: SessionSetRow;
+  targetHrZone: number | null;
+}) {
+  const parts: string[] = [];
+  if (row.duration_sec != null) parts.push(`${Math.round(row.duration_sec / 60)} min`);
+  if (row.distance_m != null) parts.push(`${(row.distance_m / 1000).toFixed(2)} km`);
+  if (row.hr_avg != null) parts.push(`HR ${row.hr_avg} avg`);
+  if (row.hr_peak != null) parts.push(`${row.hr_peak} peak`);
+  if (row.rpe_actual != null) parts.push(`@RPE ${fmt(row.rpe_actual)}`);
+  // HR vs target zone facts:
+  let zoneNote: string | null = null;
+  if (row.hr_avg != null && targetHrZone != null) {
+    const cmp = compareToTargetZone(row.hr_avg, targetHrZone);
+    if (cmp.targetRangeBpm) {
+      const [lo, hi] = cmp.targetRangeBpm;
+      const arrow = cmp.delta > 0 ? "↑" : cmp.delta < 0 ? "↓" : "≈";
+      zoneNote = `Z${cmp.actualZone} vs target Z${targetHrZone} (${lo}–${hi} bpm) ${arrow}`;
+    }
+  }
+  return (
+    <span className="set-readback tv-mono">
+      <span className="set-num">cardio:</span> {parts.join(" · ") || "—"}
+      {zoneNote && <span className="zone-note"> · {zoneNote}</span>}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 7-day strip
+// ---------------------------------------------------------------------------
+
+function SevenDayStrip({ days }: { days: SessionDayRow[] }) {
+  return (
+    <div className="seven-day-strip">
+      {days.map((d) => (
+        <DayRow key={d.plan_date} day={d} />
+      ))}
+    </div>
+  );
+}
+
+function DayRow({ day }: { day: SessionDayRow }) {
+  const avg = day.avg_set_rpe;
+  const target = day.target_rpe;
+  const arrow = avg != null && target != null
+    ? avg > target + 0.1 ? "↑" : avg < target - 0.1 ? "↓" : "≈"
+    : null;
+  const className = [
+    "seven-day-row",
+    day.is_today ? "seven-day-row--today" : "",
+    day.is_skipped ? "seven-day-row--skipped" : "",
+    day.outliers?.incomplete ? "seven-day-row--incomplete" : "",
+  ].filter(Boolean).join(" ");
+  const hrZone = day.target_hr_zone;
+  const hrTargetRange = hrZone ? zoneRangeBpm(hrZone) : null;
+  return (
+    <div className={className}>
+      <div className="seven-day-date tv-mono">{shortDate(day.plan_date)}</div>
+      <div className="seven-day-label">
+        <div className="seven-day-name">{day.display_name ?? day.session_type ?? "—"}</div>
+        {day.phase != null && day.week_num != null && (
+          <div className="seven-day-sub tv-mono">
+            P{day.phase} · W{day.week_num}
+          </div>
+        )}
+      </div>
+      <div className="seven-day-rpe tv-mono">
+        {avg != null ? avg.toFixed(1) : "—"}
+        {target != null && (
+          <span className="seven-day-target"> / {target.toFixed(1)} {arrow}</span>
+        )}
+      </div>
+      <div className="seven-day-sets tv-mono">
+        {day.logged_set_count} / {day.planned_set_count}
+      </div>
+      <div className="seven-day-work tv-mono">
+        {day.total_work_sec > 0 ? `${Math.round(day.total_work_sec / 60)}m` : "—"}
+      </div>
+      <div className="seven-day-hr tv-mono">
+        {day.hr_avg != null ? `${day.hr_avg} avg` : "—"}
+        {hrTargetRange && day.hr_avg != null && (
+          <span className="seven-day-hr-target">
+            {" "}/ Z{hrZone} ({hrTargetRange[0]}–{hrTargetRange[1]})
+          </span>
+        )}
       </div>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Generic UI primitives
+// Outliers — facts only
 // ---------------------------------------------------------------------------
+
+function Outliers({ days }: { days: SessionDayRow[] }) {
+  const flagged: Array<{ date: string; kind: string; detail: string }> = [];
+  for (const d of days) {
+    for (const s of d.outliers?.high_rpe_sets ?? []) {
+      flagged.push({
+        date: d.plan_date,
+        kind: "RPE ≥ 9",
+        detail: `${s.exercise ?? "?"} set ${s.set_num ?? "?"} · RPE ${s.rpe_actual.toFixed(1)}`,
+      });
+    }
+    if (d.outliers?.incomplete) {
+      flagged.push({
+        date: d.plan_date,
+        kind: "Incomplete",
+        detail: `${d.outliers.incomplete_logged} of ${d.outliers.incomplete_planned} planned sets logged`,
+      });
+    }
+    for (const note of d.outliers?.pain_notes ?? []) {
+      flagged.push({
+        date: d.plan_date,
+        kind: "Pain note",
+        detail: note,
+      });
+    }
+  }
+  if (flagged.length === 0) {
+    return <Empty text="No outliers in the last 7 days." />;
+  }
+  return (
+    <ul className="outlier-list">
+      {flagged.map((f, i) => (
+        <li key={i} className="outlier-row">
+          <span className="outlier-date tv-mono">{shortDate(f.date)}</span>
+          <span className={`outlier-kind outlier-kind--${f.kind.replace(/\W/g, "")}`}>{f.kind}</span>
+          <span className="outlier-detail">{f.detail}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Banner + chart + primitives
+// ---------------------------------------------------------------------------
+
+function BannerRow({ banner }: { banner: Banner }) {
+  return (
+    <div className="banner-row">
+      <span className="banner-phase">
+        {banner.phase_name ? `${banner.phase_name} (Phase ${banner.phase})` : `Phase ${banner.phase}`}
+      </span>
+      <span className="banner-week">Week {banner.week_num}</span>
+    </div>
+  );
+}
 
 function Panel({
   title,
@@ -358,4 +381,65 @@ function Panel({
 
 function Empty({ text }: { text: string }) {
   return <div className="status-empty">{text}</div>;
+}
+
+function TrendChart({ points, unit = "" }: { points: TrendPoint[]; unit?: string }) {
+  const width = 600;
+  const height = 160;
+  const padX = 36;
+  const padY = 20;
+  const values = points.map((p) => p.value);
+  const minY = Math.min(...values);
+  const maxY = Math.max(...values);
+  const range = maxY === minY ? 1 : maxY - minY;
+  const stepX = points.length > 1 ? (width - 2 * padX) / (points.length - 1) : 0;
+  const coords = points.map((p, i) => ({
+    x: padX + i * stepX,
+    y: padY + (height - 2 * padY) * (1 - (p.value - minY) / range),
+  }));
+  const path = coords.map((c, i) => `${i === 0 ? "M" : "L"}${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" ");
+  const latest = points[points.length - 1];
+  const first = points[0];
+  return (
+    <div className="chart-wrap">
+      <svg viewBox={`0 0 ${width} ${height}`} className="chart" preserveAspectRatio="none">
+        <line x1={padX} y1={height - padY} x2={width - padX} y2={height - padY} className="chart-axis" />
+        <path d={path} className="chart-path" />
+        {coords.map((c, i) => (
+          <circle key={i} cx={c.x} cy={c.y} r={3} className="chart-dot" />
+        ))}
+        <text x={4} y={padY + 4} className="chart-label">{maxY.toFixed(1)}</text>
+        <text x={4} y={height - padY} className="chart-label">{minY.toFixed(1)}</text>
+      </svg>
+      <div className="chart-foot">
+        <span>{first.date} → {latest.date}</span>
+        <span>latest <strong>{latest.value.toFixed(1)}{unit && ` ${unit}`}</strong></span>
+        <span>n = {points.length}</span>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function fmt(n: number): string {
+  return Number.isInteger(n) ? String(n) : n.toFixed(1).replace(/\.0$/, "");
+}
+
+function formatDate(iso: string): string {
+  const [y, m, d] = iso.split("-").map((s) => parseInt(s, 10));
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.toLocaleDateString("en-US", {
+    timeZone: "UTC",
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function shortDate(iso: string): string {
+  const [, m, d] = iso.split("-").map((s) => parseInt(s, 10));
+  return `${m}/${d}`;
 }

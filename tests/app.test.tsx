@@ -98,7 +98,7 @@ describe("App — /today route", () => {
     }));
     render(<App />);
     // StatusScreen shows a Last-11-days panel
-    expect(await screen.findByText(/last 11 days/i)).toBeDefined();
+    expect(await screen.findByText(/last 7 days/i)).toBeDefined();
     expect(window.location.pathname).toBe("/status");
   });
 
@@ -113,7 +113,7 @@ describe("App — /today route", () => {
       },
     }));
     render(<App />);
-    expect(await screen.findByText(/last 11 days/i)).toBeDefined();
+    expect(await screen.findByText(/last 7 days/i)).toBeDefined();
     expect(window.location.pathname).toBe("/status");
   });
 });
@@ -234,7 +234,7 @@ describe("App — mobility plan is treated as rest day", () => {
 
   it("redirects mobility days to /status (auto-redirect rule)", async () => {
     render(<App />);
-    expect(await screen.findByText(/last 11 days/i)).toBeDefined();
+    expect(await screen.findByText(/last 7 days/i)).toBeDefined();
     expect(window.location.pathname).toBe("/status");
   });
 });

@@ -231,6 +231,192 @@
 
 .day-skipped { opacity: 0.55; }
 
+/* --- Today read-back + 7-day strip + outliers -------------------------- */
+
+.status-error {
+  background: rgba(255, 80, 80, 0.15);
+  border: 1px solid rgba(255, 80, 80, 0.4);
+  color: #ffd1d1;
+  padding: 1vh 1.5vw;
+  border-radius: 6px;
+  font-family: "SF Mono", "Menlo", monospace;
+  font-size: clamp(11px, 1vw, 14px);
+}
+
+.today-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 2vh;
+}
+
+.today-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1vw 2vw;
+  padding-bottom: 1.5vh;
+  border-bottom: 1px solid rgba(245, 245, 245, 0.1);
+}
+
+.today-meta-label {
+  font-size: clamp(10px, 0.95vw, 14px);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(245, 245, 245, 0.55);
+  margin-bottom: 0.3vh;
+}
+
+.today-meta-value {
+  font-size: clamp(15px, 1.4vw, 22px);
+  font-weight: 800;
+}
+
+.today-meta-target {
+  color: rgba(245, 245, 245, 0.55);
+  font-weight: 700;
+  margin-left: 0.5em;
+}
+
+.today-exercises {
+  display: flex;
+  flex-direction: column;
+  gap: 1.4vh;
+}
+
+.today-exercise {
+  border-left: 3px solid rgba(245, 245, 245, 0.2);
+  padding-left: 0.8vw;
+}
+
+.today-exercise-name {
+  font-size: clamp(14px, 1.3vw, 20px);
+  font-weight: 800;
+  margin-bottom: 0.3vh;
+}
+
+.today-set-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3vh;
+}
+
+.set-readback {
+  font-size: clamp(13px, 1.15vw, 17px);
+  font-variant-numeric: tabular-nums;
+}
+
+.set-num {
+  color: rgba(245, 245, 245, 0.5);
+  margin-right: 0.4em;
+}
+
+.set-readback--skipped,
+.set-skipped {
+  color: rgba(245, 245, 245, 0.45);
+  font-style: italic;
+}
+
+.zone-note {
+  color: rgba(245, 245, 245, 0.55);
+  font-size: 0.88em;
+}
+
+.seven-day-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4vh;
+}
+
+.seven-day-row {
+  display: grid;
+  grid-template-columns: 4em 1.5fr 1fr 0.8fr 0.6fr 1.4fr;
+  align-items: baseline;
+  gap: 0.8vw;
+  padding: 0.7vh 0.8vw;
+  background: rgba(245, 245, 245, 0.03);
+  border: 1px solid rgba(245, 245, 245, 0.08);
+  border-radius: 6px;
+  font-size: clamp(12px, 1.1vw, 16px);
+}
+
+.seven-day-row--today {
+  border-color: #ffd166;
+  background: rgba(255, 209, 102, 0.08);
+}
+
+.seven-day-row--skipped {
+  opacity: 0.55;
+}
+
+.seven-day-row--incomplete {
+  border-color: rgba(255, 80, 80, 0.4);
+}
+
+.seven-day-date {
+  color: rgba(245, 245, 245, 0.55);
+}
+
+.seven-day-label {
+  display: flex;
+  flex-direction: column;
+}
+
+.seven-day-name {
+  font-weight: 700;
+}
+
+.seven-day-sub {
+  font-size: 0.85em;
+  color: rgba(245, 245, 245, 0.4);
+}
+
+.seven-day-rpe {
+  font-weight: 700;
+}
+
+.seven-day-target,
+.seven-day-hr-target {
+  color: rgba(245, 245, 245, 0.5);
+  font-weight: 600;
+}
+
+.outlier-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4vh;
+}
+
+.outlier-row {
+  display: grid;
+  grid-template-columns: 4em 8em 1fr;
+  align-items: baseline;
+  gap: 0.8vw;
+  padding: 0.6vh 0.8vw;
+  background: rgba(245, 245, 245, 0.03);
+  border-radius: 4px;
+  font-size: clamp(12px, 1.05vw, 15px);
+}
+
+.outlier-date {
+  color: rgba(245, 245, 245, 0.55);
+}
+
+.outlier-kind {
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-size: 0.85em;
+}
+
+.outlier-kind--RPE9 { color: #f78b8b; }
+.outlier-kind--Incomplete { color: #ffd166; }
+.outlier-kind--Painnote { color: #f78b8b; }
+
 /* ------------------------------------------------------------------------- */
 
 .chart-wrap {
