@@ -181,6 +181,14 @@
   font-weight: 900;
 }
 
+.jmap-partial {
+  color: #ffd166;
+  font-size: 0.82em;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
 @media (max-width: 900px) {
   .workout-v2-grid {
     grid-template-columns: 1fr;

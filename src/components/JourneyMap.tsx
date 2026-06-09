@@ -1,32 +1,33 @@
 import { useEffect, useRef } from "react";
 import type { Cursor, Section, Step } from "../lib/steps";
 import { formatMMSS } from "../lib/timer";
+import type { ExerciseCompletion } from "../lib/log-state";
 
 interface Props {
   steps: Step[];
   sections: Section[];
   cursor: Cursor;
-  /** Names of exercises already logged today — rendered with ✓ in the map. */
-  loggedExercises?: Set<string>;
+  /** Per-exercise completion derived in WorkoutScreen via buildCompletionMap.
+   * Full ✓ renders only when logged >= total; partial logged shows a
+   * subtle "(n/m ✓)" badge so the user sees progress, not a misleading
+   * ✓ after just set 1. */
+  completion?: Map<string, ExerciseCompletion>;
 }
 
 /** Vertical journey map. Always-visible right panel listing every step
  * of the session once. Steps inside a circuit show (currentRound/total).
- * Current step gets >> + highlight; past dim; upcoming normal. Auto-
- * scrolls the current step into view on cursor change. */
-export default function JourneyMap({ steps, sections, cursor, loggedExercises }: Props) {
+ * Current step gets ›; past dims; upcoming normal. Auto-scrolls the
+ * current step into view. */
+export default function JourneyMap({ steps, sections, cursor, completion }: Props) {
   const currentRef = useRef<HTMLLIElement | null>(null);
 
   useEffect(() => {
     const el = currentRef.current;
-    // jsdom lacks scrollIntoView; guard so tests + non-Chromium clients work.
     if (el && typeof el.scrollIntoView === "function") {
       el.scrollIntoView({ block: "center", behavior: "smooth" });
     }
   }, [cursor.stepIndex]);
 
-  // Build a quick lookup from step index → section so we know where to
-  // insert section headers.
   const sectionByStart = new Map<number, Section>();
   for (const s of sections) sectionByStart.set(s.startIndex, s);
 
@@ -40,8 +41,6 @@ export default function JourneyMap({ steps, sections, cursor, loggedExercises }:
           const isCurrent = i === cursor.stepIndex;
           const isPast = i < cursor.stepIndex;
 
-          // Round counter follows the cursor: shown only on circuit
-          // steps that are part of the SAME circuit the cursor is in.
           const inCurrentCircuit =
             !!step.circuitId &&
             !!currentStep?.circuitId &&
@@ -54,8 +53,14 @@ export default function JourneyMap({ steps, sections, cursor, loggedExercises }:
               : null;
 
           const dim = isPast && !isCurrent;
+
+          // Per-set completion badge. The same exercise (Goblet squat)
+          // can appear in multiple steps (one row per circuit body
+          // exercise) but its completion is global — we look up by name.
           const exName = step.exerciseRef?.name ?? null;
-          const isLogged = exName ? loggedExercises?.has(exName) ?? false : false;
+          const comp = exName ? completion?.get(exName) ?? null : null;
+          const isFullyLogged = !!comp && comp.logged >= comp.total;
+          const isPartiallyLogged = !!comp && comp.logged > 0 && comp.logged < comp.total;
 
           const className =
             `jmap-row jmap-row--${step.kind}` +
@@ -64,11 +69,7 @@ export default function JourneyMap({ steps, sections, cursor, loggedExercises }:
             (step.isRoundBreak ? " jmap-row--round-break" : "");
 
           return (
-            <li
-              key={i}
-              ref={isCurrent ? currentRef : null}
-              className="jmap-item"
-            >
+            <li key={i} ref={isCurrent ? currentRef : null} className="jmap-item">
               {section && (
                 <div className={`jmap-section jmap-section--${section.kind}`}>
                   {section.title}
@@ -81,8 +82,16 @@ export default function JourneyMap({ steps, sections, cursor, loggedExercises }:
                 <span className="jmap-dur tv-mono">{formatMMSS(step.duration_sec)}</span>
                 <span className="jmap-label">{step.label}</span>
                 {roundLabel && <span className="jmap-round tv-mono">({roundLabel})</span>}
-                {isLogged && step.kind === "exercise" && (
-                  <span className="jmap-check" aria-label="logged">✓</span>
+                {step.kind === "exercise" && isFullyLogged && (
+                  <span className="jmap-check" aria-label="fully logged">✓</span>
+                )}
+                {step.kind === "exercise" && !isFullyLogged && isPartiallyLogged && comp && (
+                  <span
+                    className="jmap-partial tv-mono"
+                    aria-label={`${comp.logged} of ${comp.total} sets logged`}
+                  >
+                    {comp.logged}/{comp.total} ✓
+                  </span>
                 )}
               </div>
             </li>

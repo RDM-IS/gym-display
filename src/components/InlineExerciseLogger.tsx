@@ -2,22 +2,22 @@ import { useReducer } from "react";
 import Stepper from "./Stepper";
 import { postLog } from "../lib/api";
 import { weightStepFor } from "../lib/weight-step";
-import type {
-  LastLoggedEntry,
-  LogExerciseIn,
-  LogSetIn,
-  PlannedExercise,
-} from "../lib/types";
+import type { Prefill, SetEntry } from "../lib/log-state";
+import type { LastLoggedEntry, LogExerciseIn, PlannedExercise } from "../lib/types";
 
 interface Props {
   exercise: PlannedExercise;
   plan_id: number;
-  rounds: number;
-  last: LastLoggedEntry | null;
-  /** Already logged today — render the panel as ✓ Logged and disable. */
-  alreadyLogged: boolean;
+  set_num: number;
+  total_sets: number;
+  /** Values to pre-fill the steppers with — see computePrefill(). */
+  prefill: Prefill;
+  /** Last logged set FROM A PRIOR SESSION (for the small "last 35 lb" hint
+   * under each stepper). */
+  lastHint: LastLoggedEntry | null;
+  alreadyFullyLogged: boolean;
   isFinisher?: boolean;
-  onLogged: (exerciseName: string) => void;
+  onLoggedSet: (exerciseName: string, set: SetEntry) => void;
 }
 
 type Status = "idle" | "saving" | "ok" | "error";
@@ -49,57 +49,77 @@ function reducer(state: State, action: Action): State {
   }
 }
 
-/** Single-exercise stepper card. Used by:
- *  - WorkoutScreen's main panel during a rest step (logs the just-finished
- *    exercise in the rest you're already in)
- *  - LogPanel's full-screen overlay
- * Both routes hit the same /api/health/log endpoint and call onLogged()
- * so the parent's loggedExercises set propagates everywhere. */
+/** Single-set logger card.
+ *
+ * Captures ONE set of one exercise and writes ONE session_log row via
+ * POST /api/health/log with the supplied set_num. The Log button reads
+ * the single-set value ("Log set 2: 30 lb × 12 @RPE 8") so a glance
+ * tells the user exactly what they're about to write.
+ *
+ * Pre-fills from `prefill` (parent computes: previous set this session
+ * > last-logged-session > plan target) so set 2 starts from set 1's
+ * values — when the user bumps the weight for set 3, they're actively
+ * surfacing divergence rather than blindly carrying a wrong value.
+ *
+ * The same component is used by:
+ *   - WorkoutScreen's main panel during a rest step (logs the just-
+ *     finished exercise / round in the rest you're already in)
+ *   - LogPanel's full-screen overlay (logs the next unlogged set)
+ *
+ * Both routes hit the same /api/health/log endpoint. The parent calls
+ * `onLoggedSet(name, setEntry)` to append to the shared sessionSets so
+ * the next render of this card (keyed by set_num) shows the next set.
+ */
 export default function InlineExerciseLogger({
   exercise,
   plan_id,
-  rounds,
-  last,
-  alreadyLogged,
+  set_num,
+  total_sets,
+  prefill,
+  lastHint,
+  alreadyFullyLogged,
   isFinisher,
-  onLogged,
+  onLoggedSet,
 }: Props) {
   const w = weightStepFor(exercise);
   const useReps = exercise.format === "reps";
 
-  const initial: State = {
-    weight: last?.weight_lbs ?? exercise.target_load_lbs ?? null,
-    reps: useReps
-      ? last?.reps_done ?? exercise.target_reps ?? null
-      : exercise.duration_sec ?? null,
-    rpe: null,
+  const [state, dispatch] = useReducer(reducer, {
+    weight: prefill.weight,
+    reps: prefill.reps,
+    rpe: prefill.rpe,
     status: "idle",
     error: null,
-  };
-  const [state, dispatch] = useReducer(reducer, initial);
-  const isDone = alreadyLogged || state.status === "ok";
+  });
+
+  const isDone = alreadyFullyLogged || state.status === "ok";
 
   async function save() {
     if (isDone) return;
     dispatch({ type: "save_start" });
-    const sets: LogSetIn[] = Array.from({ length: Math.max(1, rounds) }, (_, i) => ({
-      set_num: i + 1,
+    const setRow = {
+      set_num,
       reps_done: useReps ? state.reps ?? null : null,
       weight_lbs: w.isBodyweight ? null : state.weight ?? null,
       duration_sec: useReps ? null : state.reps ?? null,
       rpe_actual: state.rpe ?? null,
-    }));
+    };
     const body: LogExerciseIn = {
       plan_id,
       exercise: exercise.name,
       log_type: "strength_set",
-      sets,
+      sets: [setRow],
       notes: isFinisher ? "finisher" : null,
     };
     const r = await postLog(body);
     if (r.status === "ok") {
       dispatch({ type: "save_ok" });
-      onLogged(exercise.name);
+      onLoggedSet(exercise.name, {
+        set_num,
+        weight_lbs: setRow.weight_lbs,
+        reps_done: setRow.reps_done,
+        rpe_actual: setRow.rpe_actual,
+      });
     } else {
       dispatch({ type: "save_err", message: r.message });
     }
@@ -113,9 +133,9 @@ export default function InlineExerciseLogger({
           {isDone && <span className="log-check"> ✓</span>}
         </div>
         <div className="log-card-target tv-mono">
-          {useReps
-            ? `target ${exercise.target_reps ?? "?"}${exercise.target_load_lbs ? ` @ ${exercise.target_load_lbs} lb` : ""}`
-            : `target ${exercise.duration_sec ?? "?"} sec`}
+          Set {set_num} of {total_sets}
+          {useReps && exercise.target_load_lbs ? ` · target ${exercise.target_load_lbs} lb` : ""}
+          {useReps && exercise.target_reps != null ? ` × ${exercise.target_reps}` : ""}
         </div>
       </div>
       <div className="log-steppers">
@@ -126,8 +146,8 @@ export default function InlineExerciseLogger({
             value={state.weight}
             step={w.step}
             min={0}
-            blankStart={exercise.target_load_lbs ?? 0}
-            hint={last?.weight_lbs ?? null}
+            blankStart={prefill.weight ?? exercise.target_load_lbs ?? 0}
+            hint={lastHint?.weight_lbs ?? null}
             disabled={isDone}
             onChange={(v) => dispatch({ type: "set_weight", v })}
           />
@@ -137,8 +157,8 @@ export default function InlineExerciseLogger({
           value={state.reps}
           step={useReps ? 1 : 5}
           min={0}
-          blankStart={useReps ? exercise.target_reps ?? 0 : exercise.duration_sec ?? 0}
-          hint={useReps ? last?.reps_done ?? null : null}
+          blankStart={prefill.reps ?? (useReps ? exercise.target_reps ?? 0 : exercise.duration_sec ?? 0)}
+          hint={useReps ? lastHint?.reps_done ?? null : null}
           disabled={isDone}
           onChange={(v) => dispatch({ type: "set_reps", v })}
         />
@@ -148,7 +168,7 @@ export default function InlineExerciseLogger({
           step={1}
           min={1}
           max={10}
-          blankStart={7}
+          blankStart={prefill.rpe ?? 7}
           disabled={isDone}
           onChange={(v) => dispatch({ type: "set_rpe", v })}
         />
@@ -161,25 +181,26 @@ export default function InlineExerciseLogger({
         type="button"
         onClick={save}
         disabled={isDone || state.status === "saving"}
-        aria-label={`Log ${exercise.name}`}
+        aria-label={`Log ${exercise.name} set ${set_num}`}
       >
         {isDone
           ? "Logged ✓"
           : state.status === "saving"
           ? "Saving…"
-          : logButtonLabel(state, rounds, useReps, w.isBodyweight)}
+          : logButtonLabel(state, set_num, useReps, w.isBodyweight)}
       </button>
     </div>
   );
 }
 
-function logButtonLabel(state: State, rounds: number, useReps: boolean, isBw: boolean): string {
+function logButtonLabel(state: State, set_num: number, useReps: boolean, isBw: boolean): string {
   const parts: string[] = [];
-  if (rounds > 1) parts.push(`${rounds} ×`);
   if (!isBw && useReps && state.weight != null) parts.push(`${prettyN(state.weight)}lb`);
-  if (state.reps != null) parts.push(useReps ? `${state.reps} reps` : `${state.reps}s`);
+  if (state.reps != null) parts.push(useReps ? `× ${state.reps}` : `${state.reps}s`);
   if (state.rpe != null) parts.push(`@RPE ${prettyN(state.rpe)}`);
-  return parts.length > 0 ? `Log ${parts.join(" ")}` : "Log";
+  return parts.length > 0
+    ? `Log set ${set_num}: ${parts.join(" ")}`
+    : `Log set ${set_num}`;
 }
 
 function prettyN(n: number): string {

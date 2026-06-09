@@ -25,6 +25,16 @@ import {
 } from "../lib/audio";
 import { acquireWakeLock, releaseWakeLock } from "../lib/wake-lock";
 import { fetchLastLogged, fetchLoggedToday } from "../lib/api";
+import {
+  buildCompletionMap,
+  computePrefill,
+  isFullyLogged,
+  nextSetNumFor,
+  totalSetsFor,
+  type SessionSets,
+  type ServerLoggedCount,
+  type SetEntry,
+} from "../lib/log-state";
 import type { LastLoggedEntry, Plan, PlannedExercise } from "../lib/types";
 import JourneyMap from "../components/JourneyMap";
 import InlineExerciseLogger from "../components/InlineExerciseLogger";
@@ -52,10 +62,21 @@ export default function WorkoutScreen({ plan, onDone, onBackToHome }: Props) {
   const [muted, setMuted] = useState(isMuted());
   const [mode, setMode] = useState<Mode>("timer");
 
-  // Shared logging state — both the InlineExerciseLogger (in a rest step)
-  // and the LogPanel overlay read and write through here so changes
-  // propagate. Hydrated from /today/logged on mount.
-  const [loggedExercises, setLoggedExercises] = useState<Set<string>>(new Set());
+  // Shared per-set logging state — both the rest-panel InlineExerciseLogger
+  // and the LogPanel overlay read and write through here. One row per
+  // exercise per set; each panel always logs the NEXT unlogged set_num.
+  //
+  //   sessionSets       — set entries logged THIS browser session (with
+  //                       actual values, used as prefill for the next set).
+  //   serverLoggedCount — set_count per exercise from /today/logged on
+  //                       mount (used for completion math when the user
+  //                       reloads mid-workout).
+  //
+  // The two are combined via Math.max so a mid-workout reload doesn't
+  // lose completion state, but live values (for prefill) come from
+  // sessionSets only — the server endpoint doesn't return per-set values.
+  const [sessionSets, setSessionSets] = useState<SessionSets>({});
+  const [serverLoggedCount, setServerLoggedCount] = useState<ServerLoggedCount>({});
   const [lastLogged, setLastLogged] = useState<Record<string, LastLoggedEntry>>({});
   const [logHasSummary, setLogHasSummary] = useState(false);
 
@@ -89,7 +110,9 @@ export default function WorkoutScreen({ plan, onDone, onBackToHome }: Props) {
       ]);
       if (cancelled) return;
       if (loggedR.status === "ok") {
-        setLoggedExercises(new Set(loggedR.data.exercises.map((e) => e.exercise)));
+        const counts: ServerLoggedCount = {};
+        for (const e of loggedR.data.exercises) counts[e.exercise] = e.set_count;
+        setServerLoggedCount(counts);
         setLogHasSummary(loggedR.data.has_session_summary);
       }
       if (lastR.status === "ok") {
@@ -204,14 +227,24 @@ export default function WorkoutScreen({ plan, onDone, onBackToHome }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.status, onBackToHome]);
 
-  const handleLogged = useCallback((exerciseName: string) => {
-    setLoggedExercises((prev) => {
-      if (prev.has(exerciseName)) return prev;
-      const next = new Set(prev);
-      next.add(exerciseName);
-      return next;
+  const handleLoggedSet = useCallback((exerciseName: string, set: SetEntry) => {
+    setSessionSets((prev) => {
+      const arr = prev[exerciseName] ?? [];
+      return { ...prev, [exerciseName]: [...arr, set] };
     });
   }, []);
+
+  // Pre-computed exercise completion map for the JourneyMap.
+  const completionMap = useMemo(
+    () =>
+      buildCompletionMap(
+        plan,
+        collectExerciseNames(plan),
+        sessionSets,
+        serverLoggedCount,
+      ),
+    [plan, sessionSets, serverLoggedCount]
+  );
 
   if (!current) return null;
 
@@ -226,12 +259,29 @@ export default function WorkoutScreen({ plan, onDone, onBackToHome }: Props) {
     ? `Round ${state.cursor.currentRound} of ${current.totalRounds}`
     : current.kind.toUpperCase();
 
-  // Find the rounds for the InlineExerciseLogger when a rest is active.
-  // We log the just-finished exercise — its full N rounds at once, as
-  // the rest of the LogPanel does.
+  // Per-set logging in the rest you're already in: log THIS instance's
+  // metrics — one set per rest — with set_num = how many sets of this
+  // exercise have already been completed plus one.
   const restExercise = current.kind === "rest" ? current.precedingExerciseRef ?? null : null;
   const restExerciseLastLogged = restExercise ? lastLogged[restExercise.name] ?? null : null;
-  const restCircuitTotal = inCircuit ? current.totalRounds ?? 1 : 1;
+  const restSetNum = restExercise
+    ? nextSetNumFor(restExercise.name, sessionSets, serverLoggedCount)
+    : 1;
+  const restTotalSets = restExercise ? totalSetsFor(plan, restExercise.name) : 1;
+  const restPrefill = restExercise
+    ? computePrefill(
+        restExercise.name,
+        restExercise.format,
+        restExercise.target_load_lbs ?? null,
+        restExercise.target_reps ?? null,
+        restExercise.duration_sec ?? null,
+        sessionSets,
+        restExerciseLastLogged,
+      )
+    : { weight: null, reps: null, rpe: null };
+  const restFullyLogged = restExercise
+    ? isFullyLogged(restExercise.name, plan, sessionSets, serverLoggedCount)
+    : false;
 
   return (
     <div className={containerClass}>
@@ -256,11 +306,13 @@ export default function WorkoutScreen({ plan, onDone, onBackToHome }: Props) {
                 remaining={remaining}
                 restExercise={restExercise}
                 planId={plan.plan_id}
-                rounds={restCircuitTotal}
-                last={restExerciseLastLogged}
-                alreadyLogged={!!restExercise && loggedExercises.has(restExercise.name)}
+                setNum={restSetNum}
+                totalSets={restTotalSets}
+                prefill={restPrefill}
+                lastHint={restExerciseLastLogged}
+                alreadyFullyLogged={restFullyLogged}
                 isFinisher={current.circuitId === "finisher"}
-                onLogged={handleLogged}
+                onLoggedSet={handleLoggedSet}
               />
             )}
             {(current.kind === "warmup" || current.kind === "cooldown") && (
@@ -303,7 +355,7 @@ export default function WorkoutScreen({ plan, onDone, onBackToHome }: Props) {
           steps={state.steps}
           sections={state.sections}
           cursor={state.cursor}
-          loggedExercises={loggedExercises}
+          completion={completionMap}
         />
       </div>
 
@@ -313,10 +365,11 @@ export default function WorkoutScreen({ plan, onDone, onBackToHome }: Props) {
         <LogPanel
           plan={plan}
           elapsed_sec={elapsed}
-          loggedExercises={loggedExercises}
+          sessionSets={sessionSets}
+          serverLoggedCount={serverLoggedCount}
           lastLogged={lastLogged}
           hasSummary={logHasSummary}
-          onLogged={handleLogged}
+          onLoggedSet={handleLoggedSet}
           onSummaryLogged={() => setLogHasSummary(true)}
           onBackToTimer={() => setMode("timer")}
           onFinish={() => onDone(elapsed)}
@@ -382,20 +435,24 @@ function RestMain({
   remaining,
   restExercise,
   planId,
-  rounds,
-  last,
-  alreadyLogged,
+  setNum,
+  totalSets,
+  prefill,
+  lastHint,
+  alreadyFullyLogged,
   isFinisher,
-  onLogged,
+  onLoggedSet,
 }: {
   remaining: number;
   restExercise: PlannedExercise | null;
   planId: number;
-  rounds: number;
-  last: LastLoggedEntry | null;
-  alreadyLogged: boolean;
+  setNum: number;
+  totalSets: number;
+  prefill: { weight: number | null; reps: number | null; rpe: number | null };
+  lastHint: LastLoggedEntry | null;
+  alreadyFullyLogged: boolean;
   isFinisher: boolean;
-  onLogged: (exerciseName: string) => void;
+  onLoggedSet: (exerciseName: string, set: SetEntry) => void;
 }) {
   return (
     <>
@@ -403,15 +460,22 @@ function RestMain({
       <div className="workout-time tv-mono">{formatMMSS(remaining)}</div>
       {restExercise && (
         <div className="workout-rest-logger">
-          <div className="workout-rest-label">Log just-finished</div>
+          <div className="workout-rest-label">
+            Log {restExercise.name} · set {setNum} of {totalSets}
+          </div>
           <InlineExerciseLogger
+            // Key by name+set so the component remounts cleanly between
+            // sets with fresh state initialised from the new prefill.
+            key={`${restExercise.name}#${setNum}`}
             exercise={restExercise}
             plan_id={planId}
-            rounds={rounds}
-            last={last}
-            alreadyLogged={alreadyLogged}
+            set_num={setNum}
+            total_sets={totalSets}
+            prefill={prefill}
+            lastHint={lastHint}
+            alreadyFullyLogged={alreadyFullyLogged}
             isFinisher={isFinisher}
-            onLogged={onLogged}
+            onLoggedSet={onLoggedSet}
           />
         </div>
       )}

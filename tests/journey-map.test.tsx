@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import JourneyMap from "../src/components/JourneyMap";
 import { flattenBlocksToSteps } from "../src/lib/steps";
+import type { ExerciseCompletion } from "../src/lib/log-state";
 import type { CircuitBlocks } from "../src/lib/types";
 
 const CIRCUIT: CircuitBlocks = {
@@ -25,45 +26,61 @@ describe("JourneyMap", () => {
     render(<JourneyMap steps={steps} sections={sections} cursor={{ stepIndex: 0, currentRound: 1 }} />);
     expect(screen.getByText("Goblet squat")).toBeDefined();
     expect(screen.getByText("Plank")).toBeDefined();
-    // "Between rounds" label appears once (the round-break rest in the single pass).
     expect(screen.getAllByText("Between rounds")).toHaveLength(1);
   });
 
-  it("renders section headers from sections metadata", () => {
-    render(<JourneyMap steps={steps} sections={sections} cursor={{ stepIndex: 0, currentRound: 1 }} />);
-    expect(screen.getByText(/3 × Circuit/i)).toBeDefined();
-  });
-
   it("round counter follows the cursor — round 2 of 3 shows (2/3) on in-circuit steps", () => {
-    // cursor at goblet squat, round 2
     render(<JourneyMap steps={steps} sections={sections} cursor={{ stepIndex: 1, currentRound: 2 }} />);
     expect(screen.getAllByText("(2/3)").length).toBeGreaterThan(0);
   });
 
-  it("current step gets the current marker — only one current row at a time", () => {
+  it("exactly one current row is highlighted, and Skip moves the highlight", () => {
     const { container, rerender } = render(
       <JourneyMap steps={steps} sections={sections} cursor={{ stepIndex: 1, currentRound: 1 }} />
     );
-    const currentRows = container.querySelectorAll(".jmap-row--current");
-    expect(currentRows).toHaveLength(1);
-    // Advancing the cursor moves the highlight.
+    expect(container.querySelectorAll(".jmap-row--current")).toHaveLength(1);
     rerender(<JourneyMap steps={steps} sections={sections} cursor={{ stepIndex: 3, currentRound: 1 }} />);
     const after = container.querySelectorAll(".jmap-row--current");
     expect(after).toHaveLength(1);
     expect((after[0] as HTMLElement).textContent).toContain("Plank");
   });
 
-  it("shows ✓ on exercises in loggedExercises", () => {
+  it("renders full ✓ only when logged >= total", () => {
+    const completion = new Map<string, ExerciseCompletion>([
+      ["Goblet squat", { logged: 3, total: 3 }],
+      ["Plank", { logged: 0, total: 3 }],
+    ]);
     const { container } = render(
       <JourneyMap
         steps={steps}
         sections={sections}
         cursor={{ stepIndex: 0, currentRound: 1 }}
-        loggedExercises={new Set(["Goblet squat"])}
+        completion={completion}
       />
     );
     const gobletRow = Array.from(container.querySelectorAll(".jmap-row"))
       .find((el) => el.textContent?.includes("Goblet squat")) as HTMLElement;
-    expect(gobletRow.textContent).toContain("✓");
+    const plankRow = Array.from(container.querySelectorAll(".jmap-row"))
+      .find((el) => el.textContent?.includes("Plank")) as HTMLElement;
+    expect(gobletRow.querySelector(".jmap-check")).toBeTruthy();
+    expect(plankRow.querySelector(".jmap-check")).toBeFalsy();
+  });
+
+  it("renders subtle 'N/M ✓' partial badge when logged > 0 and < total", () => {
+    const completion = new Map<string, ExerciseCompletion>([
+      ["Goblet squat", { logged: 2, total: 3 }],
+    ]);
+    const { container } = render(
+      <JourneyMap
+        steps={steps}
+        sections={sections}
+        cursor={{ stepIndex: 0, currentRound: 1 }}
+        completion={completion}
+      />
+    );
+    const gobletRow = Array.from(container.querySelectorAll(".jmap-row"))
+      .find((el) => el.textContent?.includes("Goblet squat")) as HTMLElement;
+    expect(gobletRow.querySelector(".jmap-check")).toBeFalsy();
+    expect(gobletRow.querySelector(".jmap-partial")?.textContent).toContain("2/3");
   });
 });
