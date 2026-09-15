@@ -142,8 +142,8 @@ describe("LogPanel — per-set logging", () => {
   it("tap on Log posts exactly ONE set, not N copies", async () => {
     renderLogPanel();
     const gobletCard = screen.getByText("Goblet squat").closest(".log-card") as HTMLElement;
-    // RPE starts null in the form; one tap on + brings it to blankStart 7.
-    fireEvent.click(gobletCard.querySelector('[aria-label="Increase RPE"]') as HTMLButtonElement);
+    // RPE is a chip row — tap 7.
+    fireEvent.click(gobletCard.querySelector('[aria-label="RPE 7"]') as HTMLButtonElement);
     fireEvent.click(gobletCard.querySelector('[aria-label="Log Goblet squat set 1"]') as HTMLButtonElement);
     await waitFor(() => expect(posted.length).toBeGreaterThan(0));
     const body = posted[0];
@@ -192,7 +192,7 @@ describe("LogPanel — per-set logging", () => {
       onLoggedSet: (name, set) => logged.push({ name, set }),
     });
     const gobletCard = screen.getByText("Goblet squat").closest(".log-card") as HTMLElement;
-    fireEvent.click(gobletCard.querySelector('[aria-label="Increase RPE"]') as HTMLButtonElement);
+    fireEvent.click(gobletCard.querySelector('[aria-label="RPE 7"]') as HTMLButtonElement);
     fireEvent.click(gobletCard.querySelector('[aria-label="Log Goblet squat set 1"]') as HTMLButtonElement);
     await waitFor(() => expect(logged.length).toBe(1));
     expect(logged[0].name).toBe("Goblet squat");
@@ -215,6 +215,6 @@ describe("LogPanel — per-set logging", () => {
     // weight=30 + reps=12 + rpe=8 carry from set 1's actuals (NOT 35 / 10 / null target).
     expect(values).toContain("30");
     expect(values).toContain("12");
-    expect(values).toContain("8");
+    expect(gobletCard.querySelector('[aria-label="RPE 8"]')?.getAttribute("aria-pressed")).toBe("true");
   });
 });

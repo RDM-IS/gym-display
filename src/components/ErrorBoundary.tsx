@@ -40,30 +40,15 @@ export default class ErrorBoundary extends Component<Props, State> {
     if (this.state.error) {
       const msg = this.state.error.message || "Something broke.";
       return (
-        <div
-          className="tv"
-          style={{ justifyContent: "center", alignItems: "center", textAlign: "center" }}
-        >
-          <div className="tv-h1">Something broke</div>
-          <div className="tv-h2" style={{ marginTop: "3vh", opacity: 0.85 }}>
-            {msg}
-          </div>
-          <div className="workout-desc" style={{ marginTop: "3vh" }}>
-            Open the Status page or refresh.
-          </div>
-          <div style={{ display: "flex", gap: "2vw", marginTop: "5vh" }}>
-            <button
-              className="tv-button tv-button--ghost"
-              onClick={this.handleReload}
-              style={{ maxWidth: "30vw" }}
-            >
+        <div className="screen screen--center">
+          <div className="h1">Something broke</div>
+          <div className="h2 dim">{msg}</div>
+          <div className="desc">Open the Status page or refresh.</div>
+          <div className="button-row">
+            <button type="button" className="btn btn--ghost btn--wide" onClick={this.handleReload}>
               Go to Status
             </button>
-            <button
-              className="tv-button tv-button--ghost"
-              onClick={this.handleReset}
-              style={{ maxWidth: "30vw" }}
-            >
+            <button type="button" className="btn btn--ghost btn--wide" onClick={this.handleReset}>
               Reload
             </button>
           </div>

@@ -14,3 +14,8 @@ coverage
 # Local working files
 .claude/
 *.tsbuildinfo
+
+# Playwright
+e2e/.results/
+e2e/screenshots/
+playwright-report/

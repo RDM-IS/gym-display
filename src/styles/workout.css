@@ -1,0 +1,361 @@
+/* Workout screen: setup, active pane (glance / log density), journey map. */
+
+/* --- Setup -------------------------------------------------------------- */
+
+.setup { padding-top: calc(var(--safe-top) + 84px); }
+
+.setup-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.setup-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-right: 4px;
+}
+
+.setup-start { flex: none; }
+
+/* --- Layout ------------------------------------------------------------- */
+
+.workout {
+  height: var(--vvh, 100dvh);
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  padding:
+    calc(var(--safe-top) + 8px)
+    calc(var(--safe-right) + 16px)
+    calc(var(--safe-bottom) + 12px)
+    calc(var(--safe-left) + 16px);
+  transition: background-color 200ms ease;
+}
+
+.workout--paused { filter: saturate(0.5); }
+
+.workout-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  min-height: var(--tap);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(245, 245, 245, 0.88);
+}
+
+.workout-bar-spacer { flex: 1; }
+
+/* Landscape: journey map ~35% | active pane ~65%. */
+.workout-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(220px, 35%) minmax(0, 1fr);
+  gap: 16px;
+}
+
+/* Portrait or narrow Split View: stacked, map as a top strip. */
+.workout--stacked .workout-grid {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.workout--stacked .jmap:not(.jmap--collapsed) {
+  max-height: calc(var(--vvh, 100dvh) * 0.38);
+}
+
+.workout-pane {
+  container-type: inline-size;
+  position: relative;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  touch-action: pan-y; /* horizontal swipes reach our handler */
+}
+
+.workout-pane-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Glance mode: readable at ~2 m, minimal chrome. */
+.workout-pane--glance .workout-pane-body {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 10px;
+}
+
+.glance-set {
+  font-size: clamp(18px, 3.4cqi, 28px);
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.glance-name {
+  font-size: clamp(36px, 8.5cqi, 92px);
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.glance-target {
+  font-size: clamp(28px, 6cqi, 64px);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.glance-time {
+  font-size: clamp(72px, 18cqi, 180px);
+  font-weight: 900;
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+}
+
+.glance-prev {
+  font-size: 19px;
+  color: rgba(245, 245, 245, 0.82);
+}
+
+.glance-desc {
+  font-size: 19px;
+  color: rgba(245, 245, 245, 0.88);
+  max-width: 42ch;
+}
+
+.paused-badge {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  padding: 8px 18px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.6);
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+}
+
+/* Log mode: timer strip on top, logger + primary action in the bottom half.
+ * Bottom-anchored via margin-top:auto (not justify-content:flex-end), so when
+ * the logger is taller than the pane the overflow scrolls instead of being
+ * clipped off the top. */
+.workout-pane--log .workout-pane-body {
+  gap: var(--gap);
+}
+
+.workout-pane--log .workout-pane-body > :first-child {
+  margin-top: auto;
+}
+
+.restlog-timer {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 4px 4px 0;
+}
+
+.restlog-label {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.restlog-timer--over .restlog-label { color: var(--accent); }
+
+.restlog-time {
+  font-size: clamp(48px, 11cqi, 104px);
+  font-weight: 900;
+  line-height: 1;
+}
+
+.restlog-next {
+  font-size: 17px;
+  color: var(--fg-dim);
+}
+
+.restlog-done {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  padding: 16px;
+  text-align: center;
+  font-size: 22px;
+  font-weight: 800;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(109, 213, 140, 0.5);
+  border-radius: 16px;
+}
+
+.workout-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.workout-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--gap);
+}
+
+.workout-controls .btn { width: 100%; }
+
+.more-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--gap);
+}
+
+.more-grid .btn { width: 100%; }
+.more-close { margin-top: var(--gap); }
+
+/* --- Journey map -------------------------------------------------------- */
+
+.jmap {
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(245, 245, 245, 0.15);
+  border-radius: 14px;
+}
+
+.jmap--collapsed { overflow: hidden; }
+
+.jmap-toggle {
+  width: 100%;
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+  padding: 0 16px;
+  font-size: 17px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.jmap-toggle--open {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: rgba(10, 10, 10, 0.94);
+  border-bottom: 1px solid var(--line);
+}
+
+.jmap-toggle:active { background: rgba(255, 209, 102, 0.12); }
+
+.jmap-toggle-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--accent);
+}
+
+.jmap-toggle-meta {
+  flex: none;
+  font-size: 15px;
+  color: var(--fg-dim);
+}
+
+.jmap-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px 0;
+}
+
+.jmap-section {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(245, 245, 245, 0.6);
+  padding: 14px 16px 6px;
+  border-top: 1px dashed rgba(245, 245, 245, 0.12);
+}
+
+.jmap-item:first-child .jmap-section { border-top: none; }
+
+.jmap-section--warmup    { color: #9fd4e0; }
+.jmap-section--circuit   { color: #6dd58c; }
+.jmap-section--intervals { color: #6dd58c; }
+.jmap-section--steady    { color: #9fd4e0; }
+.jmap-section--cooldown  { color: #9fd4e0; }
+.jmap-section--finisher  { color: #ffd166; }
+.jmap-section--mobility,
+.jmap-section--walk      { color: #c8b8e0; }
+
+.jmap-row {
+  display: grid;
+  grid-template-columns: 1.1em auto minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  gap: 8px;
+  padding: 9px 16px;
+  font-size: 17px;
+  color: rgba(245, 245, 245, 0.92);
+}
+
+.jmap-row--past { color: rgba(245, 245, 245, 0.35); }
+
+.jmap-row--current {
+  background: rgba(255, 209, 102, 0.18);
+  border-left: 4px solid var(--accent);
+  padding-left: 12px;
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.jmap-row--current .jmap-dur,
+.jmap-row--current .jmap-round { color: var(--accent); }
+
+.jmap-row--rest        { font-style: italic; opacity: 0.85; }
+.jmap-row--round-break { font-style: normal; opacity: 1; color: rgba(255, 209, 102, 0.85); }
+
+.jmap-arrow { font-weight: 900; font-size: 1.2em; line-height: 1; }
+
+.jmap-dur {
+  color: rgba(245, 245, 245, 0.65);
+  font-size: 0.9em;
+}
+
+.jmap-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jmap-round { color: rgba(245, 245, 245, 0.55); font-size: 0.85em; }
+.jmap-check { color: var(--ok); font-weight: 900; }
+
+.jmap-partial {
+  color: var(--accent);
+  font-size: 0.82em;
+  font-weight: 700;
+}
+
+@media (max-width: 700px) {
+  .workout-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .workout-bar { font-size: 13px; letter-spacing: 0.08em; }
+}

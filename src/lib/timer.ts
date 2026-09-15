@@ -97,6 +97,8 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
         if (!cur) break;
         const dur_ms = cur.duration_sec * 1000;
         if (action.now_ms - stepStart < dur_ms) break;
+        // Strength sets and their logging rests wait for the user.
+        if (cur.holdAtEnd) break;
         const next = nextCursor(state.steps, cursor);
         if (next === null) {
           return {
@@ -218,6 +220,21 @@ export function selectElapsedSec(state: TimerState, now_ms: number): number {
   if (state.workout_started_at_ms === null) return 0;
   const t = effectiveNow(state, now_ms);
   return Math.max(0, (t - state.workout_started_at_ms) / 1000);
+}
+
+/** Seconds spent on the current step (counts past the planned duration while
+ * holding). */
+export function selectStepElapsedSec(state: TimerState, now_ms: number): number {
+  if (state.step_started_at_ms === null) return 0;
+  const t = effectiveNow(state, now_ms);
+  return Math.max(0, (t - state.step_started_at_ms) / 1000);
+}
+
+/** True when the current step has run out and is waiting for the user. */
+export function selectIsHolding(state: TimerState, now_ms: number): boolean {
+  if (state.status !== "running" && state.status !== "paused") return false;
+  const cur = state.steps[state.cursor.stepIndex];
+  return !!cur?.holdAtEnd && selectRemainingSec(state, now_ms) <= 0;
 }
 
 export function isFirstStepCursor(state: TimerState): boolean {

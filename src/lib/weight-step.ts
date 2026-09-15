@@ -1,83 +1,53 @@
 import type { PlannedExercise } from "./types";
+import {
+  equipmentClassFor,
+  LOAD_CONFIG,
+  STEP_OVERRIDES,
+  type EquipmentClass,
+} from "./equipment";
 
-/** Weight-increment inference for stepper UI.
+/** Load-stepper configuration for one exercise, derived from its equipment
+ * class (see equipment.ts for the name map and per-class config).
  *
- * The current planned-exercise schema (PlannedExercise in types.ts) does not
- * carry a weight_increment field — so we infer the step from the exercise
- * name. When the schema gains a `weight_increment` field, the only change
- * needed is replacing the function body with `return ex.weight_increment ?? infer(ex.name)`.
- *
- * Returns:
- *   step          — the +/- delta to apply when the stepper button is tapped
- *   isBodyweight  — true when the movement has no weight at all (hide the
- *                   weight stepper entirely; reps + RPE only)
- *
- * Centralized so the gym laptop's "Are you sure you want to log 0.5 lb?"
- * question only has one answer in one place.
+ *   step          — +/- delta in lb of total load (0 for bodyweight)
+ *   isBodyweight  — no load stepper at all; reps only
+ *   showPlateMath — smith / barbell: show the per-side plate load
  */
-
 export interface WeightStep {
+  cls: EquipmentClass;
   step: number;
   isBodyweight: boolean;
+  min: number;
+  max: number;
+  showPlateMath: boolean;
+  barLbs: number;
 }
 
-const BODYWEIGHT_KEYWORDS: readonly string[] = [
-  "plank",
-  "hollow",
-  "dead bug",
-  "bird dog",
-  "side plank",
-  "mountain climber",
-  "glute bridge",
-  "push-up",
-  "pushup",
-  "trx row",
-  "trx chest press",
-  "trx press",
-  "band ",
-  "banded ",
-  "face pull",
-];
-
-const BARBELL_KEYWORDS: readonly string[] = [
-  "barbell",
-  "back squat",
-  "front squat",
-  "bench press",
-  "deadlift_bb",
-];
-
-// Dumbbell / Powerblock-family — 5 lb step.
-// Keep this list short and obvious; the default of 5 already covers
-// most DB movements.
-const DUMBBELL_KEYWORDS: readonly string[] = [
-  "db ",
-  "dumbbell",
-  "powerblock",
-  "goblet",
-];
-
-function containsAny(s: string, list: readonly string[]): boolean {
-  for (const k of list) if (s.includes(k)) return true;
-  return false;
+export function weightStepFor(
+  ex: Pick<PlannedExercise, "name" | "format" | "equipment_class">,
+): WeightStep {
+  const cls = equipmentClassFor(ex);
+  if (cls === "bodyweight") {
+    return { cls, step: 0, isBodyweight: true, min: 0, max: 0, showPlateMath: false, barLbs: 0 };
+  }
+  const cfg = LOAD_CONFIG[cls];
+  const override =
+    cls === "machine" || cls === "cable"
+      ? STEP_OVERRIDES[(ex.name ?? "").toLowerCase().trim()]
+      : undefined;
+  return {
+    cls,
+    step: override ?? cfg.step,
+    isBodyweight: false,
+    min: cfg.min,
+    max: cfg.max,
+    showPlateMath: cls === "smith" || cls === "barbell",
+    barLbs: cfg.barLbs ?? 0,
+  };
 }
 
-export function weightStepFor(ex: Pick<PlannedExercise, "name" | "format">): WeightStep {
-  const name = (ex.name ?? "").toLowerCase();
-  // Duration-format exercises (planks, holds, mountain climbers timed)
-  // are always bodyweight.
-  if (ex.format === "duration") {
-    return { step: 0, isBodyweight: true };
-  }
-  if (containsAny(name, BODYWEIGHT_KEYWORDS)) {
-    return { step: 0, isBodyweight: true };
-  }
-  if (containsAny(name, BARBELL_KEYWORDS)) {
-    return { step: 10, isBodyweight: false };
-  }
-  if (containsAny(name, DUMBBELL_KEYWORDS)) {
-    return { step: 5, isBodyweight: false };
-  }
-  // Lighter isolation / accessory default — 2.5 lb step.
-  return { step: 2.5, isBodyweight: false };
+/** Plate load per side for a total bar load, or null when below the bar. */
+export function platesPerSide(totalLbs: number, barLbs: number): number | null {
+  const side = (totalLbs - barLbs) / 2;
+  return side >= 0 ? Math.round(side * 100) / 100 : null;
 }

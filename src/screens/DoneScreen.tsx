@@ -1,7 +1,8 @@
 import { useMemo, useReducer } from "react";
 import InlineExerciseLogger from "../components/InlineExerciseLogger";
-import Stepper from "../components/Stepper";
-import { postLog } from "../lib/api";
+import RpeChips from "../components/RpeChips";
+import NotesField from "../components/NotesField";
+import { submitLog } from "../lib/log-queue";
 import { formatMMSS } from "../lib/timer";
 import {
   computePrefill,
@@ -75,19 +76,17 @@ export default function DoneScreen({
 }: Props) {
   const unlogged = useMemo(
     () => collectUnloggedSlots(plan, sessionSets, serverLoggedCount),
-    [plan, sessionSets, serverLoggedCount]
+    [plan, sessionSets, serverLoggedCount],
   );
 
   const allLogged = unlogged.length === 0;
   const fullyComplete = allLogged && hasSummary;
 
   return (
-    <div className="done-screen">
+    <div className="screen screen--scroll done-screen">
       <header className="done-header">
-        <div className="done-title">
-          {fullyComplete ? "Workout Complete" : "Almost done"}
-        </div>
-        <div className="done-elapsed tv-mono">{formatMMSS(total_elapsed_sec)}</div>
+        <div className="h1">{fullyComplete ? "Workout Complete" : "Almost done"}</div>
+        <div className="done-elapsed mono">{formatMMSS(total_elapsed_sec)}</div>
         <div className="done-meta">
           {allLogged
             ? hasSummary
@@ -101,9 +100,7 @@ export default function DoneScreen({
 
       {!allLogged && (
         <section className="done-section">
-          <h2 className="done-section-title">
-            Unlogged sets ({unlogged.length})
-          </h2>
+          <h2 className="section-title">Unlogged sets ({unlogged.length})</h2>
           <div className="done-unlogged-grid">
             {unlogged.map((slot) => (
               <UnloggedSlotCard
@@ -120,21 +117,12 @@ export default function DoneScreen({
       )}
 
       <section className="done-section">
-        <h2 className="done-section-title">Session summary</h2>
-        <SummaryCard
-          plan_id={plan.plan_id}
-          hasSummary={hasSummary}
-          onSummaryLogged={onSummaryLogged}
-        />
+        <h2 className="section-title">Session summary</h2>
+        <SummaryCard plan_id={plan.plan_id} hasSummary={hasSummary} onSummaryLogged={onSummaryLogged} />
       </section>
 
       <footer className="done-footer">
-        <button
-          className="tv-button tv-button--ghost"
-          onClick={onBack}
-          autoFocus
-          style={{ maxWidth: "60vw" }}
-        >
+        <button type="button" className="btn btn--ghost btn--block" onClick={onBack}>
           Back to start
         </button>
       </footer>
@@ -142,11 +130,8 @@ export default function DoneScreen({
   );
 }
 
-// ---------------------------------------------------------------------------
-// One card per unlogged set: a stepper logger + a Skip-set button.
-// Skip writes a session_log row with is_skipped=true (no fake metrics).
-// ---------------------------------------------------------------------------
-
+// One card per unlogged set: a logger + a Skip-set button. Skip writes a
+// session_log row with is_skipped=true (no fake metrics).
 function UnloggedSlotCard({
   slot,
   plan_id,
@@ -184,8 +169,8 @@ function UnloggedSlotCard({
       }],
       notes: slot.is_finisher ? "finisher · skipped on Done screen" : "skipped on Done screen",
     };
-    const r = await postLog(body);
-    if (r.status === "ok") {
+    const r = await submitLog(body);
+    if (r.status !== "error") {
       onLoggedSet(slot.exercise.name, {
         set_num: slot.set_num,
         weight_lbs: null,
@@ -211,7 +196,7 @@ function UnloggedSlotCard({
       />
       <button
         type="button"
-        className="done-skip-btn"
+        className="btn btn--ghost"
         onClick={skip}
         aria-label={`Mark ${slot.exercise.name} set ${slot.set_num} as skipped`}
       >
@@ -220,10 +205,6 @@ function UnloggedSlotCard({
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Session-summary RPE entry.
-// ---------------------------------------------------------------------------
 
 interface SummaryState {
   rpe: number | null;
@@ -258,12 +239,7 @@ function SummaryCard({
   hasSummary: boolean;
   onSummaryLogged: () => void;
 }) {
-  const [s, dispatch] = useReducer(summaryReducer, {
-    rpe: null,
-    notes: "",
-    status: "idle",
-    error: null,
-  });
+  const [s, dispatch] = useReducer(summaryReducer, { rpe: null, notes: "", status: "idle", error: null });
   const isDone = hasSummary || s.status === "ok";
 
   async function save() {
@@ -274,13 +250,13 @@ function SummaryCard({
       sets: [{ rpe_actual: s.rpe ?? null }],
       notes: s.notes.trim() || null,
     };
-    const r = await postLog(body);
-    if (r.status === "ok") {
-      dispatch({ type: "save_ok" });
-      onSummaryLogged();
-    } else {
+    const r = await submitLog(body);
+    if (r.status === "error") {
       dispatch({ type: "save_err", message: r.message });
+      return;
     }
+    dispatch({ type: "save_ok" });
+    onSummaryLogged();
   }
 
   return (
@@ -290,25 +266,13 @@ function SummaryCard({
           Overall RPE{isDone && <span className="log-check"> ✓</span>}
         </div>
       </div>
-      <div className="log-steppers">
-        <Stepper
-          label="Overall RPE"
-          value={s.rpe}
-          step={1}
-          min={1}
-          max={10}
-          blankStart={7}
-          disabled={isDone}
-          onChange={(v) => dispatch({ type: "set_rpe", v })}
-        />
-      </div>
-      <textarea
-        className="log-notes"
-        placeholder="Notes (optional)"
-        value={s.notes}
-        onChange={(e) => dispatch({ type: "set_notes", v: e.target.value })}
+      <RpeChips
+        label="Overall RPE"
+        value={s.rpe}
         disabled={isDone}
+        onChange={(v) => dispatch({ type: "set_rpe", v })}
       />
+      <NotesField value={s.notes} onChange={(v) => dispatch({ type: "set_notes", v })} disabled={isDone} />
       {s.status === "error" && s.error && <div className="log-error">{s.error}</div>}
       <button
         type="button"
@@ -317,11 +281,7 @@ function SummaryCard({
         disabled={isDone || s.status === "saving"}
         aria-label="Save session summary"
       >
-        {isDone
-          ? "Summary recorded ✓"
-          : s.status === "saving"
-          ? "Saving…"
-          : "Save summary"}
+        {isDone ? "Summary recorded ✓" : s.status === "saving" ? "Saving…" : "Save summary"}
       </button>
     </div>
   );

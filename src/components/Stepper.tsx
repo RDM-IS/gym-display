@@ -1,3 +1,6 @@
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import NumericKeypad from "./NumericKeypad";
+
 interface Props {
   label: string;
   unit?: string;
@@ -6,15 +9,33 @@ interface Props {
   min?: number;
   max?: number;
   disabled?: boolean;
-  /** When the value is null and the user taps +, what to start from. */
+  /** When the value is null and the user taps +/−, what to start from. */
   blankStart?: number;
   onChange: (v: number | null) => void;
-  /** When non-null, displayed as a small placeholder beneath the value
-   * (e.g. "last 35 lb"). Tapping it copies the placeholder into value. */
+  /** When non-null, shown beneath the value (e.g. "last 35 lb"). Tapping it
+   * copies the value in. */
   hint?: number | null;
+  /** Extra line under the value (e.g. plate math per side). */
+  sub?: ReactNode;
+  allowDecimal?: boolean;
 }
 
-/** Big +/- stepper. Touch targets clamp(56px, 7vw, 96px); number is huge. */
+const HOLD_DELAY_MS = 400;
+const REPEAT_START_MS = 180;
+const REPEAT_MIN_MS = 50;
+const REPEAT_ACCEL = 0.85;
+
+export function clampRound(v: number, min?: number, max?: number): number {
+  let next = v;
+  if (min !== undefined && next < min) next = min;
+  if (max !== undefined && next > max) next = max;
+  // 1-decimal rounding so 2.5-lb steps don't accumulate FP drift.
+  return Math.round(next * 10) / 10;
+}
+
+/** Big −/+ stepper for touch. The value is a button that opens the in-app
+ * numeric keypad — never an <input>, so the iOS keyboard never appears.
+ * Press-and-hold on −/+ repeats with acceleration. */
 export default function Stepper({
   label,
   unit,
@@ -26,34 +47,70 @@ export default function Stepper({
   blankStart,
   onChange,
   hint,
+  sub,
+  allowDecimal,
 }: Props) {
-  function bump(delta: number) {
-    if (disabled) return;
-    if (value == null) {
-      // First tap reveals the suggested default (blankStart) so the
-      // user sees the suggestion and can refine from there rather than
-      // overshooting by `step` immediately.
-      let next = blankStart ?? 0;
-      if (min !== undefined && next < min) next = min;
-      if (max !== undefined && next > max) next = max;
-      onChange(Math.round(next * 10) / 10);
-      return;
+  const [keypadOpen, setKeypadOpen] = useState(false);
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  const repeatRef = useRef<number | null>(null);
+
+  function stopRepeat() {
+    if (repeatRef.current !== null) {
+      window.clearTimeout(repeatRef.current);
+      repeatRef.current = null;
     }
-    let next = value + delta;
-    if (min !== undefined && next < min) next = min;
-    if (max !== undefined && next > max) next = max;
-    // Round to 1 decimal so 2.5-step weights don't accumulate FP drift
-    next = Math.round(next * 10) / 10;
+  }
+  useEffect(() => stopRepeat, []);
+
+  function bump(delta: number) {
+    if (disabled || step === 0) return;
+    const cur = valueRef.current;
+    // First tap on an empty value reveals the suggested default rather than
+    // overshooting it by `step`.
+    const next = cur == null ? clampRound(blankStart ?? 0, min, max) : clampRound(cur + delta, min, max);
+    valueRef.current = next;
     onChange(next);
+    try {
+      navigator.vibrate?.(10);
+    } catch {
+      /* no-op on iPad */
+    }
   }
 
-  function applyHint() {
-    if (disabled || hint == null) return;
-    onChange(hint);
+  function startRepeat(delta: number) {
+    stopRepeat();
+    bump(delta);
+    let interval = REPEAT_START_MS;
+    const tick = () => {
+      bump(delta);
+      interval = Math.max(REPEAT_MIN_MS, interval * REPEAT_ACCEL);
+      repeatRef.current = window.setTimeout(tick, interval);
+    };
+    repeatRef.current = window.setTimeout(tick, HOLD_DELAY_MS);
+  }
+
+  function holdHandlers(delta: number) {
+    return {
+      onPointerDown: (e: React.PointerEvent<HTMLButtonElement>) => {
+        // Only the primary button (or touch/pen, which report 0 or nothing).
+        if (e.button > 0) return;
+        startRepeat(delta);
+      },
+      onPointerUp: stopRepeat,
+      onPointerLeave: stopRepeat,
+      onPointerCancel: stopRepeat,
+      // Pointer taps already bumped on pointerdown; keyboard / assistive
+      // activation arrives as a click with detail 0.
+      onClick: (e: React.MouseEvent<HTMLButtonElement>) => {
+        if (e.detail === 0) bump(delta);
+      },
+      onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
+    };
   }
 
   return (
-    <div className={`stepper${disabled ? " stepper--disabled" : ""}`}>
+    <div className={`stepper${disabled ? " stepper--disabled" : ""}`} data-no-swipe>
       <div className="stepper-label">
         {label}
         {unit && <span className="stepper-unit"> {unit}</span>}
@@ -62,41 +119,62 @@ export default function Stepper({
         <button
           className="stepper-btn"
           type="button"
-          onClick={() => bump(-step)}
           disabled={disabled || step === 0}
           aria-label={`Decrease ${label}`}
+          {...holdHandlers(-step)}
         >
           −
         </button>
-        <div className="stepper-value tv-mono" aria-live="polite">
+        <button
+          type="button"
+          className="stepper-value mono"
+          disabled={disabled}
+          onClick={() => setKeypadOpen(true)}
+          aria-label={`${label} ${value == null ? "not set" : prettyNum(value)}${unit ? ` ${unit}` : ""}, tap to enter`}
+        >
           {value == null ? "—" : prettyNum(value)}
-        </div>
+        </button>
         <button
           className="stepper-btn"
           type="button"
-          onClick={() => bump(step)}
           disabled={disabled || step === 0}
           aria-label={`Increase ${label}`}
+          {...holdHandlers(step)}
         >
           +
         </button>
       </div>
+      {sub && <div className="stepper-sub">{sub}</div>}
       {hint != null && value == null && !disabled && (
         <button
           type="button"
           className="stepper-hint"
-          onClick={applyHint}
+          onClick={() => onChange(hint)}
           aria-label={`Use last value ${hint}`}
         >
-          last {prettyNum(hint)}{unit ? ` ${unit}` : ""}
+          last {prettyNum(hint)}
+          {unit ? ` ${unit}` : ""}
         </button>
+      )}
+      {keypadOpen && (
+        <NumericKeypad
+          title={label}
+          unit={unit}
+          initial={value}
+          allowDecimal={allowDecimal}
+          allowNegative={min === undefined || min < 0}
+          onCancel={() => setKeypadOpen(false)}
+          onDone={(v) => {
+            setKeypadOpen(false);
+            onChange(v == null ? null : clampRound(v, min, max));
+          }}
+        />
       )}
     </div>
   );
 }
 
 function prettyNum(n: number): string {
-  // Drop trailing .0 to keep the big number visually clean.
   if (Number.isInteger(n)) return String(n);
   return n.toFixed(1).replace(/\.0$/, "");
 }

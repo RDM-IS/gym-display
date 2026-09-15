@@ -1,3 +1,7 @@
+import type { EquipmentClass } from "./equipment";
+
+export type { EquipmentClass };
+
 export type SessionType =
   | "strength_a"
   | "strength_b"
@@ -18,6 +22,8 @@ export interface PlannedExercise {
   duration_sec?: number | null;
   rest_after_sec?: number | null;
   notes?: string | null;
+  /** Optional explicit class; otherwise inferred from the name (equipment.ts). */
+  equipment_class?: EquipmentClass | null;
 }
 
 /** Legacy name kept as alias for the circuit-exercise tests. */
@@ -297,6 +303,8 @@ export interface LastLoggedEntry {
   distance_m: number | null;
   hr_avg: number | null;
   hr_peak: number | null;
+  /** Per-set notes of that row (carries `setting=<n>`). Absent on older API builds. */
+  notes?: string | null;
 }
 
 export interface LastLoggedResponse {

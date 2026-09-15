@@ -1,7 +1,9 @@
 import { useReducer } from "react";
 import Stepper from "../components/Stepper";
+import RpeChips from "../components/RpeChips";
+import NotesField from "../components/NotesField";
 import InlineExerciseLogger from "../components/InlineExerciseLogger";
-import { postLog } from "../lib/api";
+import { submitLog } from "../lib/log-queue";
 import { displayTitle, formatPlanDate } from "../lib/format";
 import {
   computePrefill,
@@ -23,16 +25,11 @@ import type {
 } from "../lib/types";
 
 // ---------------------------------------------------------------------------
-// Per-set LogPanel.
+// Per-set LogPanel (full-screen overlay, opened from "⋯ More → All sets").
 //
 // Each exercise renders a SINGLE InlineExerciseLogger card showing the next
-// unlogged set. When the user taps Log, one set_log row is written to
-// /api/health/log; the parent (WorkoutScreen) appends the set to
-// sessionSets, which causes this panel to re-render the next set's form.
-//
-// No more "Log 3 ×" bulk write. The rest-panel and this overlay both call
-// the SAME endpoint with the SAME set_num computation, so writes from
-// either route stay consistent with no duplicates.
+// unlogged set. The rest-step logger and this overlay write through the same
+// queue with the same set_num computation, so writes stay consistent.
 // ---------------------------------------------------------------------------
 
 type Status = "idle" | "saving" | "ok" | "error";
@@ -74,15 +71,7 @@ function buildInitial(plan: Plan): State {
   const t = plan.blocks?.type;
   const cardio: CardioFormState | null =
     t === "steady" || t === "intervals" || t === "walk"
-      ? {
-          duration_sec: null,
-          distance_m: null,
-          hr_avg: null,
-          hr_peak: null,
-          rpe: null,
-          status: "idle",
-          error: null,
-        }
+      ? { duration_sec: null, distance_m: null, hr_avg: null, hr_peak: null, rpe: null, status: "idle", error: null }
       : null;
   return {
     cardio,
@@ -114,10 +103,6 @@ function reducer(state: State, action: Action): State {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function mainExercises(blocks: Blocks | undefined): PlannedExercise[] {
   if (!blocks) return [];
   if (blocks.type === "circuit") {
@@ -131,16 +116,10 @@ function finisherExercises(f: Finisher | null | undefined): PlannedExercise[] {
   return Array.isArray(f.exercises) ? f.exercises : [];
 }
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
 interface Props {
   plan: Plan;
   elapsed_sec: number;
-  /** Per-set values logged this session (drives prefill + completion). */
   sessionSets: SessionSets;
-  /** set_count per exercise from /today/logged (hydrated by WorkoutScreen). */
   serverLoggedCount: ServerLoggedCount;
   lastLogged: Record<string, LastLoggedEntry>;
   hasSummary: boolean;
@@ -180,9 +159,9 @@ export default function LogPanel({
         rpe_actual: c.rpe ?? null,
       }],
     };
-    const r = await postLog(body);
-    if (r.status === "ok") dispatch({ type: "cardio_save_ok" });
-    else dispatch({ type: "cardio_save_err", message: r.message });
+    const r = await submitLog(body);
+    if (r.status === "error") dispatch({ type: "cardio_save_err", message: r.message });
+    else dispatch({ type: "cardio_save_ok" });
   }
 
   async function saveSummary() {
@@ -193,14 +172,14 @@ export default function LogPanel({
       sets: [{ rpe_actual: state.summary.rpe ?? null }],
       notes: state.summary.notes.trim() || null,
     };
-    const r = await postLog(body);
-    if (r.status === "ok") {
-      dispatch({ type: "summary_save_ok" });
-      onSummaryLogged();
-      onFinish();
-    } else {
+    const r = await submitLog(body);
+    if (r.status === "error") {
       dispatch({ type: "summary_save_err", message: r.message });
+      return;
     }
+    dispatch({ type: "summary_save_ok" });
+    onSummaryLogged();
+    onFinish();
   }
 
   const mains = mainExercises(plan.blocks);
@@ -208,13 +187,13 @@ export default function LogPanel({
   const blockType = plan.blocks?.type;
 
   return (
-    <div className="log-panel">
+    <div className="log-panel" role="dialog" aria-modal="true" aria-label="Log sets">
       <div className="log-top">
-        <button className="control-btn" onClick={onBackToTimer} aria-label="Back to timer">
+        <button type="button" className="btn" onClick={onBackToTimer} aria-label="Back to timer">
           ◀ Timer
         </button>
         <div className="log-title">{displayTitle(plan)}</div>
-        <div className="log-meta tv-mono">{formatPlanDate(plan)}</div>
+        <div className="log-meta mono">{formatPlanDate(plan)}</div>
       </div>
 
       <div className="log-scroll">
@@ -245,8 +224,10 @@ export default function LogPanel({
         )}
 
         {fins.length > 0 && (
-          <Section title={`Finisher${plan.blocks?.finisher?.rounds && plan.blocks.finisher.rounds > 1
-            ? ` — ${plan.blocks.finisher.rounds} rounds` : ""}`}>
+          <Section
+            title={`Finisher${plan.blocks?.finisher?.rounds && plan.blocks.finisher.rounds > 1
+              ? ` — ${plan.blocks.finisher.rounds} rounds` : ""}`}
+          >
             {fins.map((ex) => (
               <PerSetCard
                 key={`finisher:${ex.name}`}
@@ -273,14 +254,6 @@ export default function LogPanel({
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Per-set card — thin wrapper that computes set_num / prefill / done state
-// and hands off to InlineExerciseLogger (the same component the rest-panel
-// uses). After each save the parent's sessionSets bumps and the
-// InlineExerciseLogger is remounted (keyed by `${name}#${setNum}`) so it
-// shows the next set's form prefilled from the just-logged values.
-// ---------------------------------------------------------------------------
 
 function PerSetCard({
   exercise,
@@ -322,8 +295,7 @@ function PerSetCard({
         </div>
       )}
       <InlineExerciseLogger
-        // Keying on set_num so the component remounts cleanly when the
-        // parent's sessionSets advances after a successful save.
+        // Remount when the next set comes up so state re-initialises from prefill.
         key={`${exercise.name}#${setNum}#${fullyLogged ? "done" : "open"}`}
         exercise={exercise}
         plan_id={plan.plan_id}
@@ -338,10 +310,6 @@ function PerSetCard({
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Shared sub-components (unchanged from prior LogPanel)
-// ---------------------------------------------------------------------------
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -371,7 +339,7 @@ function CardioCard({
     <div className={`log-card${isDone ? " log-card--done" : ""}`}>
       <div className="log-card-head">
         <div className="log-card-name">Cardio block{isDone && <span className="log-check"> ✓</span>}</div>
-        <div className="log-card-target tv-mono">{blockType ?? "cardio"}</div>
+        <div className="log-card-target mono">{blockType ?? "cardio"}</div>
       </div>
       <div className="log-steppers">
         <Stepper label="Duration" unit="sec" value={form.duration_sec} step={60} min={0}
@@ -386,20 +354,13 @@ function CardioCard({
         <Stepper label="HR peak" value={form.hr_peak} step={1} min={0} max={250}
           blankStart={150} disabled={isDone}
           onChange={(v) => onField("hr_peak", v)} />
-        <Stepper label="RPE" value={form.rpe} step={1} min={1} max={10}
-          blankStart={6} disabled={isDone}
-          onChange={(v) => onField("rpe", v)} />
       </div>
-      <div className="log-card-foot">
-        <span />
-        {form.status === "error" && form.error && (
-          <div className="log-error">{form.error}</div>
-        )}
-        <button className="log-save" type="button" onClick={onSave}
-          disabled={isDone || form.status === "saving"} aria-label="Log cardio">
-          {isDone ? "Logged ✓" : form.status === "saving" ? "Saving…" : "Log cardio"}
-        </button>
-      </div>
+      <RpeChips value={form.rpe} disabled={isDone} onChange={(v) => onField("rpe", v)} />
+      {form.status === "error" && form.error && <div className="log-error">{form.error}</div>}
+      <button className="log-save" type="button" onClick={onSave}
+        disabled={isDone || form.status === "saving"} aria-label="Log cardio">
+        {isDone ? "Logged ✓" : form.status === "saving" ? "Saving…" : "Log cardio"}
+      </button>
     </div>
   );
 }
@@ -426,31 +387,13 @@ function SummaryCard({
           Session summary{isDone && <span className="log-check"> ✓</span>}
         </div>
       </div>
-      <div className="log-steppers">
-        <Stepper label="Overall RPE" value={s.rpe} step={1} min={1} max={10}
-          blankStart={7} disabled={isDone} onChange={onRpe} />
-      </div>
-      <textarea
-        className="log-notes"
-        placeholder="Notes (optional)"
-        value={s.notes}
-        onChange={(e) => onNotes(e.target.value)}
-        disabled={isDone}
-      />
-      <div className="log-card-foot">
-        <span />
-        {s.status === "error" && s.error && (
-          <div className="log-error">{s.error}</div>
-        )}
-        <button className="log-save log-finish" type="button" onClick={onFinish}
-          disabled={isDone || s.status === "saving"} aria-label="Finish workout">
-          {isDone
-            ? "Workout finished ✓"
-            : s.status === "saving"
-            ? "Saving…"
-            : "Finish workout"}
-        </button>
-      </div>
+      <RpeChips label="Overall RPE" value={s.rpe} disabled={isDone} onChange={onRpe} />
+      <NotesField value={s.notes} onChange={onNotes} disabled={isDone} />
+      {s.status === "error" && s.error && <div className="log-error">{s.error}</div>}
+      <button className="log-save log-finish" type="button" onClick={onFinish}
+        disabled={isDone || s.status === "saving"} aria-label="Finish workout">
+        {isDone ? "Workout finished ✓" : s.status === "saving" ? "Saving…" : "Finish workout"}
+      </button>
     </div>
   );
 }
