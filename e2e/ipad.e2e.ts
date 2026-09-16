@@ -230,7 +230,9 @@ test.describe("strength day", () => {
 
     await page.getByRole("button", { name: "Set done" }).tap();
     await expect(page.getByTestId("inline-logger")).toBeVisible();
-    await expect(page.getByRole("button", { name: /Seat or setting 4/ })).toBeVisible();
+    // Week 1, set 1: Machine setup is open, pre-filled from last session.
+    await expect(page.getByRole("button", { name: /Machine setup 4/ })).toBeVisible();
+    await expect(page.getByText(/numbered seat\/pad position/)).toBeVisible();
     await expectRestLogNotClipped(page);
     await expectTouchTargets(page);
     await expectNoKeyboardTriggers(page);

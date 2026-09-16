@@ -21,6 +21,7 @@ import { acquireWakeLock } from "./lib/wake-lock";
 import { restoreQueue } from "./lib/log-queue";
 import { installViewportVars } from "./lib/viewport";
 import { shouldRedirectTodayToStatus, usePath } from "./lib/routing";
+import { planFingerprint } from "./lib/adjustment";
 import type { LastLoggedEntry, Plan } from "./lib/types";
 import type {
   ServerLoggedCount,
@@ -31,6 +32,10 @@ import type {
 type WorkoutFlow = "setup" | "workout" | "done";
 
 const IN_PROGRESS_KEY = "gym_in_progress";
+
+/** How often /today is re-read before the first set is logged, so a check-in
+ * adjustment made at 05:20 reaches an iPad that loaded at 05:00. */
+export const PLAN_POLL_MS = 60_000;
 
 interface PlanLoad {
   loading: boolean;
@@ -86,6 +91,72 @@ export default function App() {
     const result = await fetchTodayPlan();
     setPlanLoad({ loading: false, result });
   }, []);
+
+  // ── Keep the plan fresh (FRIDAY-1) ─────────────────────────────────────
+  // Re-read /today quietly (no Loading flash) on focus / visibility and every
+  // PLAN_POLL_MS until the first set is logged. Mid-workout (or on the Done
+  // screen) a changed plan is HELD — the current step never shifts under Ryan
+  // — and applied when he's back on the Setup screen.
+  const flowRef = useRef(flow);
+  flowRef.current = flow;
+  const planLoadRef = useRef(planLoad);
+  planLoadRef.current = planLoad;
+  const [pendingPlan, setPendingPlan] = useState<FetchTodayResult | null>(null);
+  const [anySetLogged, setAnySetLogged] = useState(false);
+
+  const refreshPlanQuiet = useCallback(async () => {
+    const result = await fetchTodayPlan();
+    if (result.status !== "ok") return;           // keep what's on screen
+    const cur = planLoadRef.current.result;
+    const curPlan = cur?.status === "ok" ? cur.plan : null;
+    if (planFingerprint(curPlan) === planFingerprint(result.plan)) return;
+    if (flowRef.current === "setup") {
+      setPendingPlan(null);
+      setPlanLoad({ loading: false, result });
+    } else {
+      setPendingPlan(result);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (flow === "setup" && pendingPlan) {
+      setPlanLoad({ loading: false, result: pendingPlan });
+      setPendingPlan(null);
+    }
+  }, [flow, pendingPlan]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refreshPlanQuiet();
+    };
+    const onFocus = () => void refreshPlanQuiet();
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [refreshPlanQuiet]);
+
+  const localSetLogged =
+    Object.values(sessionSets).some((a) => a.length > 0) ||
+    Object.values(serverLoggedCount).some((n) => n > 0);
+  const stopPolling = anySetLogged || localSetLogged;
+
+  useEffect(() => {
+    if (route !== "today" || stopPolling) return;
+    const id = window.setInterval(() => {
+      void (async () => {
+        const logged = await fetchLoggedToday();
+        if (logged.status === "ok" && logged.data.exercises.some((e) => e.set_count > 0)) {
+          setAnySetLogged(true);
+          return;
+        }
+        await refreshPlanQuiet();
+      })();
+    }, PLAN_POLL_MS);
+    return () => window.clearInterval(id);
+  }, [route, stopPolling, refreshPlanQuiet]);
 
   const refreshStatus = useCallback(async () => {
     setStatusLoad({ loading: true, result: null });

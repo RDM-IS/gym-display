@@ -5,7 +5,7 @@ import FlagChips from "./FlagChips";
 import NumericKeypad from "./NumericKeypad";
 import { submitLog } from "../lib/log-queue";
 import { composeSetNotes, supportsSetting, type QuickFlag } from "../lib/set-notes";
-import { platesPerSide, weightStepFor } from "../lib/weight-step";
+import { plateLabel, weightStepFor } from "../lib/weight-step";
 import type { Prefill, SetEntry } from "../lib/log-state";
 import type { LastLoggedEntry, LogExerciseIn, PlannedExercise } from "../lib/types";
 
@@ -20,7 +20,18 @@ interface Props {
   lastHint: LastLoggedEntry | null;
   alreadyFullyLogged: boolean;
   isFinisher?: boolean;
+  /** Program week — week 1 opens the Machine setup field on set 1. */
+  week_num?: number;
   onLoggedSet: (exerciseName: string, set: SetEntry) => void;
+}
+
+export const MACHINE_SETUP_HELP =
+  "The numbered seat/pad position you used, e.g. seat 4, pad 2. Next time it's pre-filled.";
+
+/** Machine setup starts expanded on set 1 of a machine exercise in week 1 —
+ * that's when the seat/pad numbers are first found and worth writing down. */
+export function machineSetupOpenByDefault(week_num: number | undefined, set_num: number): boolean {
+  return week_num === 1 && set_num === 1;
 }
 
 type Status = "idle" | "saving" | "ok" | "queued" | "error";
@@ -81,12 +92,14 @@ export default function InlineExerciseLogger({
   lastHint,
   alreadyFullyLogged,
   isFinisher,
+  week_num,
   onLoggedSet,
 }: Props) {
   const w = weightStepFor(exercise);
   const useReps = exercise.format === "reps";
   const showSetting = useReps && supportsSetting(w.cls);
   const [settingPadOpen, setSettingPadOpen] = useState(false);
+  const [setupOpen, setSetupOpen] = useState(() => machineSetupOpenByDefault(week_num, set_num));
 
   const [state, dispatch] = useReducer(reducer, {
     weight: prefill.weight,
@@ -138,8 +151,6 @@ export default function InlineExerciseLogger({
     });
   }
 
-  const perSide =
-    w.showPlateMath && state.weight != null ? platesPerSide(state.weight, w.barLbs) : null;
 
   return (
     <div className={`log-card${isDone ? " log-card--done" : ""}`} data-testid="inline-logger" data-no-swipe>
@@ -165,14 +176,13 @@ export default function InlineExerciseLogger({
             min={w.min}
             max={w.max}
             allowDecimal
+            values={w.values}
             blankStart={prefill.weight ?? exercise.target_load_lbs ?? (w.min || w.step)}
             hint={lastHint?.weight_lbs ?? null}
             disabled={isDone || skipped}
             sub={
-              w.showPlateMath
-                ? perSide == null
-                  ? "below bar weight"
-                  : `${prettyN(perSide)} lb per side`
+              w.showPlateMath && state.weight != null
+                ? plateLabel(state.weight, w.barLbs)
                 : undefined
             }
             onChange={(v) => dispatch({ type: "set_weight", v })}
@@ -188,21 +198,40 @@ export default function InlineExerciseLogger({
           disabled={isDone || skipped}
           onChange={(v) => dispatch({ type: "set_reps", v })}
         />
-        {showSetting && (
-          <div className="setting-field">
-            <div className="stepper-label">Seat / setting #</div>
+        {showSetting && !setupOpen && (
+          <button
+            type="button"
+            className="setting-toggle"
+            data-testid="machine-setup-toggle"
+            aria-expanded={false}
+            onClick={() => setSetupOpen(true)}
+          >
+            Machine setup{state.setting == null ? " ▸" : `: ${prettyN(state.setting)} ▸`}
+          </button>
+        )}
+        {showSetting && setupOpen && (
+          <div className="setting-field" data-testid="machine-setup">
+            <button
+              type="button"
+              className="stepper-label setting-label"
+              aria-expanded={true}
+              onClick={() => setSetupOpen(false)}
+            >
+              Machine setup ▾
+            </button>
+            <div className="setting-help">{MACHINE_SETUP_HELP}</div>
             <button
               type="button"
               className="setting-value mono"
               disabled={isDone}
               onClick={() => setSettingPadOpen(true)}
-              aria-label={`Seat or setting ${state.setting ?? "not set"}, tap to enter`}
+              aria-label={`Machine setup ${state.setting ?? "not set"}, tap to enter`}
             >
               {state.setting == null ? "—" : prettyN(state.setting)}
             </button>
             {settingPadOpen && (
               <NumericKeypad
-                title="Seat / setting #"
+                title="Machine setup"
                 initial={state.setting}
                 allowDecimal
                 allowNegative={false}

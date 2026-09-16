@@ -119,6 +119,31 @@
   gap: 6px;
 }
 
+.setting-label {
+  min-height: var(--tap);
+  text-align: left;
+}
+
+.setting-help {
+  font-size: 15px;
+  line-height: 1.35;
+  color: var(--fg-dim);
+}
+
+/* Collapsed Machine setup: one full-width row, still a real touch target. */
+.setting-toggle {
+  min-height: var(--tap);
+  width: 100%;
+  padding: 0 16px;
+  font-size: 16px;
+  font-weight: 700;
+  text-align: left;
+  color: var(--fg-dim);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px dashed rgba(245, 245, 245, 0.22);
+  border-radius: 12px;
+}
+
 /* --- Chips (RPE, flags) ------------------------------------------------- */
 
 .rpe, .flags {

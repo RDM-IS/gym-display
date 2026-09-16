@@ -299,6 +299,7 @@ function PerSetCard({
         key={`${exercise.name}#${setNum}#${fullyLogged ? "done" : "open"}`}
         exercise={exercise}
         plan_id={plan.plan_id}
+        week_num={plan.week_num}
         set_num={Math.min(setNum, total)}
         total_sets={total}
         prefill={prefill}

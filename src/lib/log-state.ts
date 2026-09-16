@@ -1,3 +1,4 @@
+import { exerciseSets } from "./adjustment";
 import type { Plan } from "./types";
 import { parseSetting } from "./set-notes";
 
@@ -38,10 +39,10 @@ export function totalSetsFor(plan: Plan, exerciseName: string): number {
   const blocks = plan.blocks;
   if (blocks?.type === "circuit") {
     const rounds = Math.max(1, blocks.rounds ?? 1);
-    const occ = Array.isArray(blocks.exercises)
-      ? blocks.exercises.filter((e) => e.name === exerciseName).length
-      : 0;
-    total += occ * rounds;
+    // A check-in adjustment can give one exercise fewer sets than the rounds.
+    for (const e of Array.isArray(blocks.exercises) ? blocks.exercises : []) {
+      if (e.name === exerciseName) total += exerciseSets(e, rounds);
+    }
   }
   const fin = blocks?.finisher;
   if (fin && Array.isArray(fin.exercises)) {
