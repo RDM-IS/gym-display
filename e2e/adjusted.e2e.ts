@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-// FRIDAY-1: a Session B that Artemis adjusted after "sore shoulder 8/10".
+// FRIDAY-1: a Session B that Artemis adjusted after "sore shoulder 4, quads sore 3".
 const ADJUSTED = {
   plan_id: 105,
   plan_date: "2026-09-18",
@@ -34,8 +34,8 @@ const ADJUSTED = {
       added: ["Leg press", "Seated leg curl", "Calf press", "Captain's chair knee raise"],
       eased: ["Leg extension"],
       summary: [
-        "Shoulder 8/10 → removed DB goblet squat, seated cable row, incline DB press, rear delt fly. Added leg press, seated leg curl, calf press, captain's chair knee raise.",
-        "Quads 6/10 → leg extension: 1 set, RPE ≤5.",
+        "Shoulder 4/5 → removed DB goblet squat, seated cable row, incline DB press, rear delt fly. Added leg press, seated leg curl, calf press, captain's chair knee raise.",
+        "Quads 3/5 → leg extension: 1 set, RPE ≤5.",
       ],
     },
   },
@@ -58,7 +58,7 @@ test("adjusted plan: banner, badges, details — all touchable", async ({ page }
   });
 
   await page.goto("/today");
-  const banner = page.getByRole("button", { name: /Adjusted: shoulder 8\/10 — tap for details/ });
+  const banner = page.getByRole("button", { name: /Adjusted: shoulder 4\/5 — tap for details/ });
   await expect(banner).toBeVisible();
   const box = await banner.boundingBox();
   expect(box!.height).toBeGreaterThanOrEqual(56);

@@ -46,7 +46,7 @@ function sessionB(blocks: Partial<CircuitBlocks> = {}): Plan {
   };
 }
 
-// "legs sore 3" (6/10): goblet squat + leg extension → 1 set, RPE ≤5.
+// "legs sore 3": goblet squat + leg extension → 1 set, RPE ≤5.
 const LEGS_EASED = sessionB({
   exercises: B_EXERCISES.map((e) =>
     e.name === "DB goblet squat" || e.name === "Leg extension"
@@ -56,11 +56,11 @@ const LEGS_EASED = sessionB({
   adjustment: {
     rules_fired: ["ease"],
     eased: ["DB goblet squat", "Leg extension"],
-    summary: ["Legs 6/10 → DB goblet squat and leg extension: 1 set, RPE ≤5."],
+    summary: ["Legs 3/5 → DB goblet squat and leg extension: 1 set, RPE ≤5."],
   },
 });
 
-// "sore shoulder 8/10": four replaced.
+// "sore shoulder 4": four replaced.
 const SHOULDER_REPLACED = sessionB({
   exercises: [
     { name: "Leg press", format: "reps", target_reps: 12, notes: "2×10-12", added_by: "checkin", replaces: "DB goblet squat" },
@@ -75,7 +75,7 @@ const SHOULDER_REPLACED = sessionB({
     rules_fired: ["replace"],
     removed: ["DB goblet squat", "Seated cable row", "Incline DB press", "Rear delt fly"],
     added: ["Leg press", "Seated leg curl", "Calf press", "Captain's chair knee raise"],
-    summary: ["Shoulder 8/10 → removed DB goblet squat, seated cable row, incline DB press, rear delt fly. Added leg press, seated leg curl, calf press, captain's chair knee raise."],
+    summary: ["Shoulder 4/5 → removed DB goblet squat, seated cable row, incline DB press, rear delt fly. Added leg press, seated leg curl, calf press, captain's chair knee raise."],
   },
 });
 
@@ -136,8 +136,8 @@ describe("per-exercise sets in a circuit", () => {
 
 describe("adjustment helpers", () => {
   it("headline", () => {
-    expect(adjustmentHeadline(SHOULDER_REPLACED.blocks.adjustment!)).toBe("shoulder 8/10");
-    expect(adjustmentHeadline(LEGS_EASED.blocks.adjustment!)).toBe("legs 6/10");
+    expect(adjustmentHeadline(SHOULDER_REPLACED.blocks.adjustment!)).toBe("shoulder 4/5");
+    expect(adjustmentHeadline(LEGS_EASED.blocks.adjustment!)).toBe("legs 3/5");
     expect(adjustmentHeadline({})).toBe("today's check-in");
   });
 
@@ -163,7 +163,7 @@ describe("AdjustmentBanner", () => {
 
   it("shows the headline and expands to removed/added", () => {
     render(<AdjustmentBanner adjustment={SHOULDER_REPLACED.blocks.adjustment!} />);
-    const head = screen.getByRole("button", { name: /Adjusted: shoulder 8\/10 — tap for details/ });
+    const head = screen.getByRole("button", { name: /Adjusted: shoulder 4\/5 — tap for details/ });
     expect(screen.queryByText(/Removed:/)).toBeNull();
     fireEvent.click(head);
     expect(screen.getByText("Removed:").parentElement!.textContent)

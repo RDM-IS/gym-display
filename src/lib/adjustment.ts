@@ -10,7 +10,7 @@ export function adjustmentOf(plan: Plan | null | undefined): PlanAdjustment | nu
   return a && typeof a === "object" ? a : null;
 }
 
-/** "shoulder 8/10" from "Shoulder 8/10 → removed …". */
+/** "shoulder 4/5" from "Shoulder 4/5 → removed …". */
 export function adjustmentHeadline(a: PlanAdjustment): string {
   const first = (a.summary ?? [])[0] ?? a.reason ?? "";
   const head = first.split("→")[0].trim().replace(/[.:]$/, "");

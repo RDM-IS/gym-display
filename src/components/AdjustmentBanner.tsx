@@ -2,7 +2,7 @@ import { useState } from "react";
 import { adjustmentHeadline } from "../lib/adjustment";
 import type { PlanAdjustment } from "../lib/types";
 
-/** "Adjusted: shoulder 8/10 — tap for details". Expands to what the morning
+/** "Adjusted: shoulder 4/5 — tap for details". Expands to what the morning
  * check-in removed, added and eased — Artemis's own plan-exact summary. */
 export default function AdjustmentBanner({ adjustment }: { adjustment: PlanAdjustment }) {
   const [open, setOpen] = useState(false);
