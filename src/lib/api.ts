@@ -9,8 +9,15 @@ import type {
   StatusResponse,
 } from "./types";
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
-const API_KEY = import.meta.env.VITE_API_KEY ?? "";
+// Production always calls the same-origin /api proxy, which sits behind
+// Cloudflare Access and attaches the key server-side. A direct upstream URL
+// and key are honoured ONLY under `vite dev` (local, no proxy) — the DEV
+// branch is statically false in a production build, so neither value can be
+// inlined into the shipped bundle even if VITE_* vars are set in Pages.
+const API_BASE = import.meta.env.DEV
+  ? (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "")
+  : "";
+const API_KEY = import.meta.env.DEV ? import.meta.env.VITE_API_KEY ?? "" : "";
 
 export type FetchTodayResult =
   | { status: "ok"; plan: Plan }
