@@ -40,7 +40,8 @@ export function exerciseSets(ex: PlannedExercise, rounds: number): number {
   return ex.sets != null && ex.sets > 0 ? Math.min(ex.sets, Math.max(1, rounds)) : Math.max(1, rounds);
 }
 
-/** Short badges for an adjusted exercise: "RPE ≤5", "load −20%", "added". */
+/** Short badges for an adjusted exercise: "RPE ≤5", "20 lb (last 25)",
+ * "lighter than last time", "added". */
 export function exerciseTags(ex: PlannedExercise, sessionRpe?: number | null): string[] {
   const tags: string[] = [];
   const cap = ex.rpe_cap ?? sessionRpe ?? null;
@@ -48,6 +49,11 @@ export function exerciseTags(ex: PlannedExercise, sessionRpe?: number | null): s
     if (cap != null) tags.push(`RPE ≤${fmt(cap)}`);
   }
   if (ex.load_pct != null && ex.load_pct < 100) tags.push(`load −${100 - ex.load_pct}%`);
+  if (ex.load_from != null && ex.target_load_lbs != null) {
+    tags.push(`${fmt(ex.target_load_lbs)} lb (last ${fmt(ex.load_from)})`);
+  } else if (ex.load_note) {
+    tags.push("lighter than last time");
+  }
   if (ex.added_by === "checkin") tags.push(ex.replaces ? `added (for ${ex.replaces})` : "added");
   return tags;
 }

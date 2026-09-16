@@ -569,6 +569,7 @@ function RestLog({
             exercise.duration_sec ?? null,
             sessionSets,
             lastHint,
+            exercise.load_from != null,
           )}
           lastHint={lastHint}
           alreadyFullyLogged={false}

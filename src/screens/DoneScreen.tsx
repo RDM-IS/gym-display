@@ -156,6 +156,7 @@ function UnloggedSlotCard({
     slot.exercise.duration_sec ?? null,
     sessionSets,
     lastLogged,
+    slot.exercise.load_from != null,
   );
 
   async function skip() {

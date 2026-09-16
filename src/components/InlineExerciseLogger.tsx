@@ -4,7 +4,7 @@ import RpeChips from "./RpeChips";
 import FlagChips from "./FlagChips";
 import NumericKeypad from "./NumericKeypad";
 import { submitLog } from "../lib/log-queue";
-import { composeSetNotes, supportsSetting, type QuickFlag } from "../lib/set-notes";
+import { composeSetNotes, supportsSetting, type PainEntry, type QuickFlag } from "../lib/set-notes";
 import { plateLabel, weightStepFor } from "../lib/weight-step";
 import type { Prefill, SetEntry } from "../lib/log-state";
 import type { LastLoggedEntry, LogExerciseIn, PlannedExercise } from "../lib/types";
@@ -42,6 +42,7 @@ interface State {
   rpe: number | null;
   setting: number | null;
   flags: QuickFlag[];
+  pain: PainEntry[];
   status: Status;
   error: string | null;
 }
@@ -52,6 +53,7 @@ type Action =
   | { type: "set_rpe"; v: number | null }
   | { type: "set_setting"; v: number | null }
   | { type: "set_flags"; flags: QuickFlag[] }
+  | { type: "set_pain"; pain: PainEntry[] }
   | { type: "save_start" }
   | { type: "save_ok" }
   | { type: "save_queued" }
@@ -64,6 +66,7 @@ function reducer(state: State, action: Action): State {
     case "set_rpe":     return { ...state, rpe: action.v, status: "idle", error: null };
     case "set_setting": return { ...state, setting: action.v, status: "idle", error: null };
     case "set_flags":   return { ...state, flags: action.flags, status: "idle", error: null };
+    case "set_pain":    return { ...state, pain: action.pain, status: "idle", error: null };
     case "save_start":  return { ...state, status: "saving", error: null };
     case "save_ok":     return { ...state, status: "ok", error: null };
     case "save_queued": return { ...state, status: "queued", error: null };
@@ -76,8 +79,8 @@ function reducer(state: State, action: Action): State {
  *
  * No OS keyboard: weight / reps are steppers whose value opens the in-app
  * keypad, RPE and quick flags are chips, and the optional machine setting is a
- * keypad field. Flags and the setting are written to the row's notes
- * ("setting=7; machine taken").
+ * keypad field. Flags, pain and the setting are written to the row's notes
+ * ("setting=7; pain=shoulder:2; machine taken").
  *
  * Pre-fills from `prefill` (previous set this session > last session > plan
  * target). A write that can't reach the server is queued and counts as logged
@@ -107,6 +110,7 @@ export default function InlineExerciseLogger({
     rpe: prefill.rpe,
     setting: prefill.setting ?? null,
     flags: [],
+    pain: [],
     status: "idle",
     error: null,
   });
@@ -127,6 +131,7 @@ export default function InlineExerciseLogger({
       notes: composeSetNotes({
         finisher: isFinisher,
         setting: showSetting ? state.setting : null,
+        pain: state.pain,
         flags: state.flags,
       }),
     };
@@ -163,7 +168,11 @@ export default function InlineExerciseLogger({
           Set {set_num} of {total_sets}
           {useReps && exercise.target_load_lbs ? ` · target ${exercise.target_load_lbs} lb` : ""}
           {useReps && exercise.target_reps != null ? ` × ${exercise.target_reps}` : ""}
+          {useReps && exercise.load_from != null ? ` (last ${exercise.load_from} lb)` : ""}
         </div>
+        {useReps && exercise.load_note && (
+          <div className="log-card-note" data-testid="load-note">{exercise.load_note}</div>
+        )}
       </div>
 
       <div className="log-steppers">
@@ -254,8 +263,10 @@ export default function InlineExerciseLogger({
 
       <FlagChips
         value={state.flags}
+        pain={state.pain}
         disabled={isDone}
         onChange={(flags) => dispatch({ type: "set_flags", flags })}
+        onPainChange={(pain) => dispatch({ type: "set_pain", pain })}
       />
 
       {state.status === "error" && state.error && (

@@ -29,8 +29,12 @@ export interface PlannedExercise {
   sets?: number | null;
   /** Per-exercise RPE ceiling. */
   rpe_cap?: number | null;
-  /** Use this percent of the usual load (80 = −20%). */
+  /** Use this percent of the usual load (80 = −20%). Legacy (FRIDAY-1). */
   load_pct?: number | null;
+  /** PAIN-1: the last logged load a lighter target_load_lbs was taken from. */
+  load_from?: number | null;
+  /** PAIN-1: "go lighter than last time" when there was no load to lighten. */
+  load_note?: string | null;
   /** "checkin" when a substitution put it here. */
   added_by?: string | null;
   /** The exercise it replaced. */

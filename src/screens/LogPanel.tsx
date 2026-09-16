@@ -285,6 +285,7 @@ function PerSetCard({
     exercise.duration_sec ?? null,
     sessionSets,
     lastHint,
+    exercise.load_from != null,
   );
 
   return (
