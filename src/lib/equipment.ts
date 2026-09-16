@@ -27,19 +27,73 @@ export interface LoadConfig {
   barLbs?: number;
 }
 
+/** Plates available PER SIDE — one of each; there are no 2.5s. Any total is
+ * bar + 2 × (a subset sum of these), so per-side 20 or 100 is impossible and
+ * the most per side is 120. */
+export const PLATES_PER_SIDE: readonly number[] = [45, 35, 25, 10, 5];
+const MAX_PER_SIDE = PLATES_PER_SIDE.reduce((a, b) => a + b, 0);
+
+/** Olympic bar. TODO(office): confirm it is 45 lb. */
+export const OLYMPIC_BAR_LBS = 45;
+/** TODO(office): Icarian Smith starting (effective) bar weight — it may be
+ * counterbalanced. Until measured, loads are plates only (0). */
+export const SMITH_BAR_LBS = 0;
+
 export const LOAD_CONFIG: Record<Exclude<EquipmentClass, "bodyweight">, LoadConfig> = {
-  // Hex dumbbell rack. TODO(office): survey the actual min/max on the rack.
-  dumbbell: { step: 5, min: 5, max: 100 },
+  // Hex dumbbell rack: 5–45 lb in 5s.
+  dumbbell: { step: 5, min: 5, max: 45 },
   // TODO(office): confirm the pin-stack increment on each Precor machine;
-  // override per exercise in STEP_OVERRIDES once measured.
+  // override per exercise in STEP_OVERRIDES once measured. 10 lb default.
   machine: { step: 10, min: 0, max: 300 },
   // S3.23 functional trainer — same stack step as the machines until confirmed.
   cable: { step: 10, min: 0, max: 200 },
-  // 2.5 lb per side. TODO(office): Icarian Smith effective bar weight (it may be
-  // counterbalanced); plate math uses barLbs.
-  smith: { step: 5, min: 0, max: 500, barLbs: 0 },
-  barbell: { step: 5, min: 45, max: 500, barLbs: 45 },
+  // Plate-loaded: 10 lb total per step (5 per side); the stepper only offers
+  // reachable totals (see reachableTotals).
+  smith: { step: 10, min: SMITH_BAR_LBS, max: SMITH_BAR_LBS + 2 * MAX_PER_SIDE, barLbs: SMITH_BAR_LBS },
+  barbell: { step: 10, min: OLYMPIC_BAR_LBS, max: OLYMPIC_BAR_LBS + 2 * MAX_PER_SIDE, barLbs: OLYMPIC_BAR_LBS },
 };
+
+/** Every per-side load the plates can make, ascending (0 = empty bar). */
+export function reachablePerSide(plates: readonly number[] = PLATES_PER_SIDE): number[] {
+  const sums = new Set<number>([0]);
+  for (const p of plates) {
+    for (const s of [...sums]) sums.add(s + p);
+  }
+  return [...sums].sort((a, b) => a - b);
+}
+
+/** Every loadable total for a bar, ascending. */
+export function reachableTotals(barLbs: number, plates: readonly number[] = PLATES_PER_SIDE): number[] {
+  return reachablePerSide(plates).map((s) => barLbs + 2 * s);
+}
+
+/** The plates for one side, largest first — fewest plates, then the largest
+ * plates first when two combinations tie (40 → 35 + 5). null when the load
+ * can't be made. */
+export function plateBreakdown(perSide: number, plates: readonly number[] = PLATES_PER_SIDE): number[] | null {
+  const sorted = [...plates].sort((a, b) => b - a);
+  let best: number[] | null = null;
+  const n = sorted.length;
+  for (let mask = 0; mask < 1 << n; mask++) {
+    const pick = sorted.filter((_, i) => mask & (1 << i));
+    if (pick.reduce((a, b) => a + b, 0) !== perSide) continue;
+    if (
+      best === null ||
+      pick.length < best.length ||
+      (pick.length === best.length && lexGreater(pick, best))
+    ) {
+      best = pick;
+    }
+  }
+  return best;
+}
+
+function lexGreater(a: number[], b: number[]): boolean {
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    if (a[i] !== b[i]) return a[i] > b[i];
+  }
+  return a.length > b.length;
+}
 
 /** Per-exercise stack-step overrides (lb) for machine / cable exercises,
  * keyed by lower-case exercise name. */

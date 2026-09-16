@@ -18,12 +18,31 @@ interface Props {
   /** Extra line under the value (e.g. plate math per side). */
   sub?: ReactNode;
   allowDecimal?: boolean;
+  /** When set, the only values the stepper may take (ascending): −/+ move to
+   * the neighbouring value and a keypad entry snaps to the nearest one. */
+  values?: readonly number[] | null;
 }
 
 const HOLD_DELAY_MS = 400;
 const REPEAT_START_MS = 180;
 const REPEAT_MIN_MS = 50;
 const REPEAT_ACCEL = 0.85;
+
+/** Nearest allowed value (ties go to the lower one). */
+export function snapTo(v: number, values: readonly number[]): number {
+  let best = values[0];
+  for (const x of values) {
+    if (Math.abs(x - v) < Math.abs(best - v)) best = x;
+  }
+  return best;
+}
+
+/** The neighbouring allowed value in the direction of `delta`. */
+export function stepThrough(cur: number, delta: number, values: readonly number[]): number {
+  if (delta > 0) return values.find((x) => x > cur) ?? values[values.length - 1];
+  for (let i = values.length - 1; i >= 0; i--) if (values[i] < cur) return values[i];
+  return values[0];
+}
 
 export function clampRound(v: number, min?: number, max?: number): number {
   let next = v;
@@ -49,7 +68,9 @@ export default function Stepper({
   hint,
   sub,
   allowDecimal,
+  values,
 }: Props) {
+  const allowed = values && values.length > 0 ? values : null;
   const [keypadOpen, setKeypadOpen] = useState(false);
   const valueRef = useRef(value);
   valueRef.current = value;
@@ -68,7 +89,12 @@ export default function Stepper({
     const cur = valueRef.current;
     // First tap on an empty value reveals the suggested default rather than
     // overshooting it by `step`.
-    const next = cur == null ? clampRound(blankStart ?? 0, min, max) : clampRound(cur + delta, min, max);
+    let next: number;
+    if (allowed) {
+      next = cur == null ? snapTo(blankStart ?? allowed[0], allowed) : stepThrough(cur, delta, allowed);
+    } else {
+      next = cur == null ? clampRound(blankStart ?? 0, min, max) : clampRound(cur + delta, min, max);
+    }
     valueRef.current = next;
     onChange(next);
     try {
@@ -166,7 +192,7 @@ export default function Stepper({
           onCancel={() => setKeypadOpen(false)}
           onDone={(v) => {
             setKeypadOpen(false);
-            onChange(v == null ? null : clampRound(v, min, max));
+            onChange(v == null ? null : allowed ? snapTo(v, allowed) : clampRound(v, min, max));
           }}
         />
       )}

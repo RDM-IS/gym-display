@@ -102,11 +102,11 @@ describe("weightStepFor — per-class increments", () => {
     expect(weightStepFor({ name: "Leg press", format: "reps" }).step).toBe(10);
   });
 
-  it("smith / barbell → 5 lb total (2.5 per side) with plate math", () => {
-    expect(weightStepFor({ name: "Smith squat", format: "reps" })).toMatchObject({ cls: "smith", step: 5, showPlateMath: true });
-    expect(weightStepFor({ name: "Barbell back squat", format: "reps" })).toMatchObject({
-      cls: "barbell", step: 5, showPlateMath: true, barLbs: 45,
-    });
+  it("smith / barbell → 10 lb total steps over reachable totals only, with plate math", () => {
+    expect(weightStepFor({ name: "Smith squat", format: "reps" })).toMatchObject({ cls: "smith", step: 10, showPlateMath: true });
+    const bb = weightStepFor({ name: "Barbell back squat", format: "reps" });
+    expect(bb).toMatchObject({ cls: "barbell", step: 10, showPlateMath: true, barLbs: 45 });
+    expect(bb.values?.[0]).toBe(45);
   });
 
   it("bodyweight → no load stepper", () => {

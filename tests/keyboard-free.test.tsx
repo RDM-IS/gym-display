@@ -69,8 +69,9 @@ describe("strength logger never raises the OS keyboard", () => {
     expect(keyboardTriggers(document.body)).toHaveLength(0);
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
-    fireEvent.click(screen.getByRole("button", { name: /Seat or setting not set/ }));
-    expect(screen.getByRole("dialog", { name: "Seat / setting # keypad" })).toBeDefined();
+    fireEvent.click(screen.getByTestId("machine-setup-toggle"));
+    fireEvent.click(screen.getByRole("button", { name: /Machine setup not set/ }));
+    expect(screen.getByRole("dialog", { name: "Machine setup keypad" })).toBeDefined();
     expect(keyboardTriggers(document.body)).toHaveLength(0);
   });
 
@@ -94,9 +95,10 @@ describe("keypad + chips + flags → one session_log row", () => {
     }
     fireEvent.click(within(weightPad).getByRole("button", { name: "Done" }));
 
-    // Seat / setting 7.
-    fireEvent.click(screen.getByRole("button", { name: /Seat or setting not set/ }));
-    const settingPad = screen.getByRole("dialog", { name: "Seat / setting # keypad" });
+    // Machine setup 7 (collapsed on set 2 — one tap to open).
+    fireEvent.click(screen.getByTestId("machine-setup-toggle"));
+    fireEvent.click(screen.getByRole("button", { name: /Machine setup not set/ }));
+    const settingPad = screen.getByRole("dialog", { name: "Machine setup keypad" });
     fireEvent.click(within(settingPad).getByRole("button", { name: "Digit 7" }));
     fireEvent.click(within(settingPad).getByRole("button", { name: "Done" }));
 
@@ -132,16 +134,17 @@ describe("keypad + chips + flags → one session_log row", () => {
     });
     expect(prefill.setting).toBe(4);
     renderLogger({ prefill });
-    expect(screen.getByRole("button", { name: /Seat or setting 4/ })).toBeDefined();
+    // Collapsed on set 2, but the pre-filled value is visible on the toggle.
+    expect(screen.getByTestId("machine-setup-toggle").textContent).toBe("Machine setup: 4 ▸");
   });
 
   it("shows no setting field for dumbbells or bodyweight", () => {
     renderLogger({ exercise: { name: "DB bench press", format: "reps", target_reps: 12 } });
-    expect(screen.queryByRole("button", { name: /Seat or setting/ })).toBeNull();
+    expect(screen.queryByText(/Machine setup/)).toBeNull();
     cleanup();
     renderLogger({ exercise: { name: "Captain's chair knee raise", format: "reps", target_reps: 12 } });
     expect(screen.queryByRole("button", { name: /Weight/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: /Seat or setting/ })).toBeNull();
+    expect(screen.queryByText(/Machine setup/)).toBeNull();
   });
 });
 

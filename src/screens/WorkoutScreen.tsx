@@ -555,6 +555,7 @@ function RestLog({
           key={`${exerciseName}#${setNum}`}
           exercise={exercise}
           plan_id={plan.plan_id}
+          week_num={plan.week_num}
           set_num={setNum}
           total_sets={total}
           prefill={computePrefill(

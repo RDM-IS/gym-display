@@ -107,6 +107,7 @@ export default function DoneScreen({
                 key={`${slot.exercise.name}#${slot.set_num}`}
                 slot={slot}
                 plan_id={plan.plan_id}
+                week_num={plan.week_num}
                 sessionSets={sessionSets}
                 lastLogged={lastLogged[slot.exercise.name] ?? null}
                 onLoggedSet={onLoggedSet}
@@ -135,12 +136,14 @@ export default function DoneScreen({
 function UnloggedSlotCard({
   slot,
   plan_id,
+  week_num,
   sessionSets,
   lastLogged,
   onLoggedSet,
 }: {
   slot: UnloggedSlot;
   plan_id: number;
+  week_num: number;
   sessionSets: SessionSets;
   lastLogged: LastLoggedEntry | null;
   onLoggedSet: (exerciseName: string, set: SetEntry) => void;
@@ -186,6 +189,7 @@ function UnloggedSlotCard({
         key={`${slot.exercise.name}#${slot.set_num}`}
         exercise={slot.exercise}
         plan_id={plan_id}
+        week_num={week_num}
         set_num={slot.set_num}
         total_sets={slot.total_sets}
         prefill={prefill}
