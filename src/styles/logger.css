@@ -27,6 +27,7 @@
 
 .log-card-name { font-size: 22px; font-weight: 800; }
 .log-card-target { font-size: 15px; color: var(--fg-dim); }
+.log-card-note { font-size: 15px; font-weight: 700; color: var(--accent); }
 .log-check { color: var(--ok); font-weight: 900; }
 
 .log-steppers {
@@ -185,6 +186,21 @@
 .flag-chip { font-size: 16px; font-weight: 700; }
 
 .flag-hint { font-size: 14px; color: var(--fg-faint); }
+
+/* In-session pain (PAIN-1): region picker + 0–5 row, no keyboard. */
+.chip-row--regions { grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); }
+.region-chip, .pain-entry, .pain-cancel { font-size: 16px; font-weight: 700; }
+.pain-entries { display: flex; flex-wrap: wrap; gap: var(--gap); }
+.pain-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  padding: 12px;
+  border: 1px solid rgba(245, 245, 245, 0.22);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.3);
+}
+.pain-cancel { align-self: flex-start; min-width: 140px; }
 
 /* --- Primary log action + errors + notes ------------------------------- */
 

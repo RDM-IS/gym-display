@@ -95,7 +95,9 @@ export function isFullyLogged(
 }
 
 /** Build the prefill triple for the next set.
- *  Priority: previous set THIS session > last-logged-session > plan target. */
+ *  Priority: previous set THIS session > last-logged-session > plan target.
+ *  When a check-in LOWERED the target (`targetIsLighter`, PAIN-1) the target
+ *  beats last session's weight, so the stepper doesn't open at the old load. */
 export interface Prefill {
   weight: number | null;
   reps: number | null;
@@ -112,13 +114,16 @@ export function computePrefill(
   target_duration_sec: number | null | undefined,
   sessionSets: SessionSets,
   lastSession: { weight_lbs: number | null; reps_done: number | null; notes?: string | null } | null,
+  targetIsLighter = false,
 ): Prefill {
   const prev = previousSetFor(name, sessionSets);
   // Reps OR duration, depending on format.
   const repsFromPrev = prev?.reps_done ?? null;
   const repsTarget = format === "reps" ? target_reps ?? null : target_duration_sec ?? null;
   return {
-    weight: prev?.weight_lbs ?? lastSession?.weight_lbs ?? target_load_lbs ?? null,
+    weight: prev?.weight_lbs
+      ?? (targetIsLighter && target_load_lbs != null ? target_load_lbs : null)
+      ?? lastSession?.weight_lbs ?? target_load_lbs ?? null,
     reps: repsFromPrev ?? lastSession?.reps_done ?? repsTarget,
     rpe: prev?.rpe_actual ?? null,
     setting: prev?.setting ?? parseSetting(lastSession?.notes),
