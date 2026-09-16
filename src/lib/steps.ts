@@ -36,6 +36,9 @@ export interface Step {
   circuitId?: string;
   /** Distinguishes the inter-round rest from regular inter-exercise rests. */
   isRoundBreak?: boolean;
+  /** Circuit exercise (and the rest after it) with fewer sets than the
+   * circuit has rounds — the cursor skips it in rounds > activeRounds. */
+  activeRounds?: number;
   /** When the timer runs out, hold here until the user advances. Set on
    * strength (reps) sets and the logging rest that follows one; timed work
    * (intervals, holds, steady cardio, warmup/cooldown) auto-advances. */
@@ -143,6 +146,8 @@ function buildCircuit(b: Builder, blocks: CircuitBlocks): void {
     for (let i = 0; i < exercises.length; i++) {
       const ex = exercises[i];
       const isLastEx = i === exercises.length - 1;
+      const activeRounds =
+        ex.sets != null && ex.sets > 0 && ex.sets < rounds ? ex.sets : undefined;
       b.steps.push({
         kind: "exercise",
         label: ex.name,
@@ -151,6 +156,7 @@ function buildCircuit(b: Builder, blocks: CircuitBlocks): void {
         totalRounds: rounds,
         circuitId: "main",
         holdAtEnd: ex.format === "reps",
+        activeRounds,
       });
       if (!isLastEx) {
         b.steps.push({
@@ -161,6 +167,7 @@ function buildCircuit(b: Builder, blocks: CircuitBlocks): void {
           totalRounds: rounds,
           circuitId: "main",
           holdAtEnd: ex.format === "reps",
+          activeRounds,
         });
       } else if (rounds > 1) {
         // Round-break rest. Lives at the END of the circuit body. On the
@@ -191,8 +198,25 @@ function buildCircuit(b: Builder, blocks: CircuitBlocks): void {
     endSection(sec, b);
   }
 
+  appendMobility(b, blocks.mobility_min, blocks.mobility_focus);
+
   // Finisher — same circuit expansion, distinct circuitId.
   appendFinisher(b, blocks.finisher);
+}
+
+/** Mobility added by a check-in adjustment ("10 min mobility (shoulder)"). */
+function appendMobility(b: Builder, minutes: number | null | undefined, focus: string[] | null | undefined): void {
+  if (!minutes || minutes <= 0) return;
+  const what = focus && focus.length > 0 ? ` (${focus.join(", ")})` : "";
+  const label = `${minutes} min mobility${what}`;
+  const sec = startSection(b, "mobility", label);
+  b.steps.push({
+    kind: "exercise",
+    label,
+    duration_sec: minutes * 60,
+    exerciseRef: { name: "Mobility", format: "duration", duration_sec: minutes * 60 },
+  });
+  endSection(sec, b);
 }
 
 function buildIntervalsCardio(b: Builder, blocks: IntervalsBlocks): void {
@@ -283,6 +307,7 @@ function buildSteady(b: Builder, blocks: SteadyBlocks): void {
     });
     endSection(sec, b);
   }
+  appendMobility(b, blocks.mobility_min, blocks.mobility_focus);
   appendFinisher(b, blocks.finisher);
 }
 
@@ -399,9 +424,54 @@ function findCircuitStartIndex(steps: Step[], idx: number, circuitId: string): n
   return i;
 }
 
+function inactive(step: Step | undefined, round: number): boolean {
+  return !!step && !step.isRoundBreak && step.activeRounds != null && round > step.activeRounds;
+}
+
+/** First step at or after `idx` that runs in `round`, staying inside the
+ * circuit; skips this circuit's round-break on its last round. */
+function settle(steps: Step[], idx: number, round: number, circuitId: string | undefined): number {
+  let i = idx;
+  while (i < steps.length && steps[i].circuitId === circuitId && circuitId) {
+    const s = steps[i];
+    if (inactive(s, round)) { i++; continue; }
+    if (s.isRoundBreak && s.totalRounds === round) { i++; continue; }
+    break;
+  }
+  return i;
+}
+
 /** Advance one step. Handles round-wrap at the round-break rest and skips
- * the round-break entirely on the last round. Returns null at end. */
+ * the round-break entirely on the last round. Exercises with fewer sets than
+ * the circuit has rounds (a check-in adjustment) are skipped in the rounds
+ * they don't run. Returns null at end. */
 export function nextCursor(steps: Step[], cur: Cursor): Cursor | null {
+  const plain = nextCursorPlain(steps, cur);
+  if (!plain) return null;
+  const s = steps[plain.stepIndex];
+  const circuit = s.circuitId;
+  if (!circuit || !steps.some((x) => x.circuitId === circuit && x.activeRounds != null)) {
+    return plain;
+  }
+  const { currentRound } = plain;
+  const idx = settle(steps, plain.stepIndex, currentRound, circuit);
+  if (idx >= steps.length) return null;
+  const at = steps[idx];
+  if (at.circuitId !== circuit) return { stepIndex: idx, currentRound: 1 };
+  if (at.isRoundBreak && at.totalRounds && currentRound < at.totalRounds) {
+    // Nothing left to do next round (every exercise's sets are done)? Leave.
+    const start = findCircuitStartIndex(steps, idx, circuit);
+    const nextAt = steps[settle(steps, start, currentRound + 1, circuit)];
+    if (!nextAt || nextAt.circuitId !== circuit || nextAt.isRoundBreak) {
+      let out = idx + 1;
+      while (out < steps.length && steps[out].circuitId === circuit) out++;
+      return out < steps.length ? { stepIndex: out, currentRound: 1 } : null;
+    }
+  }
+  return { stepIndex: idx, currentRound };
+}
+
+function nextCursorPlain(steps: Step[], cur: Cursor): Cursor | null {
   const s = steps[cur.stepIndex];
   if (!s) return null;
 
@@ -409,7 +479,8 @@ export function nextCursor(steps: Step[], cur: Cursor): Cursor | null {
   if (s.isRoundBreak && s.totalRounds && s.circuitId) {
     if (cur.currentRound < s.totalRounds) {
       const startIdx = findCircuitStartIndex(steps, cur.stepIndex, s.circuitId);
-      return { stepIndex: startIdx, currentRound: cur.currentRound + 1 };
+      const round = cur.currentRound + 1;
+      return { stepIndex: settle(steps, startIdx, round, s.circuitId), currentRound: round };
     }
     // On the last round we should not be sitting on a round-break — TICK
     // is supposed to skip it. If we get here, treat as advance past.

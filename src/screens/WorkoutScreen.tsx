@@ -38,6 +38,7 @@ import { useSwipe } from "../lib/use-swipe";
 import type { LastLoggedEntry, Plan } from "../lib/types";
 import JourneyMap from "../components/JourneyMap";
 import InlineExerciseLogger from "../components/InlineExerciseLogger";
+import { exerciseTags } from "../lib/adjustment";
 import SoundBadge from "../components/SoundBadge";
 import SyncBadge from "../components/SyncBadge";
 import LogPanel from "./LogPanel";
@@ -475,6 +476,7 @@ function Glance({
   }
   const reps = ex?.format === "reps" && ex.target_reps != null ? `${ex.target_reps} reps` : null;
   const load = ex?.format === "reps" && ex.target_load_lbs != null ? `${fmt(ex.target_load_lbs)} lb` : null;
+  const tags = ex ? exerciseTags(ex, plan.blocks?.rpe_cap ?? null) : [];
   const last = isPlanExercise ? lastLogged[name] ?? null : null;
   const openEnded = !!step.holdAtEnd;
 
@@ -485,6 +487,7 @@ function Glance({
       {/* Steady cardio carries the intensity as its step label. */}
       {step.label !== name && <div className="glance-target">{step.label}</div>}
       {(reps || load) && <div className="glance-target">{[reps, load].filter(Boolean).join(" × ")}</div>}
+      {tags.length > 0 && <div className="glance-target glance-adjusted">{tags.join(" · ")}</div>}
       <div className="glance-time mono" aria-label={openEnded ? "Set time" : "Time remaining"}>
         {formatMMSS(openEnded ? stepElapsed : remaining)}
       </div>

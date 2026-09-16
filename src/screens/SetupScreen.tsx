@@ -10,6 +10,8 @@ import type {
 } from "../lib/types";
 import { assertNeverBlock } from "../lib/types";
 import { dedupe, displayTitle, formatPlanDate } from "../lib/format";
+import { adjustmentOf, exerciseSets, exerciseTags } from "../lib/adjustment";
+import AdjustmentBanner from "../components/AdjustmentBanner";
 
 interface Props {
   plan: Plan;
@@ -30,6 +32,8 @@ export default function SetupScreen({ plan, interrupted, onStart }: Props) {
           ~{plan.est_duration_min} min · Phase {plan.phase} · Week {plan.week_num} · RPE {plan.target_rpe}
         </div>
       </header>
+
+      {adjustmentOf(plan) && <AdjustmentBanner adjustment={adjustmentOf(plan)!} />}
 
       {interrupted && (
         <div className="banner">Workout was interrupted. Start over from the beginning.</div>
@@ -52,7 +56,12 @@ export default function SetupScreen({ plan, interrupted, onStart }: Props) {
           </Section>
         )}
 
-        <BlockDetail blocks={plan.blocks} />
+        <BlockDetail blocks={plan.blocks} sessionRpe={plan.blocks?.rpe_cap ?? null} />
+        {plan.blocks?.mobility_min ? (
+          <Section title={`Mobility — ${plan.blocks.mobility_min} min`}>
+            <div className="list">{(plan.blocks.mobility_focus ?? []).join(", ") || "general"}</div>
+          </Section>
+        ) : null}
       </div>
 
       <button type="button" className="btn btn--primary btn--block setup-start" onClick={onStart}>
@@ -71,10 +80,10 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function BlockDetail({ blocks }: { blocks: Plan["blocks"] }) {
+function BlockDetail({ blocks, sessionRpe }: { blocks: Plan["blocks"]; sessionRpe: number | null }) {
   if (!blocks) return null;
   switch (blocks.type) {
-    case "circuit":   return <CircuitDetail b={blocks} />;
+    case "circuit":   return <CircuitDetail b={blocks} sessionRpe={sessionRpe} />;
     case "intervals": return <IntervalsDetail b={blocks} />;
     case "steady":    return <SteadyDetail b={blocks} />;
     case "mobility":  return <MobilityDetail b={blocks} />;
@@ -95,7 +104,7 @@ function exerciseLine(ex: PlannedExercise): string {
   return `${target}${load}`;
 }
 
-function CircuitDetail({ b }: { b: CircuitBlocks }) {
+function CircuitDetail({ b, sessionRpe }: { b: CircuitBlocks; sessionRpe: number | null }) {
   const exercises = Array.isArray(b.exercises) ? b.exercises : [];
   const rounds = b.rounds ?? 1;
   return (
@@ -108,13 +117,19 @@ function CircuitDetail({ b }: { b: CircuitBlocks }) {
       {exercises.length > 0 ? (
         <Section title={`Exercises — ${rounds} round${rounds === 1 ? "" : "s"}`}>
           <ul className="list">
-            {exercises.map((ex, i) => (
-              <li key={`${ex.name}-${i}`}>
-                <strong>{ex.name}</strong>
-                {" — "}
-                {exerciseLine(ex)}
-              </li>
-            ))}
+            {exercises.map((ex, i) => {
+              const tags = exerciseTags(ex, sessionRpe);
+              const sets = exerciseSets(ex, rounds);
+              return (
+                <li key={`${ex.name}-${i}`} className={ex.added_by ? "exercise--added" : undefined}>
+                  <strong>{ex.name}</strong>
+                  {" — "}
+                  {sets !== rounds ? `${sets} set${sets === 1 ? "" : "s"} × ` : ""}
+                  {exerciseLine(ex)}
+                  {tags.length > 0 && <span className="exercise-tags"> · {tags.join(" · ")}</span>}
+                </li>
+              );
+            })}
           </ul>
         </Section>
       ) : (

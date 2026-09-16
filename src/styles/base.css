@@ -362,3 +362,30 @@ input, textarea, select { font-size: max(16px, 1rem); }
   .h1 { font-size: 34px; }
   .h2 { font-size: 22px; }
 }
+
+/* --- Check-in adjustment banner (FRIDAY-1) ------------------------------ */
+.adjust-banner {
+  margin: 0 0 var(--gap);
+  border: 1px solid var(--accent);
+  border-radius: 14px;
+  background: rgba(255, 200, 0, 0.08);
+}
+.adjust-banner-head {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 16px;
+  text-align: left;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--accent);
+}
+.adjust-banner-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 16px 14px;
+  font-size: 16px;
+}
+.exercise-tags,
+.glance-adjusted { color: var(--accent); }
+.exercise--added strong::after { content: " ＋"; color: var(--accent); }

@@ -24,6 +24,29 @@ export interface PlannedExercise {
   notes?: string | null;
   /** Optional explicit class; otherwise inferred from the name (equipment.ts). */
   equipment_class?: EquipmentClass | null;
+  // ── Check-in adjustment (Artemis FRIDAY-1) ──
+  /** Sets for THIS exercise when it differs from the circuit's rounds. */
+  sets?: number | null;
+  /** Per-exercise RPE ceiling. */
+  rpe_cap?: number | null;
+  /** Use this percent of the usual load (80 = −20%). */
+  load_pct?: number | null;
+  /** "checkin" when a substitution put it here. */
+  added_by?: string | null;
+  /** The exercise it replaced. */
+  replaces?: string | null;
+}
+
+/** blocks.adjustment — written by Artemis when a morning check-in changed the plan. */
+export interface PlanAdjustment {
+  reason?: string | null;
+  rules_fired?: string[] | null;
+  checkin_id?: string | null;
+  at?: string | null;
+  removed?: string[] | null;
+  added?: string[] | null;
+  eased?: string[] | null;
+  summary?: string[] | null;
 }
 
 /** Legacy name kept as alias for the circuit-exercise tests. */
@@ -43,6 +66,15 @@ interface BlocksBase {
   display_name?: string | null;
   equipment?: string[] | null;
   setup_notes?: string[] | null;
+  /** Present when today's plan was adjusted by a check-in. */
+  adjustment?: PlanAdjustment | null;
+  /** The plan as written (blocks + row fields) before the adjustment. */
+  original?: unknown;
+  /** Session-wide RPE ceiling after a recovery adjustment. */
+  rpe_cap?: number | null;
+  /** Mobility added by an adjustment. */
+  mobility_focus?: string[] | null;
+  mobility_min?: number | null;
   finisher?: Finisher | null;
 }
 
