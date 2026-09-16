@@ -6,6 +6,7 @@ import ErrorScreen from "./screens/ErrorScreen";
 import RestDayScreen from "./screens/RestDayScreen";
 import StatusScreen from "./screens/StatusScreen";
 import Nav from "./components/Nav";
+import SyncBadge from "./components/SyncBadge";
 import {
   fetchLastLogged,
   fetchLoggedToday,
@@ -15,7 +16,10 @@ import {
   type FetchTodayResult,
 } from "./lib/api";
 import { flattenBlocksToSteps } from "./lib/steps";
-import { initAudio } from "./lib/audio";
+import { unlockAudio } from "./lib/audio";
+import { acquireWakeLock } from "./lib/wake-lock";
+import { restoreQueue } from "./lib/log-queue";
+import { installViewportVars } from "./lib/viewport";
 import { shouldRedirectTodayToStatus, usePath } from "./lib/routing";
 import type { LastLoggedEntry, Plan } from "./lib/types";
 import type {
@@ -38,23 +42,32 @@ interface StatusLoad {
   result: FetchStatusResult | null;
 }
 
+function Loading() {
+  return (
+    <div className="screen screen--center">
+      <div className="meta">Loading…</div>
+    </div>
+  );
+}
+
 export default function App() {
   const [route, navigate] = usePath();
   const [planLoad, setPlanLoad] = useState<PlanLoad>({ loading: true, result: null });
   const [statusLoad, setStatusLoad] = useState<StatusLoad>({ loading: true, result: null });
   const [flow, setFlow] = useState<WorkoutFlow>("setup");
   const [totalElapsedSec, setTotalElapsedSec] = useState(0);
-  const [interrupted, setInterrupted] = useState(
-    () =>
-      typeof localStorage !== "undefined" &&
-      localStorage.getItem(IN_PROGRESS_KEY) === "1"
-  );
+  const [interrupted, setInterrupted] = useState(() => {
+    try {
+      return localStorage.getItem(IN_PROGRESS_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
   const autoRedirectedRef = useRef(false);
 
   // ── Shared per-set workout state — lifted from WorkoutScreen so it
-  //    survives the workout → done transition. DoneScreen uses the same
-  //    sessionSets to compute the unlogged-set catch-all with the same
-  //    prefill chain (prior set this session → last session → target).
+  //    survives the workout → done transition (DoneScreen's unlogged-set
+  //    catch-all uses the same prefill chain).
   const [sessionSets, setSessionSets] = useState<SessionSets>({});
   const [serverLoggedCount, setServerLoggedCount] = useState<ServerLoggedCount>({});
   const [lastLogged, setLastLogged] = useState<Record<string, LastLoggedEntry>>({});
@@ -85,6 +98,13 @@ export default function App() {
     void refreshStatus();
   }, [refreshPlan, refreshStatus]);
 
+  // Keyboard-safe layout vars (--vvh / --kb-inset) + any unsynced logs a
+  // previous load of this tab left behind.
+  useEffect(() => {
+    restoreQueue();
+    return installViewportVars();
+  }, []);
+
   // Auto-redirect /today → /status when today is rest / missing / already logged.
   // Fires once after status loads. Skipped if user is mid-workout flow.
   useEffect(() => {
@@ -95,8 +115,7 @@ export default function App() {
     if (statusLoad.result?.status !== "ok") return;
     const t = statusLoad.result.data.today_summary;
     if (!t) return;
-    // Use blocks.type from the plan payload when available — session_type
-    // alone can't distinguish a mobility/walk variant on a shared label.
+    // blocks.type from the plan payload is the authoritative classifier.
     const blocks_type =
       planLoad.result?.status === "ok"
         ? planLoad.result.plan.blocks?.type ?? null
@@ -122,9 +141,8 @@ export default function App() {
     [plan]
   );
 
-  // Hydrate the shared workout state when a workout starts. Pulls
-  // /today/logged for set counts (mid-workout reload safety) and
-  // /last_logged for prefill from prior sessions.
+  // Hydrate the shared workout state when a workout starts: /today/logged for
+  // set counts (mid-workout reload safety) and /last_logged for prefill.
   const hydrateWorkoutState = useCallback(async (currentPlan: Plan) => {
     const names: string[] = [];
     const b = currentPlan.blocks;
@@ -152,7 +170,10 @@ export default function App() {
 
   const onStart = useCallback(() => {
     if (!plan) return;
-    initAudio();
+    // Inside the Start tap: iOS only unlocks audio (and grants the wake lock
+    // most reliably) from a user gesture.
+    void unlockAudio();
+    void acquireWakeLock();
     try { localStorage.setItem(IN_PROGRESS_KEY, "1"); } catch { /* ignore */ }
     setInterrupted(false);
     setSessionSets({});         // fresh session — discard any stale entries
@@ -179,18 +200,24 @@ export default function App() {
 
   // Render --------------------------------------------------------------
 
-  // The workout screen is full-immersive — never show nav over it.
-  const showNav = route === "status" || flow !== "workout";
+  // The workout screen is full-immersive — it carries its own header.
+  const immersive = route === "today" && flow === "workout";
+  const chrome = immersive ? null : (
+    <>
+      <Nav route={route} onNavigate={navigate} />
+      <div className="floating-badges">
+        <SyncBadge />
+      </div>
+    </>
+  );
 
   // ---- /status route ----
   if (route === "status") {
     if (statusLoad.loading) {
       return (
         <>
-          {showNav && <Nav route={route} onNavigate={navigate} />}
-          <div className="tv" style={{ justifyContent: "center", alignItems: "center" }}>
-            <div className="tv-h2 tv-meta">Loading…</div>
-          </div>
+          {chrome}
+          <Loading />
         </>
       );
     }
@@ -198,7 +225,7 @@ export default function App() {
     if (!sr || sr.status === "error") {
       return (
         <>
-          {showNav && <Nav route={route} onNavigate={navigate} />}
+          {chrome}
           <ErrorScreen
             title="Status unavailable"
             message={sr?.status === "error" ? sr.message : "Failed to load status."}
@@ -209,7 +236,7 @@ export default function App() {
     }
     return (
       <>
-        {showNav && <Nav route={route} onNavigate={navigate} />}
+        {chrome}
         <StatusScreen data={sr.data} />
       </>
     );
@@ -219,10 +246,8 @@ export default function App() {
   if (planLoad.loading) {
     return (
       <>
-        {showNav && <Nav route={route} onNavigate={navigate} />}
-        <div className="tv" style={{ justifyContent: "center", alignItems: "center" }}>
-          <div className="tv-h2 tv-meta">Loading…</div>
-        </div>
+        {chrome}
+        <Loading />
       </>
     );
   }
@@ -233,7 +258,7 @@ export default function App() {
   if (result.status === "no_plan") {
     return (
       <>
-        {showNav && <Nav route={route} onNavigate={navigate} />}
+        {chrome}
         <ErrorScreen
           title="No workout today"
           message={`${result.message} Open Status to see this week.`}
@@ -245,21 +270,14 @@ export default function App() {
   if (result.status === "error") {
     return (
       <>
-        {showNav && <Nav route={route} onNavigate={navigate} />}
-        <ErrorScreen
-          title="No plan available"
-          message={result.message}
-          onRetry={refreshPlan}
-        />
+        {chrome}
+        <ErrorScreen title="No plan available" message={result.message} onRetry={refreshPlan} />
       </>
     );
   }
 
-  const offline = result.from_cache;
-
-  // Rest-day classification: session_type alone is unreliable (Sat/Sun may
-  // both be cardio_z2 but different workouts). Authoritative signals:
-  // is_skipped, session_type='rest_mobility', or blocks.type='mobility'.
+  // Rest-day classification: is_skipped, session_type='rest_mobility', or
+  // blocks.type='mobility' (session_type alone is ambiguous).
   const blocksType = result.plan.blocks?.type;
   const isRestDay =
     result.plan.is_skipped ||
@@ -269,8 +287,7 @@ export default function App() {
   if (isRestDay) {
     return (
       <>
-        {showNav && <Nav route={route} onNavigate={navigate} />}
-        {offline && <div className="offline-badge">Offline</div>}
+        {chrome}
         <RestDayScreen plan={result.plan} />
       </>
     );
@@ -279,7 +296,7 @@ export default function App() {
   if (stepCount === 0) {
     return (
       <>
-        {showNav && <Nav route={route} onNavigate={navigate} />}
+        {chrome}
         <ErrorScreen
           title="Plan has no steps"
           message="Plan loaded but produced no steps. Check the plan in Artemis."
@@ -291,14 +308,9 @@ export default function App() {
 
   return (
     <>
-      {showNav && <Nav route={route} onNavigate={navigate} />}
-      {offline && <div className="offline-badge">Offline</div>}
+      {chrome}
       {flow === "setup" && (
-        <SetupScreen
-          plan={result.plan}
-          interrupted={interrupted}
-          onStart={onStart}
-        />
+        <SetupScreen plan={result.plan} interrupted={interrupted} onStart={onStart} />
       )}
       {flow === "workout" && (
         <WorkoutScreen

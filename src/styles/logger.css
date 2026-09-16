@@ -1,0 +1,389 @@
+/* Per-set logger, steppers, chips, keypad sheet, log panel, done screen. */
+
+/* --- Cards -------------------------------------------------------------- */
+
+.log-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.38);
+  border: 1px solid rgba(245, 245, 245, 0.14);
+  border-radius: 16px;
+}
+
+.log-card--done {
+  border-color: rgba(109, 213, 140, 0.5);
+  background: rgba(26, 95, 58, 0.22);
+}
+
+.log-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.log-card-name { font-size: 22px; font-weight: 800; }
+.log-card-target { font-size: 15px; color: var(--fg-dim); }
+.log-check { color: var(--ok); font-weight: 900; }
+
+.log-steppers {
+  display: grid;
+  /* Weight, reps and seat/setting side by side in the landscape pane. */
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px 16px;
+}
+
+/* --- Stepper: big −/+ at the edges, value opens the keypad ------------- */
+
+.stepper {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.stepper-label,
+.chip-label {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+
+.stepper-unit { color: var(--fg-faint); font-weight: 600; }
+
+.stepper-row {
+  display: grid;
+  /* 64 + ≥68 + 64 at the 220px column minimum — every target stays ≥56px. */
+  grid-template-columns: 64px minmax(56px, 1fr) 64px;
+  gap: var(--gap);
+}
+
+.stepper-btn {
+  min-height: var(--tap-primary);
+  font-size: 38px;
+  font-weight: 900;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 2px solid rgba(245, 245, 245, 0.28);
+  touch-action: none; /* hold-to-repeat must not scroll or zoom */
+}
+
+.stepper-btn:active:not(:disabled) {
+  transform: scale(0.94);
+  background: rgba(255, 209, 102, 0.25);
+  border-color: var(--accent);
+}
+
+.stepper-btn:disabled { opacity: 0.3; }
+
+.stepper-value,
+.setting-value {
+  min-height: var(--tap-primary);
+  width: 100%;
+  font-size: 40px;
+  font-weight: 800;
+  background: rgba(0, 0, 0, 0.6);
+  border: 2px solid rgba(245, 245, 245, 0.22);
+  border-radius: 14px;
+}
+
+.stepper-value:active:not(:disabled),
+.setting-value:active:not(:disabled) { border-color: var(--accent); }
+
+.stepper--disabled .stepper-value,
+.setting-value:disabled { opacity: 0.5; }
+
+.stepper-sub {
+  font-size: 15px;
+  color: var(--fg-dim);
+  text-align: center;
+}
+
+.stepper-hint {
+  align-self: center;
+  min-height: var(--tap);
+  padding: 0 16px;
+  font-size: 16px;
+  color: var(--accent);
+  text-decoration: underline dotted;
+}
+
+.setting-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* --- Chips (RPE, flags) ------------------------------------------------- */
+
+.rpe, .flags {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.chip-row {
+  display: grid;
+  gap: var(--gap);
+}
+
+.chip-row--rpe  { grid-template-columns: repeat(6, minmax(56px, 1fr)); }
+.chip-row--half { grid-template-columns: repeat(5, minmax(56px, 1fr)); padding-inline: 8%; }
+.chip-row--flags { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+
+.chip {
+  min-height: var(--tap);
+  padding: 0 10px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 2px solid rgba(245, 245, 245, 0.25);
+  font-size: 22px;
+  font-weight: 800;
+  transition: transform 60ms ease;
+}
+
+.chip:active:not(:disabled) { transform: scale(0.95); }
+.chip:disabled { opacity: 0.35; }
+
+.chip--on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+}
+
+.rpe-chip--half { font-size: 17px; font-weight: 700; }
+.flag-chip { font-size: 16px; font-weight: 700; }
+
+.flag-hint { font-size: 14px; color: var(--fg-faint); }
+
+/* --- Primary log action + errors + notes ------------------------------- */
+
+.log-save {
+  min-height: var(--tap-primary);
+  width: 100%;
+  padding: 0 16px;
+  font-size: 22px;
+  font-weight: 800;
+  background: var(--fg);
+  color: var(--bg);
+  border: 2px solid var(--fg);
+  border-radius: 14px;
+}
+
+.log-save:active:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+  transform: scale(0.98);
+}
+
+.log-save:disabled {
+  background: rgba(245, 245, 245, 0.25);
+  border-color: transparent;
+  color: var(--bg);
+}
+
+.log-finish { background: var(--ok); border-color: var(--ok); }
+
+.log-error {
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #6b1a1a;
+  color: #ffd1d1;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.log-summary {
+  border-color: rgba(255, 209, 102, 0.4);
+  background: rgba(255, 209, 102, 0.08);
+}
+
+.notes-field { display: flex; flex-direction: column; gap: 6px; }
+
+.log-notes {
+  font: inherit;
+  font-size: 17px; /* ≥16px: no iOS focus zoom */
+  width: 100%;
+  min-height: 96px;
+  padding: 12px 14px;
+  resize: none;
+  color: var(--fg);
+  background: rgba(0, 0, 0, 0.45);
+  border: 2px solid rgba(245, 245, 245, 0.2);
+  border-radius: 12px;
+  scroll-margin-bottom: calc(var(--kb-inset) + 24px);
+}
+
+.log-notes:focus { outline: none; border-color: var(--accent); }
+
+/* --- Keypad sheet ------------------------------------------------------- */
+
+.keypad-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--gap);
+  margin-bottom: 8px;
+}
+
+.keypad-title {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.keypad-unit { color: var(--fg-faint); }
+
+.keypad-display {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px;
+  gap: var(--gap);
+  margin-bottom: var(--gap);
+}
+
+.keypad-value {
+  min-height: var(--tap-primary);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 18px;
+  font-size: 44px;
+  font-weight: 800;
+  background: rgba(0, 0, 0, 0.5);
+  border: 2px solid var(--accent);
+  border-radius: 14px;
+}
+
+.keypad-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--gap);
+}
+
+.keypad-key {
+  min-height: var(--tap-primary);
+  font-size: 30px;
+  font-weight: 800;
+  border-radius: 14px;
+  background: rgba(245, 245, 245, 0.08);
+  border: 1px solid var(--line);
+}
+
+.keypad-key:active:not(:disabled) {
+  background: rgba(255, 209, 102, 0.3);
+  transform: scale(0.96);
+}
+
+.keypad-key:disabled { opacity: 0.3; }
+
+.keypad-done { margin-top: var(--gap); }
+
+/* --- Log panel overlay -------------------------------------------------- */
+
+.log-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  padding:
+    calc(var(--safe-top) + 10px)
+    calc(var(--safe-right) + 16px)
+    0
+    calc(var(--safe-left) + 16px);
+  background: var(--bg);
+}
+
+.log-top {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.log-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.log-meta {
+  font-size: 13px;
+  color: var(--fg-faint);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.log-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: calc(var(--kb-inset) + var(--safe-bottom) + 24px);
+}
+
+.log-section { display: flex; flex-direction: column; gap: var(--gap); }
+
+.log-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.log-stack { display: flex; flex-direction: column; gap: 6px; }
+
+.log-progress {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+/* --- Done screen -------------------------------------------------------- */
+
+.done-screen {
+  padding-top: calc(var(--safe-top) + 84px);
+  padding-bottom: calc(var(--kb-inset) + var(--safe-bottom) + 24px);
+  gap: 24px;
+}
+
+.done-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: center;
+}
+
+.done-elapsed { font-size: 40px; font-weight: 800; }
+.done-meta { font-size: 17px; color: var(--fg-dim); }
+
+.done-section { display: flex; flex-direction: column; gap: var(--gap); }
+
+.done-unlogged-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr));
+  gap: 16px;
+}
+
+.done-unlogged-cell { display: flex; flex-direction: column; gap: 8px; }
+
+.done-footer { padding-bottom: 12px; }

@@ -1,0 +1,242 @@
+/* /status — information-dense, touch-sized. */
+
+.status {
+  height: var(--vvh, 100dvh);
+  width: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding:
+    calc(var(--safe-top) + 84px)
+    calc(var(--safe-right) + var(--gutter))
+    calc(var(--safe-bottom) + 24px)
+    calc(var(--safe-left) + var(--gutter));
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 16px;
+}
+
+.banner-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--gap);
+  padding: 12px 16px;
+  background: rgba(245, 245, 245, 0.05);
+  border: 1px solid rgba(245, 245, 245, 0.15);
+  border-radius: 12px;
+}
+
+.banner-phase { font-size: 22px; font-weight: 800; letter-spacing: 0.02em; }
+
+.banner-week {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+
+.status-panel {
+  background: rgba(245, 245, 245, 0.03);
+  border: 1px solid rgba(245, 245, 245, 0.15);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.status-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 12px 16px;
+  background: rgba(245, 245, 245, 0.05);
+  border-bottom: 1px solid rgba(245, 245, 245, 0.1);
+}
+
+.status-panel-title { font-size: 18px; font-weight: 800; }
+
+.status-panel-subtitle {
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+
+.status-panel-body { padding: 12px 16px 16px; }
+
+.status-empty {
+  padding: 18px 8px;
+  text-align: center;
+  font-size: 16px;
+  font-style: italic;
+  color: var(--fg-faint);
+}
+
+.status-error {
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(255, 80, 80, 0.15);
+  border: 1px solid rgba(255, 80, 80, 0.4);
+  color: #ffd1d1;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 14px;
+}
+
+/* --- Today read-back --------------------------------------------------- */
+
+.today-grid { display: flex; flex-direction: column; gap: 16px; }
+
+.today-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(245, 245, 245, 0.1);
+}
+
+.today-meta-label {
+  margin-bottom: 4px;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.today-meta-value { font-size: 19px; font-weight: 800; }
+
+.today-meta-target {
+  margin-left: 0.5em;
+  font-weight: 700;
+  color: var(--fg-faint);
+}
+
+.today-exercises { display: flex; flex-direction: column; gap: 14px; }
+
+.today-exercise {
+  padding-left: 12px;
+  border-left: 3px solid rgba(245, 245, 245, 0.2);
+}
+
+.today-exercise-name { margin-bottom: 4px; font-size: 18px; font-weight: 800; }
+
+.today-set-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.set-readback { font-size: 16px; font-variant-numeric: tabular-nums; }
+.set-num { margin-right: 0.4em; color: var(--fg-faint); }
+
+.set-readback--skipped,
+.set-skipped { font-style: italic; color: rgba(245, 245, 245, 0.45); }
+
+.zone-note { font-size: 0.88em; color: var(--fg-faint); }
+
+/* --- 7-day strip ------------------------------------------------------- */
+
+.seven-day-strip { display: flex; flex-direction: column; gap: 6px; }
+
+.seven-day-row {
+  display: grid;
+  grid-template-columns: 3.5em minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 0.7fr) minmax(0, 0.5fr) minmax(0, 1.4fr);
+  align-items: baseline;
+  gap: 10px;
+  min-height: var(--tap);
+  padding: 10px 12px;
+  background: rgba(245, 245, 245, 0.03);
+  border: 1px solid rgba(245, 245, 245, 0.08);
+  border-radius: 10px;
+  font-size: 15px;
+}
+
+.seven-day-row--today {
+  border-color: var(--accent);
+  background: rgba(255, 209, 102, 0.08);
+}
+
+.seven-day-row--skipped { opacity: 0.55; }
+.seven-day-row--incomplete { border-color: rgba(255, 80, 80, 0.4); }
+
+.seven-day-date { color: var(--fg-faint); }
+.seven-day-label { display: flex; flex-direction: column; min-width: 0; }
+.seven-day-name { font-weight: 700; overflow-wrap: anywhere; }
+.seven-day-sub { font-size: 0.85em; color: rgba(245, 245, 245, 0.4); }
+.seven-day-rpe { font-weight: 700; }
+
+.seven-day-target,
+.seven-day-hr-target { font-weight: 600; color: var(--fg-faint); }
+
+/* --- Outliers ---------------------------------------------------------- */
+
+.outlier-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+
+.outlier-row {
+  display: grid;
+  grid-template-columns: 3.5em 8em minmax(0, 1fr);
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 12px;
+  background: rgba(245, 245, 245, 0.03);
+  border-radius: 8px;
+  font-size: 15px;
+}
+
+.outlier-date { color: var(--fg-faint); }
+
+.outlier-kind {
+  font-size: 0.85em;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.outlier-kind--RPE9 { color: var(--danger); }
+.outlier-kind--Incomplete { color: var(--accent); }
+.outlier-kind--Painnote { color: var(--danger); }
+
+/* --- Chart ------------------------------------------------------------- */
+
+.chart-wrap { display: flex; flex-direction: column; gap: 8px; }
+.chart { width: 100%; height: 160px; }
+.chart-axis { stroke: rgba(245, 245, 245, 0.25); stroke-width: 1; }
+
+.chart-path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart-dot { fill: var(--accent); stroke: var(--bg); stroke-width: 1; }
+
+.chart-label {
+  fill: var(--fg-faint);
+  font-size: 11px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+.chart-foot {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 14px;
+  color: var(--fg-dim);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+@media (max-width: 700px) {
+  .seven-day-row {
+    grid-template-columns: 3.5em minmax(0, 1fr) auto;
+    row-gap: 4px;
+  }
+  .seven-day-work, .seven-day-hr { grid-column: 2 / -1; }
+  .outlier-row { grid-template-columns: 3.5em minmax(0, 1fr); }
+  .outlier-detail { grid-column: 1 / -1; }
+}

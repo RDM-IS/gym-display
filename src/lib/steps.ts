@@ -36,6 +36,10 @@ export interface Step {
   circuitId?: string;
   /** Distinguishes the inter-round rest from regular inter-exercise rests. */
   isRoundBreak?: boolean;
+  /** When the timer runs out, hold here until the user advances. Set on
+   * strength (reps) sets and the logging rest that follows one; timed work
+   * (intervals, holds, steady cardio, warmup/cooldown) auto-advances. */
+  holdAtEnd?: boolean;
 }
 
 export type SectionKind =
@@ -146,6 +150,7 @@ function buildCircuit(b: Builder, blocks: CircuitBlocks): void {
         exerciseRef: ex,
         totalRounds: rounds,
         circuitId: "main",
+        holdAtEnd: ex.format === "reps",
       });
       if (!isLastEx) {
         b.steps.push({
@@ -155,6 +160,7 @@ function buildCircuit(b: Builder, blocks: CircuitBlocks): void {
           precedingExerciseRef: ex,
           totalRounds: rounds,
           circuitId: "main",
+          holdAtEnd: ex.format === "reps",
         });
       } else if (rounds > 1) {
         // Round-break rest. Lives at the END of the circuit body. On the
@@ -166,6 +172,7 @@ function buildCircuit(b: Builder, blocks: CircuitBlocks): void {
           precedingExerciseRef: ex,
           totalRounds: rounds,
           circuitId: "main",
+          holdAtEnd: ex.format === "reps",
           isRoundBreak: true,
         });
       }
@@ -330,6 +337,7 @@ function appendFinisher(b: Builder, f: Finisher | null | undefined): void {
       exerciseRef: ex,
       totalRounds: rounds > 1 ? rounds : undefined,
       circuitId: "finisher",
+      holdAtEnd: ex.format === "reps",
     });
     if (!isLastEx) {
       b.steps.push({
@@ -339,6 +347,7 @@ function appendFinisher(b: Builder, f: Finisher | null | undefined): void {
         precedingExerciseRef: ex,
         totalRounds: rounds > 1 ? rounds : undefined,
         circuitId: "finisher",
+        holdAtEnd: ex.format === "reps",
       });
     } else if (rounds > 1) {
       b.steps.push({
@@ -348,6 +357,7 @@ function appendFinisher(b: Builder, f: Finisher | null | undefined): void {
         precedingExerciseRef: ex,
         totalRounds: rounds,
         circuitId: "finisher",
+        holdAtEnd: ex.format === "reps",
         isRoundBreak: true,
       });
     }

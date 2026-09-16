@@ -9,32 +9,67 @@ interface Props {
   cursor: Cursor;
   /** Per-exercise completion derived in WorkoutScreen via buildCompletionMap.
    * Full ✓ renders only when logged >= total; partial logged shows a
-   * subtle "(n/m ✓)" badge so the user sees progress, not a misleading
-   * ✓ after just set 1. */
+   * subtle "n/m ✓" badge. */
   completion?: Map<string, ExerciseCompletion>;
+  /** Portrait: render as a one-line strip until expanded. */
+  collapsed?: boolean;
+  /** When set, the map shows a collapse / expand toggle. */
+  onToggleCollapsed?: () => void;
 }
 
-/** Vertical journey map. Always-visible right panel listing every step
- * of the session once. Steps inside a circuit show (currentRound/total).
- * Current step gets ›; past dims; upcoming normal. Auto-scrolls the
- * current step into view. */
-export default function JourneyMap({ steps, sections, cursor, completion }: Props) {
+/** Journey map listing every step of the session once. Steps inside a
+ * circuit show (currentRound/total). Current step gets ›; past dims.
+ * Keeps the current step in view. */
+export default function JourneyMap({
+  steps,
+  sections,
+  cursor,
+  completion,
+  collapsed,
+  onToggleCollapsed,
+}: Props) {
   const currentRef = useRef<HTMLLIElement | null>(null);
 
   useEffect(() => {
     const el = currentRef.current;
     if (el && typeof el.scrollIntoView === "function") {
-      el.scrollIntoView({ block: "center", behavior: "smooth" });
+      el.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }
-  }, [cursor.stepIndex]);
+  }, [cursor.stepIndex, collapsed]);
+
+  const currentStep = steps[cursor.stepIndex] ?? null;
+
+  if (collapsed) {
+    return (
+      <aside className="jmap jmap--collapsed" aria-label="Session journey">
+        <button
+          type="button"
+          className="jmap-toggle"
+          onClick={onToggleCollapsed}
+          aria-expanded={false}
+        >
+          <span className="jmap-toggle-label">
+            › {currentStep?.label ?? "—"}
+          </span>
+          <span className="jmap-toggle-meta mono">
+            {cursor.stepIndex + 1}/{steps.length} ▾
+          </span>
+        </button>
+      </aside>
+    );
+  }
 
   const sectionByStart = new Map<number, Section>();
   for (const s of sections) sectionByStart.set(s.startIndex, s);
 
-  const currentStep = steps[cursor.stepIndex] ?? null;
-
   return (
     <aside className="jmap" aria-label="Session journey">
+      {onToggleCollapsed && (
+        <button type="button" className="jmap-toggle jmap-toggle--open" onClick={onToggleCollapsed} aria-expanded>
+          <span className="jmap-toggle-label">Session</span>
+          <span className="jmap-toggle-meta">Hide ▴</span>
+        </button>
+      )}
       <ol className="jmap-list">
         {steps.map((step, i) => {
           const section = sectionByStart.get(i);
@@ -52,11 +87,7 @@ export default function JourneyMap({ steps, sections, cursor, completion }: Prop
                 : `–/${step.totalRounds}`
               : null;
 
-          const dim = isPast && !isCurrent;
-
-          // Per-set completion badge. The same exercise (Goblet squat)
-          // can appear in multiple steps (one row per circuit body
-          // exercise) but its completion is global — we look up by name.
+          // Completion is global per exercise name.
           const exName = step.exerciseRef?.name ?? null;
           const comp = exName ? completion?.get(exName) ?? null : null;
           const isFullyLogged = !!comp && comp.logged >= comp.total;
@@ -65,7 +96,7 @@ export default function JourneyMap({ steps, sections, cursor, completion }: Prop
           const className =
             `jmap-row jmap-row--${step.kind}` +
             (isCurrent ? " jmap-row--current" : "") +
-            (dim ? " jmap-row--past" : "") +
+            (isPast && !isCurrent ? " jmap-row--past" : "") +
             (step.isRoundBreak ? " jmap-row--round-break" : "");
 
           return (
@@ -79,15 +110,15 @@ export default function JourneyMap({ steps, sections, cursor, completion }: Prop
                 <span className="jmap-arrow" aria-hidden>
                   {isCurrent ? "›" : ""}
                 </span>
-                <span className="jmap-dur tv-mono">{formatMMSS(step.duration_sec)}</span>
+                <span className="jmap-dur mono">{formatMMSS(step.duration_sec)}</span>
                 <span className="jmap-label">{step.label}</span>
-                {roundLabel && <span className="jmap-round tv-mono">({roundLabel})</span>}
+                {roundLabel && <span className="jmap-round mono">({roundLabel})</span>}
                 {step.kind === "exercise" && isFullyLogged && (
                   <span className="jmap-check" aria-label="fully logged">✓</span>
                 )}
                 {step.kind === "exercise" && !isFullyLogged && isPartiallyLogged && comp && (
                   <span
-                    className="jmap-partial tv-mono"
+                    className="jmap-partial mono"
                     aria-label={`${comp.logged} of ${comp.total} sets logged`}
                   >
                     {comp.logged}/{comp.total} ✓

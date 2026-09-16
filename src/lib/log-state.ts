@@ -1,4 +1,5 @@
 import type { Plan } from "./types";
+import { parseSetting } from "./set-notes";
 
 // ---------------------------------------------------------------------------
 // Per-set logging model.
@@ -13,6 +14,8 @@ export interface SetEntry {
   weight_lbs: number | null;
   reps_done: number | null;
   rpe_actual: number | null;
+  /** Machine seat / pin setting recorded with this set, if any. */
+  setting?: number | null;
 }
 
 export type SessionSets = Record<string, SetEntry[]>;
@@ -96,6 +99,8 @@ export interface Prefill {
   weight: number | null;
   reps: number | null;
   rpe: number | null;
+  /** Machine setting: previous set this session > last session's notes. */
+  setting: number | null;
 }
 
 export function computePrefill(
@@ -105,7 +110,7 @@ export function computePrefill(
   target_reps: number | null | undefined,
   target_duration_sec: number | null | undefined,
   sessionSets: SessionSets,
-  lastSession: { weight_lbs: number | null; reps_done: number | null } | null,
+  lastSession: { weight_lbs: number | null; reps_done: number | null; notes?: string | null } | null,
 ): Prefill {
   const prev = previousSetFor(name, sessionSets);
   // Reps OR duration, depending on format.
@@ -115,6 +120,7 @@ export function computePrefill(
     weight: prev?.weight_lbs ?? lastSession?.weight_lbs ?? target_load_lbs ?? null,
     reps: repsFromPrev ?? lastSession?.reps_done ?? repsTarget,
     rpe: prev?.rpe_actual ?? null,
+    setting: prev?.setting ?? parseSetting(lastSession?.notes),
   };
 }
 

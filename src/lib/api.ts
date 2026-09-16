@@ -12,47 +12,12 @@ import type {
 const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_KEY ?? "";
 
-const CACHE_PREFIX = "gym_plan_";
-
-function todayKeyCT(): string {
-  const fmt = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Chicago",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  return fmt.format(new Date());
-}
-
-export function cacheKeyForToday(): string {
-  return `${CACHE_PREFIX}${todayKeyCT()}`;
-}
-
-export function readCachedPlan(): Plan | null {
-  try {
-    const raw = localStorage.getItem(cacheKeyForToday());
-    if (!raw) return null;
-    return JSON.parse(raw) as Plan;
-  } catch {
-    return null;
-  }
-}
-
-export function writeCachedPlan(plan: Plan): void {
-  try {
-    localStorage.setItem(cacheKeyForToday(), JSON.stringify(plan));
-  } catch {
-    // localStorage may be full or unavailable — non-fatal
-  }
-}
-
 export type FetchTodayResult =
-  | { status: "ok"; plan: Plan; from_cache: boolean }
+  | { status: "ok"; plan: Plan }
   | { status: "no_plan"; message: string }
   | { status: "error"; message: string };
 
 export async function fetchTodayPlan(): Promise<FetchTodayResult> {
-  const cached = readCachedPlan();
   try {
     const headers: Record<string, string> = { Accept: "application/json" };
     if (API_KEY) headers["X-API-Key"] = API_KEY;
@@ -66,12 +31,8 @@ export async function fetchTodayPlan(): Promise<FetchTodayResult> {
     }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const plan = (await res.json()) as Plan;
-    writeCachedPlan(plan);
-    return { status: "ok", plan, from_cache: false };
+    return { status: "ok", plan };
   } catch (err) {
-    if (cached) {
-      return { status: "ok", plan: cached, from_cache: true };
-    }
     return {
       status: "error",
       message: err instanceof Error ? err.message : "Failed to load plan.",
@@ -108,9 +69,16 @@ export async function fetchStatus(): Promise<FetchStatusResult> {
 
 export type PostLogResult =
   | { status: "ok"; data: LogResponse }
-  | { status: "error"; message: string };
+  /** retryable: network failure, 5xx, 408 or 429 — safe to queue and resend. */
+  | { status: "error"; message: string; retryable: boolean };
+
+function isRetryableStatus(status: number): boolean {
+  return status >= 500 || status === 408 || status === 429;
+}
 
 export async function postLog(body: LogExerciseIn): Promise<PostLogResult> {
+  // A fetch that throws (offline, DNS, CORS abort) is retryable by default.
+  let retryable = true;
   try {
     const headers: Record<string, string> = {
       Accept: "application/json",
@@ -123,6 +91,7 @@ export async function postLog(body: LogExerciseIn): Promise<PostLogResult> {
       body: JSON.stringify(body),
     });
     if (!res.ok) {
+      retryable = isRetryableStatus(res.status);
       let msg = `HTTP ${res.status}`;
       try {
         const j = await res.json();
@@ -143,6 +112,7 @@ export async function postLog(body: LogExerciseIn): Promise<PostLogResult> {
     return {
       status: "error",
       message: err instanceof Error ? err.message : "Failed to log.",
+      retryable,
     };
   }
 }

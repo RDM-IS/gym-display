@@ -1,5 +1,13 @@
 let ctx: AudioContext | null = null;
 let muted = false;
+const listeners = new Set<() => void>();
+
+/** "on" = unlocked and audible; "locked" = iOS still needs a user gesture. */
+export type AudioStatus = "on" | "muted" | "locked" | "unsupported";
+
+function notify(): void {
+  for (const l of listeners) l();
+}
 
 function ensureCtx(): AudioContext | null {
   if (typeof window === "undefined") return null;
@@ -7,22 +15,66 @@ function ensureCtx(): AudioContext | null {
   const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!Ctor) return null;
   ctx = new Ctor();
+  ctx.onstatechange = notify;
   return ctx;
 }
 
-export function initAudio(): void {
+/** Unlock audio. MUST be called synchronously inside a user tap (iOS only
+ * lets an AudioContext start from a gesture): resumes the context and plays a
+ * one-sample silent buffer. Resolves true when the context is running. */
+export async function unlockAudio(): Promise<boolean> {
   const c = ensureCtx();
-  if (c && c.state === "suspended") {
-    void c.resume();
+  if (!c) return false;
+  try {
+    const buf = c.createBuffer(1, 1, 22050);
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    src.connect(c.destination);
+    src.start(0);
+  } catch {
+    /* ignore */
   }
+  if (c.state !== "running") {
+    try {
+      await c.resume();
+    } catch {
+      return false;
+    }
+  }
+  notify();
+  return c.state === "running";
+}
+
+/** Back-compat alias used by the Start tap. */
+export function initAudio(): void {
+  void unlockAudio();
+}
+
+export function audioStatus(): AudioStatus {
+  if (typeof window === "undefined") return "unsupported";
+  const hasCtor =
+    !!window.AudioContext ||
+    !!(window as unknown as { webkitAudioContext?: unknown }).webkitAudioContext;
+  if (!hasCtor) return "unsupported";
+  if (!ctx || ctx.state !== "running") return "locked";
+  return muted ? "muted" : "on";
+}
+
+export function subscribeAudio(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 }
 
 export function setMuted(value: boolean): void {
   muted = value;
+  notify();
 }
 
 export function toggleMuted(): boolean {
   muted = !muted;
+  notify();
   return muted;
 }
 
@@ -41,7 +93,7 @@ interface ToneOpts {
 function playTone(opts: ToneOpts): void {
   if (muted) return;
   const c = ensureCtx();
-  if (!c) return;
+  if (!c || c.state !== "running") return;
   const start = c.currentTime + (opts.start_offset_ms ?? 0) / 1000;
   const end = start + opts.duration_ms / 1000;
 

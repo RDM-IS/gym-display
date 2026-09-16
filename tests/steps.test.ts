@@ -12,9 +12,11 @@ import {
   initTimer,
   selectCurrentStep,
   selectElapsedSec,
+  selectIsHolding,
   selectNextStep,
   selectRemainingSec,
   selectStepAfterNext,
+  selectStepElapsedSec,
   timerReducer,
 } from "../src/lib/timer";
 import type {
@@ -228,8 +230,8 @@ describe("timerReducer — walks 3 full rounds end-to-end", () => {
     return total;
   }
 
-  it("TICK eventually transitions status to 'done' after the full duration", () => {
-    const session = buildSession(circuit);
+  it("TICK runs a timed-only session (intervals) to 'done' after the full duration", () => {
+    const session = buildSession(cardio);
     const totalMs = totalDurationFor(session.steps) * 1000;
     let s = initTimer(session);
     s = timerReducer(s, { type: "START", now_ms: 0 });
@@ -237,16 +239,28 @@ describe("timerReducer — walks 3 full rounds end-to-end", () => {
     expect(s.status).toBe("done");
   });
 
-  it("round counter increments on round-break wrap", () => {
+  it("strength set + its logging rest HOLD at 0; timed plank and its round-break auto-advance and wrap", () => {
     const session = buildSession(circuit);
+    // [0]warmup [1]goblet(reps,hold) [2]rest(hold) [3]plank(duration) [4]round-break(no hold) [5]cooldown
+    expect(session.steps.map((st) => !!st.holdAtEnd)).toEqual([false, true, true, false, false, false]);
     let s = initTimer(session);
     s = timerReducer(s, { type: "START", now_ms: 0 });
-    expect(s.cursor.currentRound).toBe(1);
-    // Tick past warmup (300) + goblet (40) + rest (60) + plank (30) + round-break (120)
-    // = 550s; should be back at step 1 (goblet) round 2.
-    s = timerReducer(s, { type: "TICK", now_ms: 550_001 });
-    expect(s.cursor.currentRound).toBe(2);
+    // warmup 300s auto-advances; goblet (40s) holds well past its duration.
+    s = timerReducer(s, { type: "TICK", now_ms: 1_000_000 });
     expect(s.cursor.stepIndex).toBe(1);
+    expect(s.status).toBe("running");
+    expect(selectRemainingSec(s, 1_000_000)).toBe(0);
+    expect(selectIsHolding(s, 1_000_000)).toBe(true);
+    // "Set done" → logging rest, which also holds.
+    s = timerReducer(s, { type: "NEXT_STEP", now_ms: 1_000_000 });
+    s = timerReducer(s, { type: "TICK", now_ms: 1_200_000 });
+    expect(s.cursor.stepIndex).toBe(2);
+    // Advance → plank (30s) → round-break (120s) → wraps to goblet round 2 on its own.
+    s = timerReducer(s, { type: "NEXT_STEP", now_ms: 1_200_000 });
+    s = timerReducer(s, { type: "TICK", now_ms: 1_200_000 + 150_001 });
+    expect(s.cursor.stepIndex).toBe(1);
+    expect(s.cursor.currentRound).toBe(2);
+    expect(selectStepElapsedSec(s, 1_200_000 + 150_001)).toBeCloseTo(0.001, 2);
   });
 
   it("PAUSE freezes remaining; RESUME offsets so paused time is excluded from elapsed", () => {
