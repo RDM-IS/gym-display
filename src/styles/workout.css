@@ -2,7 +2,7 @@
 
 /* --- Setup -------------------------------------------------------------- */
 
-.setup { padding-top: calc(var(--safe-top) + 84px); }
+.setup { padding-top: calc(var(--top-inset) + 84px); }
 
 .setup-head {
   display: flex;
@@ -29,7 +29,7 @@
   flex-direction: column;
   gap: var(--gap);
   padding:
-    calc(var(--safe-top) + 8px)
+    calc(var(--top-inset) + 8px)
     calc(var(--safe-right) + 16px)
     calc(var(--safe-bottom) + 12px)
     calc(var(--safe-left) + 16px);

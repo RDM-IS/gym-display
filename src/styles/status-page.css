@@ -9,7 +9,7 @@
   flex-direction: column;
   gap: 16px;
   padding:
-    calc(var(--safe-top) + 84px)
+    calc(var(--top-inset) + 84px)
     calc(var(--safe-right) + var(--gutter))
     calc(var(--safe-bottom) + 24px)
     calc(var(--safe-left) + var(--gutter));

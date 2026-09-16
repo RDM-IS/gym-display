@@ -10,6 +10,11 @@ import type {
   SessionsResponse,
   StatusResponse,
 } from "./types";
+import {
+  SessionExpiredError,
+  isSessionExpiredResponse,
+  markSessionExpired,
+} from "./session";
 
 // Production always calls the same-origin /api proxy, which sits behind
 // Cloudflare Access and attaches the key server-side. A direct upstream URL
@@ -21,6 +26,24 @@ const API_BASE = import.meta.env.DEV
   : "";
 const API_KEY = import.meta.env.DEV ? import.meta.env.VITE_API_KEY ?? "" : "";
 
+/**
+ * Every /api call goes through here. `redirect: "manual"` turns a Cloudflare
+ * Access login redirect into an opaque-redirect response we can recognise,
+ * instead of a cross-origin CORS failure that looks like being offline.
+ * A lapsed session flips the global banner and throws SessionExpiredError.
+ */
+async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  if (!headers.has("Accept")) headers.set("Accept", "application/json");
+  if (API_KEY) headers.set("X-API-Key", API_KEY);
+  const res = await fetch(`${API_BASE}${path}`, { ...init, headers, redirect: "manual" });
+  if (await isSessionExpiredResponse(res)) {
+    markSessionExpired();
+    throw new SessionExpiredError();
+  }
+  return res;
+}
+
 export type FetchTodayResult =
   | { status: "ok"; plan: Plan }
   | { status: "no_plan"; message: string }
@@ -28,9 +51,7 @@ export type FetchTodayResult =
 
 export async function fetchTodayPlan(): Promise<FetchTodayResult> {
   try {
-    const headers: Record<string, string> = { Accept: "application/json" };
-    if (API_KEY) headers["X-API-Key"] = API_KEY;
-    const res = await fetch(`${API_BASE}/api/health/today`, { headers });
+    const res = await apiFetch("/api/health/today");
     if (res.status === 404) {
       const body = (await res.json().catch(() => null)) as NoPlanResponse | null;
       return {
@@ -55,9 +76,7 @@ export type FetchStatusResult =
 
 export async function fetchStatus(): Promise<FetchStatusResult> {
   try {
-    const headers: Record<string, string> = { Accept: "application/json" };
-    if (API_KEY) headers["X-API-Key"] = API_KEY;
-    const res = await fetch(`${API_BASE}/api/health/status`, { headers });
+    const res = await apiFetch("/api/health/status");
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = (await res.json()) as StatusResponse;
     return { status: "ok", data };
@@ -78,11 +97,15 @@ export async function fetchStatus(): Promise<FetchStatusResult> {
 
 export type PostLogResult =
   | { status: "ok"; data: LogResponse }
-  /** retryable: network failure, 5xx, 408 or 429 — safe to queue and resend. */
-  | { status: "error"; message: string; retryable: boolean };
+  /** retryable: keep the body queued and resend later (network failure, 5xx,
+   * 408/429, or an auth problem that a sign-in or key fix will clear).
+   * sessionExpired: the Access session lapsed — hold until reload. */
+  | { status: "error"; message: string; retryable: boolean; sessionExpired?: boolean };
 
 function isRetryableStatus(status: number): boolean {
-  return status >= 500 || status === 408 || status === 429;
+  // 401/403 are held, not dropped: a lapsed session or a key mid-rotation is
+  // fixed out-of-band, and the set must still land once it is.
+  return status >= 500 || status === 408 || status === 429 || status === 401 || status === 403;
 }
 
 export async function postLog(
@@ -92,14 +115,9 @@ export async function postLog(
   // A fetch that throws (offline, DNS, CORS abort) is retryable by default.
   let retryable = true;
   try {
-    const headers: Record<string, string> = {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    };
-    if (API_KEY) headers["X-API-Key"] = API_KEY;
-    const res = await fetch(`${API_BASE}/api/health/log`, {
+    const res = await apiFetch("/api/health/log", {
       method: "POST",
-      headers,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
       // keepalive lets a log sent while the page is hiding/closing finish.
       ...(opts.keepalive ? { keepalive: true } : {}),
@@ -123,6 +141,9 @@ export async function postLog(
     const data = (await res.json()) as LogResponse;
     return { status: "ok", data };
   } catch (err) {
+    if (err instanceof SessionExpiredError) {
+      return { status: "error", message: err.message, retryable: true, sessionExpired: true };
+    }
     return {
       status: "error",
       message: err instanceof Error ? err.message : "Failed to log.",
@@ -137,9 +158,7 @@ export type FetchLoggedResult =
 
 export async function fetchLoggedToday(): Promise<FetchLoggedResult> {
   try {
-    const headers: Record<string, string> = { Accept: "application/json" };
-    if (API_KEY) headers["X-API-Key"] = API_KEY;
-    const res = await fetch(`${API_BASE}/api/health/today/logged`, { headers });
+    const res = await apiFetch("/api/health/today/logged");
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = (await res.json()) as LoggedTodayResponse;
     return { status: "ok", data };
@@ -166,9 +185,7 @@ export type FetchSessionsResult =
  * Default 7 days, server clamps to MAX 30. */
 export async function fetchSessions(days = 7): Promise<FetchSessionsResult> {
   try {
-    const headers: Record<string, string> = { Accept: "application/json" };
-    if (API_KEY) headers["X-API-Key"] = API_KEY;
-    const res = await fetch(`${API_BASE}/api/health/sessions?days=${days}`, { headers });
+    const res = await apiFetch(`/api/health/sessions?days=${days}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = (await res.json()) as SessionsResponse;
     return { status: "ok", data };
@@ -186,10 +203,8 @@ export async function fetchLastLogged(exerciseNames: string[]): Promise<FetchLas
     return { status: "ok", data: { by_exercise: {} } };
   }
   try {
-    const headers: Record<string, string> = { Accept: "application/json" };
-    if (API_KEY) headers["X-API-Key"] = API_KEY;
     const qs = encodeURIComponent(clean.join(","));
-    const res = await fetch(`${API_BASE}/api/health/last_logged?exercises=${qs}`, { headers });
+    const res = await apiFetch(`/api/health/last_logged?exercises=${qs}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = (await res.json()) as LastLoggedResponse;
     return { status: "ok", data };

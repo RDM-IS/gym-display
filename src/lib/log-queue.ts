@@ -1,14 +1,19 @@
 import { postLog } from "./api";
+import { isSessionExpired } from "./session";
 import type { LogExerciseIn, LogResponse } from "./types";
 
 // ---------------------------------------------------------------------------
 // Offline resilience for POST /api/health/log.
 //
-// A write that fails for a retryable reason (network, 5xx, 408/429) is queued
+// A write that fails for a retryable reason (network, 5xx, 408/429, 401/403) is queued
 // in memory and retried FIFO with exponential backoff, so set order is kept.
 // While anything is queued, new writes join the back of the queue. The queue is
 // mirrored to sessionStorage (guarded) so it survives a reload of this tab.
 // Plan data is never stored here — the API stays the source of truth.
+//
+// While the Access session is expired nothing is sent: writes are held (and
+// persisted) until the banner-triggered reload signs Ryan back in, after which
+// restoreQueue() replays them.
 // ---------------------------------------------------------------------------
 
 export type SubmitResult =
@@ -94,7 +99,7 @@ export function restoreQueue(): void {
 
 /** Send queued writes in order until one fails retryably (then back off). */
 export async function flushQueue(): Promise<void> {
-  if (flushing) return;
+  if (flushing || isSessionExpired()) return;
   flushing = true;
   try {
     while (queue.length > 0) {
@@ -102,6 +107,11 @@ export async function flushQueue(): Promise<void> {
       const r = await postLog(head.body);
       if (r.status === "ok") {
         queue.shift();
+      } else if (r.sessionExpired) {
+        // Hold everything; the reload after sign-in replays the queue.
+        persist();
+        notify();
+        return;
       } else if (!r.retryable) {
         queue.shift();
         failed += 1;
@@ -127,7 +137,7 @@ export async function submitLog(
   body: LogExerciseIn,
   opts: { keepalive?: boolean } = {},
 ): Promise<SubmitResult> {
-  if (queue.length > 0) {
+  if (queue.length > 0 || isSessionExpired()) {
     enqueue(body);
     void flushQueue();
     return { status: "queued" };
