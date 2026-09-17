@@ -170,8 +170,8 @@ describe("offline cache", () => {
 describe("Week view", () => {
   it("lists the program week, highlights today, and navigates", async () => {
     payload = weekPayload;
-    const onBack = vi.fn();
-    render(<PeekScreen mode="week" onBack={onBack} deviceToday="2026-09-21" />);
+    const onNavigate = vi.fn();
+    render(<PeekScreen mode="week" onNavigate={onNavigate} deviceToday="2026-09-21" />);
     await waitFor(() => expect(screen.getByTestId("week-title").textContent).toContain("Phase 1 · Week 1"));
     expect(calls[0]).toContain("/api/health/plan?from=2026-09-16&to=2026-09-22");
     const rows = within(screen.getByTestId("week-list")).getAllByRole("button");
@@ -184,8 +184,24 @@ describe("Week view", () => {
     expect(screen.getByTestId("plan-detail").textContent).toContain("Mon 9/21");
     expect(screen.queryByRole("button", { name: /start/i })).toBeNull();
 
-    fireEvent.click(rows[0]);
-    expect(screen.getByTestId("plan-detail").textContent).toContain("Wed 9/16");
+    // Bar: Today, Tomorrow — never Week on Week, never Start.
+    const bar = () => within(screen.getByTestId("bottom-bar")).getAllByRole("button").map((b) => b.textContent);
+    expect(bar()).toEqual(["Today", "Tomorrow"]);
+
+    // A day opens as its own view; Week returns to the same program week.
+    fireEvent.click(screen.getByRole("button", { name: "Next week" }));
+    await waitFor(() => expect(calls.at(-1)).toContain("from=2026-09-23&to=2026-09-29"));
+    await waitFor(() => expect(within(screen.getByTestId("week-list")).getAllByRole("button")[0].hasAttribute("disabled")).toBe(false));
+    fireEvent.click(within(screen.getByTestId("week-list")).getAllByRole("button")[1]);
+    expect(screen.getByTestId("peek-day")).toBeDefined();
+    expect(screen.getByTestId("plan-detail").textContent).toContain("Thu 9/24");
+    expect(bar()).toEqual(["Today", "Week"]);
+    fireEvent.click(within(screen.getByTestId("bottom-bar")).getByRole("button", { name: "Week" }));
+    expect(screen.getByTestId("peek-week")).toBeDefined();
+    expect(screen.getByTestId("week-title").textContent).toContain("Wed 9/23 – Tue 9/29");
+    expect(onNavigate).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Previous week" }));
+    await waitFor(() => expect(calls.at(-1)).toContain("from=2026-09-16&to=2026-09-22"));
 
     fireEvent.click(screen.getByRole("button", { name: "Next week" }));
     await waitFor(() => expect(calls.at(-1)).toContain("from=2026-09-23&to=2026-09-29"));
@@ -193,24 +209,27 @@ describe("Week view", () => {
     await waitFor(() => expect(screen.getByTestId("week-title").textContent).toContain("Week 7 · Deload"));
     expect(calls.at(-1)).toContain("from=2026-10-28&to=2026-11-03");
 
-    fireEvent.click(screen.getByRole("button", { name: "‹ Today" }));
-    expect(onBack).toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "‹ Today" })).toBeNull();
+    fireEvent.click(within(screen.getByTestId("bottom-bar")).getByRole("button", { name: "Today" }));
+    expect(onNavigate).toHaveBeenCalledWith("today");
+    fireEvent.click(within(screen.getByTestId("bottom-bar")).getByRole("button", { name: "Tomorrow" }));
+    expect(onNavigate).toHaveBeenLastCalledWith("tomorrow");
   });
 
   it("re-anchors on the API's today", async () => {
     payload = (url) => ({ ...weekPayload(url), today: "2026-09-23" });
-    render(<PeekScreen mode="week" onBack={() => {}} deviceToday="2026-09-22" />);
+    render(<PeekScreen mode="week" onNavigate={() => {}} deviceToday="2026-09-22" />);
     await waitFor(() => expect(calls.at(-1)).toContain("from=2026-09-23"));
     expect(calls).toHaveLength(2);
   });
 
   it("offline: last data with 'as of'", async () => {
     payload = weekPayload;
-    const first = render(<PeekScreen mode="week" onBack={() => {}} deviceToday="2026-09-21" />);
+    const first = render(<PeekScreen mode="week" onNavigate={() => {}} deviceToday="2026-09-21" />);
     await waitFor(() => screen.getByTestId("plan-detail"));
     first.unmount();
     online = false;
-    render(<PeekScreen mode="week" onBack={() => {}} deviceToday="2026-09-21" />);
+    render(<PeekScreen mode="week" onNavigate={() => {}} deviceToday="2026-09-21" />);
     await waitFor(() => expect(screen.getByTestId("peek-stale").textContent).toMatch(/^Offline — as of \d\d:\d\d$/));
     expect(within(screen.getByTestId("week-list")).getAllByRole("button")[0].textContent).toContain("✓");
   });
@@ -223,7 +242,7 @@ describe("Tomorrow view", () => {
       day("2026-09-21", { session_type: "strength_c", display_name: "Office Strength C" }),
       day("2026-09-22"),
     ]);
-    render(<PeekScreen mode="tomorrow" onBack={() => {}} deviceToday="2026-09-20" />);
+    render(<PeekScreen mode="tomorrow" onNavigate={() => {}} deviceToday="2026-09-20" />);
     await waitFor(() => screen.getByTestId("plan-detail"));
     expect(calls[0]).toContain("from=2026-09-19&to=2026-09-22");
     const d = screen.getByTestId("plan-detail");
@@ -232,11 +251,15 @@ describe("Tomorrow view", () => {
     expect(d.textContent).toContain("DB goblet squat — 2 × 8-12 · RPE ≤6");
     expect(d.textContent).toContain("Adjusts after your morning check-in.");
     expect(screen.queryByRole("button", { name: /start/i })).toBeNull();
+    // One separator on the date line.
+    expect(d.querySelector(".meta")!.textContent).toBe("Mon 9/21 · Upcoming");
+    expect(within(screen.getByTestId("bottom-bar")).getAllByRole("button").map((b) => b.textContent))
+      .toEqual(["Today", "Week"]);
   });
 
   it("says so when nothing is planned", async () => {
     payload = () => resp("2026-11-03", [day("2026-11-03")]);
-    render(<PeekScreen mode="tomorrow" onBack={() => {}} deviceToday="2026-11-03" />);
+    render(<PeekScreen mode="tomorrow" onNavigate={() => {}} deviceToday="2026-11-03" />);
     await waitFor(() => screen.getByTestId("peek-empty"));
   });
 });

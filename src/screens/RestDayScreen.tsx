@@ -2,15 +2,15 @@ import type { MobilityBlocks, Plan } from "../lib/types";
 import { displayTitle, formatPlanDate } from "../lib/format";
 import { adjustmentOf } from "../lib/adjustment";
 import AdjustmentBanner from "../components/AdjustmentBanner";
-import PeekButtons from "../components/PeekButtons";
-import type { PeekMode } from "./PeekScreen";
+import BottomBar from "../components/BottomBar";
+import type { BarTarget } from "../lib/bottom-bar";
 
 interface Props {
   plan: Plan;
-  onPeek?: (mode: PeekMode) => void;
+  onNavigate?: (target: BarTarget) => void;
 }
 
-export default function RestDayScreen({ plan, onPeek }: Props) {
+export default function RestDayScreen({ plan, onNavigate }: Props) {
   const blocks = plan.blocks;
   const isMobility = blocks?.type === "mobility";
   const title = isMobility ? displayTitle(plan) : "Rest day";
@@ -34,7 +34,7 @@ export default function RestDayScreen({ plan, onPeek }: Props) {
       </div>
       {mobNotes && !dayOff && <div className="desc">{mobNotes}</div>}
       <div className="desc">See you tomorrow.</div>
-      {onPeek && <div className="start-row start-row--peek"><PeekButtons onPeek={onPeek} /></div>}
+      {onNavigate && <BottomBar view="today" onNavigate={onNavigate} />}
     </div>
   );
 }

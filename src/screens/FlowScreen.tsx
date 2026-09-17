@@ -36,15 +36,15 @@ import { detectSwipe } from "../lib/use-swipe";
 import { acquireWakeLock, releaseWakeLock } from "../lib/wake-lock";
 import { formatPlanDate } from "../lib/format";
 import type { Plan, RecoveryFlowBlocks } from "../lib/types";
-import PeekButtons from "../components/PeekButtons";
-import type { PeekMode } from "./PeekScreen";
+import BottomBar from "../components/BottomBar";
+import type { BarTarget } from "../lib/bottom-bar";
 
 interface Props {
   plan: Plan;
   /** True while the flow runs full-screen (the app hides its nav). */
   onRunningChange?: (running: boolean) => void;
-  /** Tomorrow / Week — offered on the ready screen only. */
-  onPeek?: (mode: PeekMode) => void;
+  /** Bottom bar (Tomorrow / Week) — on the ready screen only. */
+  onNavigate?: (target: BarTarget) => void;
 }
 
 const TICK_MS = 250;
@@ -60,7 +60,7 @@ function now(): number {
  * auto-advances with a 5 s preview, a Switch sides screen between R and L,
  * voice cues, and automatic complete / partial logging. Tap to pause, swipe
  * to skip — both optional. */
-export default function FlowScreen({ plan, onRunningChange, onPeek }: Props) {
+export default function FlowScreen({ plan, onRunningChange, onNavigate }: Props) {
   const blocks = plan.blocks as RecoveryFlowBlocks;
   const items = useMemo(() => buildFlowTimeline(blocks), [blocks]);
   const errors = useMemo(() => validateFlow(blocks), [blocks]);
@@ -270,12 +270,7 @@ export default function FlowScreen({ plan, onRunningChange, onPeek }: Props) {
           <li className="dim">Round 2: same order, bridge → easy pose held 2×</li>
         </ol>
         <div className="desc">Hands-free after Start: it advances, switches sides and logs itself.</div>
-        <div className="start-row">
-          <button type="button" className="btn btn--primary flow-start" onClick={start}>
-            Start
-          </button>
-          {onPeek && <PeekButtons onPeek={onPeek} />}
-        </div>
+        <BottomBar view="today" start={{ label: "Start", onStart: start }} onNavigate={onNavigate ?? (() => {})} />
       </div>
     );
   }

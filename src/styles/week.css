@@ -1,19 +1,50 @@
 /* GD-WEEK — Tomorrow / Week (read-only). */
 
-.start-row {
-  display: flex;
-  gap: var(--gap);
-  align-items: stretch;
-  flex-shrink: 0;
+/* GD-NAV — one fixed bottom bar on every Setup-level view. */
+:root {
+  --bottom-bar-pad: 12px;
+  --bottom-bar-h: calc(var(--tap) + 2 * var(--bottom-bar-pad) + var(--safe-bottom));
 }
-.start-row > .setup-start,
-.start-row > .flow-start { flex: 1; }
-.peek-btn {
+.bottom-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+  padding:
+    var(--bottom-bar-pad)
+    calc(var(--safe-right) + var(--gutter))
+    calc(var(--safe-bottom) + var(--bottom-bar-pad))
+    calc(var(--safe-left) + var(--gutter));
+  background: rgba(10, 10, 10, 0.92);
+  border-top: 1px solid var(--line);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+.bottom-bar-left { flex: 1; display: flex; min-width: 0; }
+.bottom-bar-right { display: flex; gap: var(--gap); flex-shrink: 0; }
+.bottom-bar-start {
   min-height: var(--tap);
-  min-width: 132px;
+  width: 100%;
+  max-width: 520px;
+}
+.bottom-bar-btn {
+  min-height: var(--tap);
+  min-width: 140px;
   padding: 0 18px;
 }
-.start-row--peek { margin-top: var(--gap); justify-content: center; }
+/* Scroll areas reserve the bar's height so the last item clears it. */
+.setup-scroll,
+.peek-body,
+.week-list,
+.week-detail,
+.flow-ready { padding-bottom: calc(var(--bottom-bar-h) + var(--gap)); }
+.setup,
+.peek { padding-bottom: 0; }
 
 .peek {
   display: flex;
@@ -30,7 +61,7 @@
   padding-right: 280px; /* clear the floating nav */
   flex-shrink: 0;
 }
-.peek-back { min-height: var(--tap); min-width: 120px; }
+.peek-title { min-height: var(--tap); display: flex; align-items: center; }
 .peek-body {
   flex: 1;
   min-height: 0;
@@ -72,7 +103,7 @@
   display: grid;
   gap: var(--gutter);
   grid-template-columns: 1fr;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: 1fr;
 }
 .week-list { list-style: none; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
 .week-detail { min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
@@ -93,7 +124,6 @@
 }
 .week-row:disabled { opacity: 0.45; }
 .week-row--today { border-color: var(--accent); background: rgba(255, 209, 102, 0.1); }
-.week-row--selected { box-shadow: inset 0 0 0 2px var(--fg); }
 .week-day { font-weight: 700; }
 .week-session { font-weight: 600; }
 .week-mins { color: var(--fg-dim); text-align: right; }
@@ -105,6 +135,10 @@
 .ds--missed { color: var(--danger); }
 .ds--upcoming, .ds--today { color: var(--fg-dim); }
 
+/* Portrait: the list only (a tapped day opens as its own view).
+ * Landscape: list | today's detail. */
+.week-detail { display: none; }
 @media (orientation: landscape) {
   .week-grid { grid-template-columns: minmax(360px, 44%) 1fr; grid-template-rows: 1fr; }
+  .week-detail { display: block; }
 }

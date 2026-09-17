@@ -186,7 +186,7 @@ test("Tomorrow: read-only plan with sets × reps, RPE cap, check-in footer", asy
   await page.clock.runFor(10 * 60_000);
   expect(calls).toHaveLength(opened);
 
-  await page.getByRole("button", { name: "‹ Today" }).tap();
+  await page.getByTestId("bottom-bar").getByRole("button", { name: "Today", exact: true }).tap();
   await expect(page.getByRole("button", { name: "Start Workout" })).toBeVisible();
 });
 
@@ -211,37 +211,42 @@ test("Week: statuses, adjusted badge, today, past detail, navigation", async ({ 
   await expect(row("2026-09-22").locator(".week-status")).toHaveText("•");
   await expect(page.getByRole("button", { name: /start/i })).toHaveCount(0);
 
-  // Today's detail is shown by default.
-  await expect(page.getByTestId("plan-detail")).toContainText("Mon 9/21");
-  await expectDetailReadable(page);
   await expectTouchTargets(page);
   await expectNoKeyboardTriggers(page);
 
-  // Layout: landscape = list | detail; portrait = stacked.
+  // Layout: landscape = list | today's detail; portrait = the list only.
   const list = (await page.getByTestId("week-list").boundingBox())!;
-  const det = (await page.locator(".week-detail").boundingBox())!;
   if (test.info().project.name === "ipad-landscape") {
+    await expect(page.getByTestId("plan-detail")).toContainText("Mon 9/21");
+    await expectDetailReadable(page);
+    const det = (await page.locator(".week-detail").boundingBox())!;
     expect(det.x).toBeGreaterThanOrEqual(list.x + list.width - 1);
   } else {
-    expect(det.y).toBeGreaterThanOrEqual(list.y + list.height - 1);
+    await expect(page.locator(".week-detail")).toBeHidden();
   }
   await shot(page, "week-1-week");
 
-  // A past day shows what was logged.
+  const back = () => page.getByTestId("bottom-bar").getByRole("button", { name: "Week", exact: true }).tap();
+
+  // A past day opens as its own view and shows what was logged.
   await row("2026-09-16").tap();
+  await expect(page.getByTestId("peek-day")).toBeVisible();
   await expectDetailReadable(page);
   const logged = page.getByTestId("plan-detail-logged");
   await expect(logged).toContainText("Leg press — 2 sets · 12, 11 reps · top 180 lb");
   await expect(page.getByTestId("plan-detail")).not.toContainText("Adjusts after your morning check-in.");
   await shot(page, "week-2-past-day");
+  await back();
 
   // The adjusted day explains itself; the flow day lists its poses.
   await row("2026-09-18").tap();
   await expect(page.getByTestId("plan-detail-adjusted")).toContainText("Pain shoulder 2/5");
   await expect(page.getByTestId("plan-detail")).toContainText("Incline DB press — 2 × 8-12 · RPE ≤6 · 20 lb (last 25)");
+  await back();
   await row("2026-09-17").tap();
   await expect(page.getByTestId("plan-detail")).toContainText("37:30 total · 2 rounds");
   await expect(page.getByTestId("plan-detail")).toContainText("recovery_flow: complete 37 min");
+  await back();
 
   // Navigation → week 7 shows Deload.
   await page.getByRole("button", { name: "Next week" }).tap();
@@ -260,7 +265,7 @@ test("Week offline: last data, marked 'as of'", async ({ page }) => {
   await mockApi(page, { planFail: () => fail });
   await openFromSetup(page, "Week");
   await expect(page.getByTestId("week-row-2026-09-16")).toContainText("✓");
-  await page.getByRole("button", { name: "‹ Today" }).tap();
+  await page.getByTestId("bottom-bar").getByRole("button", { name: "Today", exact: true }).tap();
   fail = true;
   await page.getByRole("button", { name: "Week", exact: true }).tap();
   await expect(page.getByTestId("peek-stale")).toHaveText(/^Offline — as of \d\d:\d\d$/);

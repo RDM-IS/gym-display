@@ -12,17 +12,17 @@ import { assertNeverBlock } from "../lib/types";
 import { dedupe, displayTitle, formatPlanDate } from "../lib/format";
 import { adjustmentOf, exerciseSets, exerciseTags } from "../lib/adjustment";
 import AdjustmentBanner from "../components/AdjustmentBanner";
-import PeekButtons from "../components/PeekButtons";
-import type { PeekMode } from "./PeekScreen";
+import BottomBar from "../components/BottomBar";
+import type { BarTarget } from "../lib/bottom-bar";
 
 interface Props {
   plan: Plan;
   interrupted: boolean;
   onStart: () => void;
-  onPeek?: (mode: PeekMode) => void;
+  onNavigate?: (target: BarTarget) => void;
 }
 
-export default function SetupScreen({ plan, interrupted, onStart, onPeek }: Props) {
+export default function SetupScreen({ plan, interrupted, onStart, onNavigate }: Props) {
   const equipment = dedupe(plan.blocks?.equipment ?? undefined);
   const setupNotes = dedupe(plan.blocks?.setup_notes ?? undefined);
 
@@ -67,12 +67,11 @@ export default function SetupScreen({ plan, interrupted, onStart, onPeek }: Prop
         ) : null}
       </div>
 
-      <div className="start-row">
-        <button type="button" className="btn btn--primary setup-start" onClick={onStart}>
-          Start Workout
-        </button>
-        {onPeek && <PeekButtons onPeek={onPeek} />}
-      </div>
+      <BottomBar
+        view="today"
+        start={{ label: "Start Workout", onStart }}
+        onNavigate={onNavigate ?? (() => {})}
+      />
     </div>
   );
 }
