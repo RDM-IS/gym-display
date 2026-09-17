@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import overview from "../tests/fixtures/overview.json" with { type: "json" };
 
 // ---------------------------------------------------------------------------
 // GD-IPAD viewport checks (WebKit, iPad Pro 11" landscape + portrait).
@@ -146,6 +147,7 @@ async function mockApi(page: Page, { plan, status }: MockOpts): Promise<unknown[
       });
     }
     if (path.endsWith("/sessions")) return route.fulfill({ json: SESSIONS });
+    if (path.endsWith("/overview")) return route.fulfill({ json: overview });
     if (path.endsWith("/log")) {
       posted.push(route.request().postDataJSON());
       return route.fulfill({ json: { plan_id: plan?.plan_id ?? null, inserted: 1, rows: [] } });
@@ -299,7 +301,7 @@ test("rest_mobility: redirects to Status; Today shows the rest-day screen", asyn
   await mockApi(page, { plan: MOBILITY_PLAN, status: statusFor({ plan_id: 103, session_type: "rest_mobility", exists: true }) });
   await page.goto("/today");
   await expect(page).toHaveURL(/\/status$/);
-  await expect(page.getByText("Last 7 days", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "This week" })).toBeVisible();
   await expectSaneLayout(page);
   await expectTouchTargets(page);
   await shot(page, "5-rest-mobility-status");

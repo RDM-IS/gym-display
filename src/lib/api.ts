@@ -4,6 +4,7 @@ import type {
   LogResponse,
   LoggedTodayResponse,
   NoPlanResponse,
+  OverviewResponse,
   Plan,
   PlanRangeResponse,
   SessionsResponse,
@@ -244,5 +245,44 @@ export async function fetchPlanRange(from: string, to: string): Promise<FetchPla
       status: "error",
       message: err instanceof Error ? err.message : "Failed to load the plan.",
     };
+  }
+}
+
+// ── STATUS-1: the Status page in one read, cached for offline ────────────────
+
+export type FetchOverviewResult =
+  | { status: "ok"; data: OverviewResponse; asOf: Date; stale: boolean }
+  | { status: "error"; message: string };
+
+const OVERVIEW_CACHE_KEY = "gd_overview";
+
+export async function fetchOverview(): Promise<FetchOverviewResult> {
+  try {
+    const headers: Record<string, string> = { Accept: "application/json" };
+    if (API_KEY) headers["X-API-Key"] = API_KEY;
+    const res = await fetch(`${API_BASE}/api/health/overview`, { headers });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = (await res.json()) as OverviewResponse;
+    if (!data || typeof data.date !== "string" || !Array.isArray(data.week_days) || !data.today) {
+      throw new Error("unexpected response");
+    }
+    const asOf = new Date();
+    try {
+      localStorage.setItem(OVERVIEW_CACHE_KEY, JSON.stringify({ at: asOf.toISOString(), data }));
+    } catch {
+      /* storage blocked — still show live data */
+    }
+    return { status: "ok", data, asOf, stale: false };
+  } catch (err) {
+    try {
+      const raw = localStorage.getItem(OVERVIEW_CACHE_KEY);
+      if (raw) {
+        const cached = JSON.parse(raw) as { at: string; data: OverviewResponse };
+        return { status: "ok", data: cached.data, asOf: new Date(cached.at), stale: true };
+      }
+    } catch {
+      /* fall through */
+    }
+    return { status: "error", message: err instanceof Error ? err.message : "Failed to load status." };
   }
 }

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
+import overview from "./fixtures/overview.json";
 import App from "../src/App";
 import type { Plan, StatusResponse } from "../src/lib/types";
 
@@ -63,7 +64,15 @@ function mockFetch(statusOverrides: Partial<StatusResponse> = {}) {
         headers: { "Content-Type": "application/json" },
       });
     }
+    if (url.includes("/api/health/overview")) return overviewResponse();
     return Response.error();
+  });
+}
+
+function overviewResponse(): Response {
+  return new Response(JSON.stringify(overview), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
   });
 }
 
@@ -97,8 +106,7 @@ describe("App — /today route", () => {
       },
     }));
     render(<App />);
-    // StatusScreen shows a Last-11-days panel
-    expect(await screen.findByText(/last 7 days/i)).toBeDefined();
+    expect(await screen.findByRole("heading", { name: "This week" })).toBeDefined();
     expect(window.location.pathname).toBe("/status");
   });
 
@@ -113,7 +121,7 @@ describe("App — /today route", () => {
       },
     }));
     render(<App />);
-    expect(await screen.findByText(/last 7 days/i)).toBeDefined();
+    expect(await screen.findByRole("heading", { name: "This week" })).toBeDefined();
     expect(window.location.pathname).toBe("/status");
   });
 });
@@ -165,6 +173,7 @@ describe("App — cardio steady plan", () => {
             headers: { "Content-Type": "application/json" },
           });
         }
+        if (url.includes("/api/health/overview")) return overviewResponse();
         return Response.error();
       })
     );
@@ -222,6 +231,7 @@ describe("App — mobility plan is treated as rest day", () => {
             headers: { "Content-Type": "application/json" },
           });
         }
+        if (url.includes("/api/health/overview")) return overviewResponse();
         return Response.error();
       })
     );
@@ -234,7 +244,7 @@ describe("App — mobility plan is treated as rest day", () => {
 
   it("redirects mobility days to /status (auto-redirect rule)", async () => {
     render(<App />);
-    expect(await screen.findByText(/last 7 days/i)).toBeDefined();
+    expect(await screen.findByRole("heading", { name: "This week" })).toBeDefined();
     expect(window.location.pathname).toBe("/status");
   });
 });
@@ -251,10 +261,10 @@ describe("App — /status route", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders StatusScreen with phase banner", async () => {
+  it("renders the rebuilt Status page with the program header", async () => {
     render(<App />);
-    expect(await screen.findByText(/foundation/i)).toBeDefined();
-    expect(await screen.findByText(/week 1/i)).toBeDefined();
+    expect(await screen.findByRole("heading", { name: "Foundation · Phase 1 · Week 1 of 7" })).toBeDefined();
+    expect(screen.getByRole("heading", { name: "This week" })).toBeDefined();
   });
 
   it("shows persistent nav with active Status link", async () => {

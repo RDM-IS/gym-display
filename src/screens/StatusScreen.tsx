@@ -1,466 +1,528 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import BottomBar from "../components/BottomBar";
+import PlanDayDetail, { sessionName } from "../components/PlanDayDetail";
+import { fetchOverview, fetchPlanRange, type FetchOverviewResult, type FetchPlanRangeResult } from "../lib/api";
+import type { BarTarget } from "../lib/bottom-bar";
+import {
+  checkinParts,
+  chartGeometry,
+  deloadText,
+  fmtNum,
+  md,
+  programTitle,
+  progressText,
+  scoreList,
+  sorenessStrip,
+  topSetText,
+  TREND_ARROWS,
+  type ChartBox,
+} from "../lib/overview";
 import type {
-  Banner,
-  SessionDayRow,
-  SessionsResponse,
-  SessionSetRow,
-  StatusResponse,
+  CheckinInfo,
+  FlagInfo,
+  OverviewResponse,
+  PatternInfo,
+  PlanDay,
+  StrengthProgressRow,
   TrendPoint,
 } from "../lib/types";
-import { fetchSessions } from "../lib/api";
-import {
-  classifyHrZone,
-  targetZoneLabel,
-  zoneArrow,
-  zoneLabel,
-  zoneRangeBpm,
-} from "../lib/hr-zone";
+import { addDays, asOfLabel, dayLabel, statusIcon } from "../lib/week";
+
+// ---------------------------------------------------------------------------
+// STATUS-1 — the Status page. One read (/api/health/overview), scoped to the
+// current program; the page scrolls, no card has a fixed height. Read-only.
+// ---------------------------------------------------------------------------
 
 interface Props {
-  data: StatusResponse;
+  onNavigate: (target: BarTarget) => void;
 }
 
-export default function StatusScreen({ data }: Props) {
-  const [sessions, setSessions] = useState<SessionsResponse | null>(null);
-  const [sessionsErr, setSessionsErr] = useState<string | null>(null);
+type View = { kind: "page" } | { kind: "day"; day: PlanDay } | { kind: "previous" };
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const r = await fetchSessions(7);
-      if (cancelled) return;
-      if (r.status === "ok") setSessions(r.data);
-      else setSessionsErr(r.message);
-    })();
-    return () => { cancelled = true; };
+export default function StatusScreen({ onNavigate }: Props) {
+  const [result, setResult] = useState<FetchOverviewResult | null>(null);
+  const [view, setView] = useState<View>({ kind: "page" });
+
+  const load = useCallback(async () => {
+    setResult(await fetchOverview());
   }, []);
 
-  const todayRow =
-    sessions?.days.find((d) => d.is_today) ?? sessions?.days[sessions.days.length - 1] ?? null;
+  // Fetch on open and on focus — never polled.
+  useEffect(() => {
+    void load();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    window.addEventListener("focus", onVisible);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("focus", onVisible);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [load]);
 
-  return (
-    <div className="status">
-      {data?.banner && <BannerRow banner={data.banner} />}
+  const data = result?.status === "ok" ? result.data : null;
 
-      <Panel
-        title="Today"
-        subtitle={todayRow ? formatDate(todayRow.plan_date) : "loading"}
-      >
-        {sessionsErr && (
-          <div className="status-error">
-            Sessions endpoint error: {sessionsErr}
-          </div>
-        )}
-        {!sessions && !sessionsErr && <Empty text="Loading…" />}
-        {todayRow && (
-          <TodayPanel
-            day={todayRow}
-            planExercises={extractPlannedExerciseNames(todayRow)}
-          />
-        )}
-      </Panel>
-
-      <Panel title="Last 7 days" subtitle="planned vs logged · avg-set RPE vs target">
-        {!sessions ? <Empty text="Loading…" /> : <SevenDayStrip days={sessions.days} />}
-      </Panel>
-
-      <Panel title="Outliers" subtitle="data only · not interpretation">
-        {!sessions ? <Empty text="Loading…" /> : <Outliers days={sessions.days} />}
-      </Panel>
-
-      <Panel title="Body weight" subtitle="last 30 days · daily_state">
-        {data?.weight_trend && data.weight_trend.length > 0 ? (
-          <TrendChart points={data.weight_trend} unit="lb" />
-        ) : (
-          <Empty text="No body-weight check-ins yet." />
-        )}
-      </Panel>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Today — per-exercise per-set read-back + planned-vs-logged gaps
-// ---------------------------------------------------------------------------
-
-interface PlannedExerciseRef {
-  name: string;
-  expected_sets: number;
-  is_finisher: boolean;
-}
-
-/** Walk the sets returned by /sessions for today AND any planned exercises
- * that should have rows. The /sessions payload has the per-set rows; what
- * it doesn't tell us natively is the planned exercise list. We extract that
- * by collecting all distinct exercise names that appear in sets + computing
- * any planned names missing entirely (which would show as "not logged"). */
-function extractPlannedExerciseNames(_day: SessionDayRow): PlannedExerciseRef[] {
-  // For now: planned-list reconciliation happens BACKEND-side via
-  // planned_set_count + per-exercise set rows. The frontend reads back
-  // what's in sets[]; the backend's planned_set_count vs logged_set_count
-  // is the gap signal. Future: have backend return the planned exercise
-  // list as a separate field on SessionDayRow so we can render
-  // "not-logged-at-all" exercises explicitly. For v1, the gap is
-  // visible in the day's logged < planned ratio and Outliers section.
-  return [];
-}
-
-function TodayPanel({ day }: { day: SessionDayRow; planExercises: PlannedExerciseRef[] }) {
-  const sets = Array.isArray(day.sets) ? day.sets : [];
-  // Group by exercise name preserving original order.
-  const grouped = new Map<string, SessionSetRow[]>();
-  for (const s of sets) {
-    const k = s.exercise ?? "—";
-    const arr = grouped.get(k) ?? [];
-    arr.push(s);
-    grouped.set(k, arr);
-  }
-  const completionRatio = day.planned_set_count > 0
-    ? `${day.logged_set_count} of ${day.planned_set_count}`
-    : `${day.logged_set_count}`;
-  const targetRpe = day.target_rpe;
-  const avgRpe = day.avg_set_rpe;
-  const arrow = avgRpe != null && targetRpe != null
-    ? avgRpe > targetRpe + 0.1 ? "↑" : avgRpe < targetRpe - 0.1 ? "↓" : "≈"
-    : "";
-
-  return (
-    <div className="today-grid">
-      <div className="today-meta">
-        <div>
-          <div className="today-meta-label">Session</div>
-          <div className="today-meta-value">{day.display_name ?? day.session_type ?? "—"}</div>
+  if (view.kind === "day") {
+    return (
+      <div className="screen peek peek--day" data-testid="status-day">
+        <header className="peek-head"><div className="h2 peek-title">{dayLabel(view.day.plan_date)}</div></header>
+        <div className="peek-body">
+          <PlanDayDetail day={view.day} today={data?.date ?? view.day.plan_date} />
         </div>
-        <div>
-          <div className="today-meta-label">Phase / Week</div>
-          <div className="today-meta-value">
-            {day.phase ? `P${day.phase}` : "—"} · {day.week_num ? `W${day.week_num}` : "—"}
-          </div>
-        </div>
-        <div>
-          <div className="today-meta-label">Sets logged</div>
-          <div className="today-meta-value">{completionRatio}</div>
-        </div>
-        <div>
-          <div className="today-meta-label">Avg-set RPE / target</div>
-          <div className="today-meta-value">
-            {avgRpe != null ? avgRpe.toFixed(1) : "—"}
-            {targetRpe != null && (
-              <span className="today-meta-target"> / {targetRpe.toFixed(1)} {arrow}</span>
-            )}
-          </div>
-        </div>
+        <BottomBar view="day" onNavigate={onNavigate} />
       </div>
+    );
+  }
 
-      {grouped.size === 0 ? (
-        <Empty text="No sets logged today yet." />
-      ) : (
-        <div className="today-exercises">
-          {[...grouped.entries()].map(([name, rows]) => (
-            <ExerciseReadback key={name} name={name} rows={rows} targetHrZone={day.target_hr_zone} />
-          ))}
+  if (view.kind === "previous" && data?.program) {
+    return (
+      <PreviousProgram
+        anchor={data.program.anchor}
+        end={data.previous_program_end}
+        today={data.date}
+        onBack={() => setView({ kind: "page" })}
+        onNavigate={onNavigate}
+      />
+    );
+  }
+
+  return (
+    <div className="status2" data-testid="status-page">
+      {result?.status === "ok" && result.stale && (
+        <div className="banner status-stale" data-testid="status-stale" role="status">
+          Offline — {asOfLabel(result.asOf)}
         </div>
       )}
+      {result === null && <div className="muted">Loading…</div>}
+      {result?.status === "error" && (
+        <div className="status-error" data-testid="status-error">Couldn't load status ({result.message}).</div>
+      )}
+      {data && (
+        <div className="status-grid">
+          <div className="status-col">
+            <ProgramSection data={data} />
+            <WeekSection data={data} onOpen={(day) => setView({ kind: "day", day })} />
+            <TodaySection data={data} />
+          </div>
+          <div className="status-col">
+            <StrengthSection rows={data.strength_progress} />
+            <CheckinSection checkins={data.checkins_14d} />
+            {data.patterns.length > 0 && <PatternSection patterns={data.patterns} />}
+            <FlagSection flags={data.flags} />
+            <WeightSection data={data} />
+            {data.previous_program_end && (
+              <button
+                type="button"
+                className="btn status-previous"
+                data-testid="previous-program"
+                onClick={() => setView({ kind: "previous" })}
+              >
+                Previous program
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+      <BottomBar view="status" onNavigate={onNavigate} />
     </div>
   );
 }
 
-function ExerciseReadback({
-  name,
-  rows,
-  targetHrZone,
-}: {
-  name: string;
-  rows: SessionSetRow[];
-  targetHrZone: number | null;
+function Section({ title, subtitle, testId, children }: {
+  title: string; subtitle?: string; testId: string; children: React.ReactNode;
 }) {
   return (
-    <div className="today-exercise">
-      <div className="today-exercise-name">{name}</div>
-      <ul className="today-set-list">
-        {rows.map((r) => (
-          <li key={r.log_id} className={r.is_skipped ? "set-skipped" : ""}>
-            {r.log_type === "cardio_block" ? (
-              <CardioReadback row={r} targetHrZone={targetHrZone} />
-            ) : (
-              <StrengthReadback row={r} />
-            )}
+    <section className="st-section" data-testid={testId} aria-label={title}>
+      <header className="st-head">
+        <h2 className="st-title">{title}</h2>
+        {subtitle && <div className="st-sub">{subtitle}</div>}
+      </header>
+      <div className="st-body">{children}</div>
+    </section>
+  );
+}
+
+// 1 ── Program header ───────────────────────────────────────────────────────
+
+export function ProgramSection({ data }: { data: OverviewResponse }) {
+  const p = data.program;
+  if (!p) {
+    return (
+      <Section title="Program" testId="st-program">
+        <div className="muted">No program on the calendar.</div>
+      </Section>
+    );
+  }
+  const deload = deloadText(p);
+  return (
+    <Section title={programTitle(p)} testId="st-program">
+      <ul className="st-facts">
+        <li><span className="st-label">Started</span> {md(p.anchor)}</li>
+        {deload && <li><span className="st-label">Deload</span> {deload}</li>}
+        <li>
+          <span className="st-label">This week</span> {p.sessions_done} / {p.sessions_planned} sessions done
+        </li>
+      </ul>
+    </Section>
+  );
+}
+
+// 2 ── This week ─────────────────────────────────────────────────────────────
+
+export function WeekSection({ data, onOpen }: { data: OverviewResponse; onOpen: (d: PlanDay) => void }) {
+  const p = data.program;
+  const sub = p ? `${dayLabel(p.week_start)} – ${dayLabel(p.week_end)}` : undefined;
+  return (
+    <Section title="This week" subtitle={sub} testId="st-week">
+      {data.week_days.length === 0 ? (
+        <div className="muted">No sessions planned this week.</div>
+      ) : (
+        <div className="st-tiles">
+          {data.week_days.map((d) => {
+            const st = statusIcon(d.status);
+            const today = d.plan_date === data.date;
+            return (
+              <button
+                key={d.plan_date}
+                type="button"
+                className={`st-tile${today ? " st-tile--today" : ""}`}
+                data-testid={`st-tile-${d.plan_date}`}
+                aria-current={today ? "date" : undefined}
+                aria-label={`${dayLabel(d.plan_date)}, ${sessionName(d)}, ${st.label}${d.adjusted ? ", adjusted" : ""}`}
+                onClick={() => onOpen(d)}
+              >
+                <span className="st-tile-day">{dayLabel(d.plan_date)}</span>
+                <span className="st-tile-name">{sessionName(d)}</span>
+                <span className={`st-tile-icon ds--${d.status}`}>{st.icon}</span>
+                {d.adjusted && <span className="badge badge--adjusted">Adjusted</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </Section>
+  );
+}
+
+// 3 ── Today ────────────────────────────────────────────────────────────────
+
+export function TodaySection({ data }: { data: OverviewResponse }) {
+  const t = data.today;
+  const day = t.day;
+  const parts = checkinParts(t.checkin);
+  return (
+    <Section title="Today" subtitle={dayLabel(t.date)} testId="st-today">
+      {day ? (
+        <>
+          <div className="st-today-name">
+            {sessionName(day)} <span className={`day-status ds--${day.status}`}>{statusIcon(day.status).label}</span>
+          </div>
+          <div className="st-progress" data-testid="st-progress">{progressText(t.progress)}</div>
+        </>
+      ) : (
+        <div className="muted">Nothing planned today.</div>
+      )}
+      <div className="st-sub-title">Morning check-in</div>
+      {t.checkin ? (
+        <ul className="st-facts" data-testid="st-checkin">
+          {parts.length > 0 && <li>{parts.join(" · ")}</li>}
+          {Object.keys(t.checkin.soreness).length > 0 && (
+            <li><span className="st-label">Soreness</span> {scoreList(t.checkin.soreness)}</li>
+          )}
+          {Object.keys(t.checkin.pain).length > 0 && (
+            <li><span className="st-label st-label--pain">Pain</span> {scoreList(t.checkin.pain)}</li>
+          )}
+        </ul>
+      ) : (
+        <div className="muted" data-testid="st-checkin-empty">No check-in yet</div>
+      )}
+      {t.adjustment && t.adjustment.summary.length > 0 && (
+        <div className="st-adjust" data-testid="st-adjustment">
+          <span className="badge badge--adjusted">Adjusted</span>
+          {t.adjustment.summary.map((s) => <div key={s}>{s}</div>)}
+        </div>
+      )}
+    </Section>
+  );
+}
+
+// 4 ── Strength progress ────────────────────────────────────────────────────
+
+export function StrengthSection({ rows }: { rows: StrengthProgressRow[] }) {
+  return (
+    <Section title="Strength progress" subtitle="top set by load × reps" testId="st-strength">
+      {rows.length === 0 ? (
+        <div className="muted">No strength exercises this week.</div>
+      ) : (
+        <div className="table-scroll" data-testid="st-strength-scroll">
+          <table className="st-table">
+            <thead>
+              <tr>
+                <th scope="col">Exercise</th>
+                <th scope="col">Last</th>
+                <th scope="col">Previous</th>
+                <th scope="col">Trend</th>
+                <th scope="col">Best</th>
+                <th scope="col">Machine setup</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => {
+                const tr = r.trend ? TREND_ARROWS[r.trend] : null;
+                return (
+                  <tr key={r.exercise}>
+                    <th scope="row">{r.exercise}</th>
+                    <td>
+                      <TopSetCell t={r.last} />
+                      {!r.last && <div className="st-cell-note">not yet logged</div>}
+                    </td>
+                    <td><TopSetCell t={r.previous} /></td>
+                    <td>
+                      {tr ? <span className={`st-trend st-trend--${r.trend}`} aria-label={tr.label} title={tr.label}>{tr.arrow}</span> : "—"}
+                    </td>
+                    <td><TopSetCell t={r.best} /></td>
+                    <td>{r.setting != null ? `setting ${fmtNum(r.setting)}` : "—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+/** "180 lb × 12" over "9/16" — narrow enough for six columns in landscape. */
+function TopSetCell({ t }: { t: StrengthProgressRow["last"] }) {
+  if (!t) return <>—</>;
+  const text = topSetText(t);                 // "9/16 · 180 lb × 12"
+  const [date, load] = text.split(" · ");
+  return (
+    <span className="st-topset" title={text}>
+      <span className="st-topset-load">{load}</span>
+      <span className="st-topset-date">{date}</span>
+    </span>
+  );
+}
+
+// 5 ── Check-in trends ──────────────────────────────────────────────────────
+
+const SPARK: ChartBox = { width: 300, height: 96, left: 36, right: 8, top: 8, bottom: 20 };
+
+function Spark({ title, unit, points, fixed, testId, from, to }: {
+  title: string; unit: string; points: TrendPoint[]; fixed?: [number, number]; testId: string;
+  from: string; to: string;
+}) {
+  const g = chartGeometry(points, SPARK, { fixed, pad: fixed ? undefined : 1, from, to });
+  return (
+    <figure className="st-spark" data-testid={testId}>
+      <figcaption>{title} <span className="st-unit">({unit})</span></figcaption>
+      {points.length === 0 ? (
+        <div className="muted">No readings</div>
+      ) : (
+        <svg viewBox={`0 0 ${SPARK.width} ${SPARK.height}`} role="img" aria-label={`${title}, ${points.length} readings`}>
+          <rect x={g.plot.x0} y={g.plot.y0} width={g.plot.x1 - g.plot.x0} height={g.plot.y1 - g.plot.y0} className="st-plot" />
+          {g.yTicks.map((t) => (
+            <text key={t.value} x={g.plot.x0 - 6} y={t.y + 4} textAnchor="end" className="st-axis">{fmtNum(t.value)}</text>
+          ))}
+          <text x={g.plot.x0} y={SPARK.height - 4} className="st-axis">{md(from)}</text>
+          <text x={g.plot.x1} y={SPARK.height - 4} textAnchor="end" className="st-axis">{md(to)}</text>
+          {g.path && <path d={g.path} className="st-line" />}
+          {g.dots.map((d) => <circle key={d.date} cx={d.x} cy={d.y} r={3.5} className="st-dot" />)}
+        </svg>
+      )}
+    </figure>
+  );
+}
+
+export function CheckinSection({ checkins }: { checkins: CheckinInfo[] }) {
+  if (checkins.length === 0) {
+    return (
+      <Section title="Check-in trends" subtitle="last 14 days" testId="st-checkins">
+        <div className="muted">No check-ins yet this program.</div>
+      </Section>
+    );
+  }
+  const from = checkins[0].date;
+  const to = checkins[checkins.length - 1].date;
+  const series = (f: (c: CheckinInfo) => number | null): TrendPoint[] =>
+    checkins.flatMap((c) => (f(c) != null ? [{ date: c.date, value: f(c)! }] : []));
+  const strip = sorenessStrip(checkins);
+  return (
+    <Section title="Check-in trends" subtitle="last 14 days" testId="st-checkins">
+      <div className="st-sparks">
+        <Spark title="Sleep" unit="hours" points={series((c) => c.sleep_hrs)} testId="spark-sleep" from={from} to={to} />
+        <Spark title="Energy" unit="0–5" points={series((c) => c.energy)} fixed={[0, 5]} testId="spark-energy" from={from} to={to} />
+        <Spark title="Weight" unit="lb" points={series((c) => c.weight_lbs)} testId="spark-weight" from={from} to={to} />
+      </div>
+      <div className="st-sub-title">Soreness &amp; pain (0–5)</div>
+      {strip.length === 0 ? (
+        <div className="muted">No soreness or pain reported.</div>
+      ) : (
+        <div className="table-scroll" data-testid="st-strip">
+          <table className="st-strip">
+            <thead>
+              <tr>
+                <th scope="col">Region</th>
+                {checkins.map((c) => <th key={c.date} scope="col">{md(c.date)}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {strip.map((row) => (
+                <tr key={row.key}>
+                  <th scope="row">
+                    {row.region} <span className={`st-kind st-kind--${row.kind}`}>{row.kind === "pain" ? "pain" : "sore"}</span>
+                  </th>
+                  {row.cells.map((c) => (
+                    <td
+                      key={c.date}
+                      className={`st-cell st-cell--${row.kind}`}
+                      data-level={c.value ?? ""}
+                      aria-label={c.value == null ? "not reported" : `${row.region} ${row.kind} ${c.value} of 5`}
+                    >
+                      {c.value ?? ""}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+// 6 ── Patterns ─────────────────────────────────────────────────────────────
+
+export function PatternSection({ patterns }: { patterns: PatternInfo[] }) {
+  return (
+    <Section title="Patterns" subtitle="counts only — not causes" testId="st-patterns">
+      <ul className="st-list">
+        {patterns.map((p) => (
+          <li key={p.id}>
+            {p.text}
+            <div className="st-cell-note">
+              {p.last_reflection_at ? `Last reflection ${md(p.last_reflection_at.slice(0, 10))}` : "No reflection yet"}
+            </div>
           </li>
         ))}
       </ul>
-    </div>
+    </Section>
   );
 }
 
-function StrengthReadback({ row }: { row: SessionSetRow }) {
-  if (row.is_skipped) {
-    return (
-      <span className="set-readback set-readback--skipped">
-        set {row.set_num ?? "?"}: skipped
-      </span>
-    );
-  }
-  const parts: string[] = [];
-  if (row.weight_lbs != null) parts.push(`${fmt(row.weight_lbs)} lb`);
-  if (row.reps_done != null) parts.push(`× ${row.reps_done}`);
-  if (row.rpe_actual != null) parts.push(`@RPE ${fmt(row.rpe_actual)}`);
+// 7 ── Flags ────────────────────────────────────────────────────────────────
+
+export function FlagSection({ flags }: { flags: FlagInfo[] }) {
   return (
-    <span className="set-readback tv-mono">
-      <span className="set-num">set {row.set_num ?? "?"}:</span> {parts.join(" ") || "—"}
-    </span>
+    <Section title="Flags" subtitle="data only" testId="st-flags">
+      {flags.length === 0 ? (
+        <div className="muted" data-testid="st-flags-empty">Nothing flagged</div>
+      ) : (
+        <ul className="st-list">
+          {flags.map((f, i) => (
+            <li key={`${f.date}-${i}`} className={`st-flag st-flag--${f.kind}`}>{f.text}</li>
+          ))}
+        </ul>
+      )}
+    </Section>
   );
 }
 
-function CardioReadback({
-  row,
-  targetHrZone,
-}: {
-  row: SessionSetRow;
-  targetHrZone: number | null;
+// 8 ── Body weight ──────────────────────────────────────────────────────────
+
+export const WEIGHT_BOX: ChartBox = { width: 560, height: 220, left: 56, right: 16, top: 12, bottom: 28 };
+
+export function WeightSection({ data }: { data: OverviewResponse }) {
+  const pts = data.weight_30d;
+  const s = data.weight_summary;
+  const from = addDays(data.date, -29);
+  const g = chartGeometry(pts, WEIGHT_BOX, { pad: 3, from, to: data.date });
+  return (
+    <Section title="Body weight" subtitle="last 30 days" testId="st-weight">
+      {pts.length === 0 ? (
+        <div className="muted">No weight readings in the last 30 days.</div>
+      ) : (
+        <>
+          <svg
+            className="st-weight-chart"
+            viewBox={`0 0 ${WEIGHT_BOX.width} ${WEIGHT_BOX.height}`}
+            role="img"
+            aria-label={`Body weight, ${pts.length} reading${pts.length === 1 ? "" : "s"}`}
+            data-testid="weight-chart"
+          >
+            <rect x={g.plot.x0} y={g.plot.y0} width={g.plot.x1 - g.plot.x0} height={g.plot.y1 - g.plot.y0} className="st-plot" />
+            {g.yTicks.map((t) => (
+              <text key={t.value} x={g.plot.x0 - 8} y={t.y + 5} textAnchor="end" className="st-axis">
+                {fmtNum(t.value)} lb
+              </text>
+            ))}
+            <text x={g.plot.x0} y={WEIGHT_BOX.height - 6} className="st-axis">{md(from)}</text>
+            <text x={g.plot.x1} y={WEIGHT_BOX.height - 6} textAnchor="end" className="st-axis">{md(data.date)}</text>
+            {g.path && <path d={g.path} className="st-line" data-testid="weight-line" />}
+            {g.dots.map((d) => <circle key={d.date} cx={d.x} cy={d.y} r={5} className="st-dot" data-testid="weight-dot" />)}
+          </svg>
+          {s && (
+            <ul className="st-facts" data-testid="weight-summary">
+              <li><span className="st-label">First</span> {fmtNum(s.first.value)} lb ({md(s.first.date)})</li>
+              <li><span className="st-label">Latest</span> {fmtNum(s.latest.value)} lb ({md(s.latest.date)})</li>
+              <li><span className="st-label">Change</span> {s.change > 0 ? "+" : s.change < 0 ? "−" : ""}{fmtNum(Math.abs(s.change))} lb</li>
+            </ul>
+          )}
+        </>
+      )}
+    </Section>
+  );
+}
+
+// ── Previous program (read-only list) ──────────────────────────────────────
+
+function PreviousProgram({ anchor, end, today, onBack, onNavigate }: {
+  anchor: string; end: string | null; today: string; onBack: () => void;
+  onNavigate: (t: BarTarget) => void;
 }) {
-  const headParts: string[] = [];
-  if (row.duration_sec != null) headParts.push(`${Math.round(row.duration_sec / 60)} min`);
-  if (row.distance_m != null) headParts.push(`${(row.distance_m / 1000).toFixed(2)} km`);
-  if (row.rpe_actual != null) headParts.push(`@RPE ${fmt(row.rpe_actual)}`);
-
-  const hrLines: Array<{ label: string; bpmLabel: string; arrow: string }> = [];
-  if (row.hr_avg != null) {
-    const avgArrow = targetHrZone != null
-      ? zoneArrow(classifyHrZone(row.hr_avg), targetHrZone)
-      : "";
-    hrLines.push({ label: "avg", bpmLabel: zoneLabel(row.hr_avg), arrow: avgArrow });
-  }
-  if (row.hr_peak != null) {
-    const peakArrow = targetHrZone != null
-      ? zoneArrow(classifyHrZone(row.hr_peak), targetHrZone)
-      : "";
-    hrLines.push({ label: "peak", bpmLabel: zoneLabel(row.hr_peak), arrow: peakArrow });
-  }
-  const tgt = targetHrZone != null ? targetZoneLabel(targetHrZone) : null;
-
-  return (
-    <span className="set-readback set-readback--cardio tv-mono">
-      <span className="set-num">cardio:</span> {headParts.join(" · ") || "—"}
-      {hrLines.map((line, i) => (
-        <span key={i} className="hr-line">
-          {" "}· HR {line.label} {line.bpmLabel} {line.arrow}
-        </span>
-      ))}
-      {tgt && <span className="zone-note"> · target {tgt}</span>}
-    </span>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// 7-day strip
-// ---------------------------------------------------------------------------
-
-function SevenDayStrip({ days }: { days: SessionDayRow[] }) {
-  return (
-    <div className="seven-day-strip">
-      {days.map((d) => (
-        <DayRow key={d.plan_date} day={d} />
-      ))}
-    </div>
-  );
-}
-
-function DayRow({ day }: { day: SessionDayRow }) {
-  const avg = day.avg_set_rpe;
-  const target = day.target_rpe;
-  const rpeArrow = avg != null && target != null
-    ? avg > target + 0.1 ? "↑" : avg < target - 0.1 ? "↓" : "≈"
-    : null;
-  const className = [
-    "seven-day-row",
-    day.is_today ? "seven-day-row--today" : "",
-    day.is_skipped ? "seven-day-row--skipped" : "",
-    day.outliers?.incomplete ? "seven-day-row--incomplete" : "",
-  ].filter(Boolean).join(" ");
-  const hrZone = day.target_hr_zone;
-  const hrTargetRange = hrZone ? zoneRangeBpm(hrZone) : null;
-  const hrAvgZone = day.hr_avg != null ? classifyHrZone(day.hr_avg) : null;
-  const hrArrow = hrAvgZone != null && hrZone != null
-    ? zoneArrow(hrAvgZone, hrZone)
-    : null;
-  return (
-    <div className={className}>
-      <div className="seven-day-date tv-mono">{shortDate(day.plan_date)}</div>
-      <div className="seven-day-label">
-        <div className="seven-day-name">{day.display_name ?? day.session_type ?? "—"}</div>
-        {day.phase != null && day.week_num != null && (
-          <div className="seven-day-sub tv-mono">
-            P{day.phase} · W{day.week_num}
-          </div>
-        )}
-      </div>
-      <div className="seven-day-rpe tv-mono">
-        {avg != null ? avg.toFixed(1) : "—"}
-        {target != null && (
-          <span className="seven-day-target"> / {target.toFixed(1)} {rpeArrow}</span>
-        )}
-      </div>
-      <div className="seven-day-sets tv-mono">
-        {day.logged_set_count} / {day.planned_set_count}
-      </div>
-      <div className="seven-day-work tv-mono">
-        {day.total_work_sec > 0 ? `${Math.round(day.total_work_sec / 60)}m` : "—"}
-      </div>
-      <div className="seven-day-hr tv-mono">
-        {day.hr_avg != null && hrAvgZone != null
-          ? `${day.hr_avg} = Z${hrAvgZone}${hrArrow ? " " + hrArrow : ""}`
-          : "—"}
-        {hrTargetRange && day.hr_avg != null && hrZone != null && (
-          <span className="seven-day-hr-target">
-            {" "}/ target Z{hrZone} ({hrTargetRange[0]}–{hrTargetRange[1]})
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Outliers — facts only
-// ---------------------------------------------------------------------------
-
-function Outliers({ days }: { days: SessionDayRow[] }) {
-  const flagged: Array<{ date: string; kind: string; detail: string }> = [];
-  for (const d of days) {
-    for (const s of d.outliers?.high_rpe_sets ?? []) {
-      flagged.push({
-        date: d.plan_date,
-        kind: "RPE ≥ 9",
-        detail: `${s.exercise ?? "?"} set ${s.set_num ?? "?"} · RPE ${s.rpe_actual.toFixed(1)}`,
-      });
+  const last = end ?? addDays(anchor, -1);
+  const [pages, setPages] = useState<string[]>([last]);
+  const [results, setResults] = useState<Record<string, FetchPlanRangeResult>>({});
+  useEffect(() => {
+    for (const p of pages) {
+      if (results[p]) continue;
+      void fetchPlanRange(addDays(p, -13), p).then((r) => setResults((cur) => ({ ...cur, [p]: r })));
     }
-    if (d.outliers?.incomplete) {
-      flagged.push({
-        date: d.plan_date,
-        kind: "Incomplete",
-        detail: `${d.outliers.incomplete_logged} of ${d.outliers.incomplete_planned} planned sets logged`,
-      });
-    }
-    for (const note of d.outliers?.pain_notes ?? []) {
-      flagged.push({
-        date: d.plan_date,
-        kind: "Pain note",
-        detail: note,
-      });
-    }
-  }
-  if (flagged.length === 0) {
-    return <Empty text="No outliers in the last 7 days." />;
-  }
-  return (
-    <ul className="outlier-list">
-      {flagged.map((f, i) => (
-        <li key={i} className="outlier-row">
-          <span className="outlier-date tv-mono">{shortDate(f.date)}</span>
-          <span className={`outlier-kind outlier-kind--${f.kind.replace(/\W/g, "")}`}>{f.kind}</span>
-          <span className="outlier-detail">{f.detail}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Banner + chart + primitives
-// ---------------------------------------------------------------------------
-
-function BannerRow({ banner }: { banner: Banner }) {
-  return (
-    <div className="banner-row">
-      <span className="banner-phase">
-        {banner.phase_name ? `${banner.phase_name} (Phase ${banner.phase})` : `Phase ${banner.phase}`}
-      </span>
-      <span className="banner-week">Week {banner.week_num}</span>
-    </div>
-  );
-}
-
-function Panel({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string;
-  subtitle?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="status-panel">
-      <div className="status-panel-head">
-        <span className="status-panel-title">{title}</span>
-        {subtitle && <span className="status-panel-subtitle">{subtitle}</span>}
-      </div>
-      <div className="status-panel-body">{children}</div>
-    </div>
-  );
-}
-
-function Empty({ text }: { text: string }) {
-  return <div className="status-empty">{text}</div>;
-}
-
-function TrendChart({ points, unit = "" }: { points: TrendPoint[]; unit?: string }) {
-  const width = 600;
-  const height = 160;
-  const padX = 36;
-  const padY = 20;
-  const values = points.map((p) => p.value);
-  const minY = Math.min(...values);
-  const maxY = Math.max(...values);
-  const range = maxY === minY ? 1 : maxY - minY;
-  const stepX = points.length > 1 ? (width - 2 * padX) / (points.length - 1) : 0;
-  const coords = points.map((p, i) => ({
-    x: padX + i * stepX,
-    y: padY + (height - 2 * padY) * (1 - (p.value - minY) / range),
-  }));
-  const path = coords.map((c, i) => `${i === 0 ? "M" : "L"}${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" ");
-  const latest = points[points.length - 1];
-  const first = points[0];
-  return (
-    <div className="chart-wrap">
-      <svg viewBox={`0 0 ${width} ${height}`} className="chart" preserveAspectRatio="none">
-        <line x1={padX} y1={height - padY} x2={width - padX} y2={height - padY} className="chart-axis" />
-        <path d={path} className="chart-path" />
-        {coords.map((c, i) => (
-          <circle key={i} cx={c.x} cy={c.y} r={3} className="chart-dot" />
-        ))}
-        <text x={4} y={padY + 4} className="chart-label">{maxY.toFixed(1)}</text>
-        <text x={4} y={height - padY} className="chart-label">{minY.toFixed(1)}</text>
-      </svg>
-      <div className="chart-foot">
-        <span>{first.date} → {latest.date}</span>
-        <span>latest <strong>{latest.value.toFixed(1)}{unit && ` ${unit}`}</strong></span>
-        <span>n = {points.length}</span>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function fmt(n: number): string {
-  return Number.isInteger(n) ? String(n) : n.toFixed(1).replace(/\.0$/, "");
-}
-
-function formatDate(iso: string): string {
-  const [y, m, d] = iso.split("-").map((s) => parseInt(s, 10));
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  return dt.toLocaleDateString("en-US", {
-    timeZone: "UTC",
-    weekday: "short",
-    month: "short",
-    day: "numeric",
+  }, [pages, results]);
+  const days = pages.flatMap((p) => {
+    const r = results[p];
+    return r?.status === "ok" ? [...r.data.days].reverse() : [];
   });
-}
-
-function shortDate(iso: string): string {
-  const [, m, d] = iso.split("-").map((s) => parseInt(s, 10));
-  return `${m}/${d}`;
+  return (
+    <div className="screen peek peek--week" data-testid="status-previous">
+      <header className="peek-head"><div className="h2 peek-title">Previous program</div></header>
+      <div className="peek-body">
+        <button type="button" className="btn status-previous" onClick={onBack}>Back to Status</button>
+        <ol className="week-list st-previous-list">
+          {days.map((d) => (
+            <li key={d.plan_date} className="st-previous-row">
+              <span className="week-day">{dayLabel(d.plan_date)}</span>
+              <span>{sessionName(d)}</span>
+              <span className="dim">P{d.phase} W{d.week_num}</span>
+              <span className={`ds--${d.status}`}>{statusIcon(d.status).icon}</span>
+            </li>
+          ))}
+        </ol>
+        {days.length === 0 && <div className="muted">Loading…</div>}
+        <button
+          type="button"
+          className="btn status-previous"
+          onClick={() => setPages((ps) => [...ps, addDays(ps[ps.length - 1], -14)])}
+        >
+          Older
+        </button>
+        <div className="dim">Read-only · before {md(anchor)} · today {md(today)}</div>
+      </div>
+      <BottomBar view="status" onNavigate={onNavigate} />
+    </div>
+  );
 }
