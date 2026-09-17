@@ -12,14 +12,17 @@ import { assertNeverBlock } from "../lib/types";
 import { dedupe, displayTitle, formatPlanDate } from "../lib/format";
 import { adjustmentOf, exerciseSets, exerciseTags } from "../lib/adjustment";
 import AdjustmentBanner from "../components/AdjustmentBanner";
+import PeekButtons from "../components/PeekButtons";
+import type { PeekMode } from "./PeekScreen";
 
 interface Props {
   plan: Plan;
   interrupted: boolean;
   onStart: () => void;
+  onPeek?: (mode: PeekMode) => void;
 }
 
-export default function SetupScreen({ plan, interrupted, onStart }: Props) {
+export default function SetupScreen({ plan, interrupted, onStart, onPeek }: Props) {
   const equipment = dedupe(plan.blocks?.equipment ?? undefined);
   const setupNotes = dedupe(plan.blocks?.setup_notes ?? undefined);
 
@@ -64,9 +67,12 @@ export default function SetupScreen({ plan, interrupted, onStart }: Props) {
         ) : null}
       </div>
 
-      <button type="button" className="btn btn--primary btn--block setup-start" onClick={onStart}>
-        Start Workout
-      </button>
+      <div className="start-row">
+        <button type="button" className="btn btn--primary setup-start" onClick={onStart}>
+          Start Workout
+        </button>
+        {onPeek && <PeekButtons onPeek={onPeek} />}
+      </div>
     </div>
   );
 }

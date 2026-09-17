@@ -6,6 +6,7 @@ import ErrorScreen from "./screens/ErrorScreen";
 import RestDayScreen from "./screens/RestDayScreen";
 import StatusScreen from "./screens/StatusScreen";
 import FlowScreen from "./screens/FlowScreen";
+import PeekScreen, { type PeekMode } from "./screens/PeekScreen";
 import Nav from "./components/Nav";
 import SyncBadge from "./components/SyncBadge";
 import {
@@ -62,6 +63,8 @@ export default function App() {
   const [statusLoad, setStatusLoad] = useState<StatusLoad>({ loading: true, result: null });
   const [flow, setFlow] = useState<WorkoutFlow>("setup");
   const [flowRunning, setFlowRunning] = useState(false);
+  // GD-WEEK: read-only Tomorrow / Week, opened from Setup — never mid-workout.
+  const [peek, setPeek] = useState<PeekMode | null>(null);
   const [totalElapsedSec, setTotalElapsedSec] = useState(0);
   const [interrupted, setInterrupted] = useState(() => {
     try {
@@ -359,6 +362,15 @@ export default function App() {
   // blocks.type='mobility' (session_type alone is ambiguous).
   const blocksType = result.plan.blocks?.type;
 
+  if (peek && flow === "setup" && !flowRunning) {
+    return (
+      <>
+        {chrome}
+        <PeekScreen mode={peek} onBack={() => setPeek(null)} />
+      </>
+    );
+  }
+
   // YOGA-1: a Recovery Flow runs in its own hands-free player.
   if (blocksType === "recovery_flow" && !result.plan.is_skipped) {
     return (
@@ -368,6 +380,7 @@ export default function App() {
           key={`flow-${result.plan.plan_id}`}
           plan={result.plan}
           onRunningChange={setFlowRunning}
+          onPeek={setPeek}
         />
       </>
     );
@@ -381,7 +394,7 @@ export default function App() {
     return (
       <>
         {chrome}
-        <RestDayScreen plan={result.plan} />
+        <RestDayScreen plan={result.plan} onPeek={setPeek} />
       </>
     );
   }
@@ -403,7 +416,7 @@ export default function App() {
     <>
       {chrome}
       {flow === "setup" && (
-        <SetupScreen plan={result.plan} interrupted={interrupted} onStart={onStart} />
+        <SetupScreen plan={result.plan} interrupted={interrupted} onStart={onStart} onPeek={setPeek} />
       )}
       {flow === "workout" && (
         <WorkoutScreen

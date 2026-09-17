@@ -5,6 +5,7 @@ import type {
   LoggedTodayResponse,
   NoPlanResponse,
   Plan,
+  PlanRangeResponse,
   SessionsResponse,
   StatusResponse,
 } from "./types";
@@ -195,6 +196,53 @@ export async function fetchLastLogged(exerciseNames: string[]): Promise<FetchLas
     return {
       status: "error",
       message: err instanceof Error ? err.message : "Failed to load last-logged.",
+    };
+  }
+}
+
+// ── GD-WEEK: read-only plan range, cached for offline ────────────────────────
+
+export type FetchPlanRangeResult =
+  | { status: "ok"; data: PlanRangeResponse; asOf: Date; stale: boolean }
+  | { status: "error"; message: string };
+
+const RANGE_CACHE_PREFIX = "gd_plan_range:";
+
+function rangeKey(from: string, to: string): string {
+  return `${RANGE_CACHE_PREFIX}${from}:${to}`;
+}
+
+/** GET /api/health/plan for [from, to]. Fetched when a view opens (no
+ * polling). On failure the last successful copy is returned, marked stale
+ * with the time it was fetched. */
+export async function fetchPlanRange(from: string, to: string): Promise<FetchPlanRangeResult> {
+  try {
+    const headers: Record<string, string> = { Accept: "application/json" };
+    if (API_KEY) headers["X-API-Key"] = API_KEY;
+    const qs = `from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+    const res = await fetch(`${API_BASE}/api/health/plan?${qs}`, { headers });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = (await res.json()) as PlanRangeResponse;
+    const asOf = new Date();
+    try {
+      localStorage.setItem(rangeKey(from, to), JSON.stringify({ at: asOf.toISOString(), data }));
+    } catch {
+      /* storage full or blocked — still return live data */
+    }
+    return { status: "ok", data, asOf, stale: false };
+  } catch (err) {
+    try {
+      const raw = localStorage.getItem(rangeKey(from, to));
+      if (raw) {
+        const cached = JSON.parse(raw) as { at: string; data: PlanRangeResponse };
+        return { status: "ok", data: cached.data, asOf: new Date(cached.at), stale: true };
+      }
+    } catch {
+      /* fall through */
+    }
+    return {
+      status: "error",
+      message: err instanceof Error ? err.message : "Failed to load the plan.",
     };
   }
 }
