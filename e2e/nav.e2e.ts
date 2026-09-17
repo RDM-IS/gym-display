@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import office from "../tests/fixtures/recovery-flow-office.json" with { type: "json" };
+import overviewFixture from "../tests/fixtures/overview.json" with { type: "json" };
 
 // GD-NAV — one bottom bar on every Setup-level view (iPad WebKit, both
 // orientations): no dead ends, Start only on Today, 56 px targets, fixed at
@@ -73,6 +74,7 @@ async function mockApi(page: Page, plan: typeof STRENGTH | typeof FLOW) {
     if (path.endsWith("/today/logged")) {
       return route.fulfill({ json: { plan_id: plan.plan_id, exercises: [], has_session_summary: false } });
     }
+    if (path.endsWith("/overview")) return route.fulfill({ json: overviewFixture });
     return route.fulfill({ json: { by_exercise: {}, days: [] } });
   });
 }
@@ -185,7 +187,10 @@ test("Today → Tomorrow → Week → a day → Week → Today, no dead ends", a
   await tapBar(page, "Week");
   await page.getByRole("link", { name: "Status" }).tap();
   await expect(page).toHaveURL(/\/status$/);
-  await expect(bar(page)).toHaveCount(0);
+  expect(await barLabels(page)).toEqual(["Today", "Tomorrow", "Week"]);
+  await tapBar(page, "Tomorrow");
+  await expect(page.getByTestId("peek-tomorrow")).toBeVisible();
+  await page.getByRole("link", { name: "Status" }).tap();
   await page.getByRole("link", { name: "Workout" }).tap();
   await expect(page.getByRole("button", { name: "Start Workout" })).toBeVisible();
 });

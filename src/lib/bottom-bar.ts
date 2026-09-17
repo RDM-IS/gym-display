@@ -5,12 +5,13 @@
 //   Tomorrow          … [Today] [Week]
 //   Week              … [Today] [Tomorrow]
 //   Day (from Week)   … [Today] [Week]
+//   Status            … [Today] [Tomorrow] [Week]
 //
 // The right group keeps the order Today → Tomorrow → Week and leaves out the
 // view you're on. Start only ever appears on Today.
 // ---------------------------------------------------------------------------
 
-export type BarView = "today" | "tomorrow" | "week" | "day";
+export type BarView = "today" | "tomorrow" | "week" | "day" | "status";
 export type BarTarget = "today" | "tomorrow" | "week";
 
 export const BAR_ORDER: readonly BarTarget[] = ["today", "tomorrow", "week"];

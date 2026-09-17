@@ -493,3 +493,92 @@ export interface PlanRangeResponse {
   range_to: string;
   days: PlanDay[];
 }
+
+// ── STATUS-1: GET /api/health/overview ──────────────────────────────────────
+
+export interface ProgramInfo {
+  name: string | null;
+  phase: number;
+  week: number;
+  weeks_total: number;
+  anchor: string;
+  deload_week: number | null;
+  weeks_to_deload: number | null;
+  week_start: string;
+  week_end: string;
+  sessions_done: number;
+  sessions_planned: number;
+  source: "state" | "derived";
+}
+
+export interface ProgressInfo {
+  unit: "sets" | "minutes" | "rest";
+  done: number | null;
+  planned: number | null;
+}
+
+export interface CheckinInfo {
+  date: string;
+  sleep_hrs: number | null;
+  energy: number | null;
+  weight_lbs: number | null;
+  resting_hr: number | null;
+  soreness: Record<string, number>;
+  pain: Record<string, number>;
+}
+
+export interface TodayOverview {
+  date: string;
+  day: PlanDay | null;
+  progress: ProgressInfo | null;
+  checkin: CheckinInfo | null;
+  adjustment: { summary: string[]; rules_fired: string[] } | null;
+}
+
+export interface TopSetInfo {
+  date: string;
+  weight_lbs: number | null;
+  reps: number | null;
+  score: number;
+}
+
+export interface StrengthProgressRow {
+  exercise: string;
+  sessions: number;
+  last: TopSetInfo | null;
+  previous: TopSetInfo | null;
+  best: TopSetInfo | null;
+  trend: "up" | "flat" | "down" | null;
+  setting: number | null;
+}
+
+export interface PatternInfo {
+  id: number;
+  exercise: string;
+  region: string;
+  hits: number;
+  exposures: number;
+  text: string;
+  last_reflection_at: string | null;
+}
+
+export interface FlagInfo {
+  date: string;
+  kind: "missed" | "partial" | "rpe" | "pain" | string;
+  text: string;
+}
+
+export interface OverviewResponse {
+  date: string;
+  timezone: string;
+  program: ProgramInfo | null;
+  week_days: PlanDay[];
+  today: TodayOverview;
+  strength_progress: StrengthProgressRow[];
+  checkins_14d: CheckinInfo[];
+  patterns: PatternInfo[];
+  flags: FlagInfo[];
+  weight_30d: TrendPoint[];
+  weight_summary: { first: TrendPoint; latest: TrendPoint; change: number } | null;
+  previous_program_end: string | null;
+}

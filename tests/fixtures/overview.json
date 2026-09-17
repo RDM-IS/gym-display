@@ -1,0 +1,1505 @@
+{
+ "date": "2026-09-21",
+ "timezone": "America/Chicago",
+ "program": {
+  "name": "Foundation",
+  "phase": 1,
+  "week": 1,
+  "weeks_total": 7,
+  "anchor": "2026-09-16",
+  "deload_week": 7,
+  "weeks_to_deload": 6,
+  "week_start": "2026-09-16",
+  "week_end": "2026-09-22",
+  "sessions_done": 3,
+  "sessions_planned": 6,
+  "source": "state"
+ },
+ "week_days": [
+  {
+   "plan_id": 103,
+   "plan_date": "2026-09-16",
+   "session_type": "strength_a",
+   "display_name": "Office Strength A",
+   "phase": 1,
+   "week_num": 1,
+   "target_rpe": 6.0,
+   "est_duration_min": 40,
+   "location": "office gym",
+   "is_skipped": false,
+   "adjusted": false,
+   "status": "done",
+   "blocks": {
+    "type": "circuit",
+    "display_name": "Office Strength A",
+    "location": "office gym",
+    "rounds": 2,
+    "warmup": "5 min elliptical, easy",
+    "cooldown": "5 min Stretch Trainer",
+    "exercises": [
+     {
+      "name": "Leg press",
+      "format": "reps",
+      "target_reps": 12,
+      "notes": "2×8-12"
+     },
+     {
+      "name": "DB bench press",
+      "format": "reps",
+      "target_reps": 12,
+      "notes": "2×8-12"
+     },
+     {
+      "name": "Lat pulldown",
+      "format": "reps",
+      "target_reps": 12,
+      "notes": "2×8-12"
+     },
+     {
+      "name": "Seated leg curl",
+      "format": "reps",
+      "target_reps": 12,
+      "notes": "2×8-12"
+     },
+     {
+      "name": "Cable face pull (rope)",
+      "format": "reps",
+      "target_reps": 12,
+      "notes": "2×8-12"
+     },
+     {
+      "name": "Captain's chair knee raise",
+      "format": "reps",
+      "target_reps": 12,
+      "notes": "2×8-12"
+     }
+    ]
+   },
+   "logged": [
+    {
+     "exercise": "Leg press",
+     "log_type": "strength_set",
+     "sets": 2,
+     "reps": [
+      12,
+      11
+     ],
+     "top_weight_lbs": 180,
+     "duration_sec": null,
+     "skipped": 0
+    },
+    {
+     "exercise": "DB bench press",
+     "log_type": "strength_set",
+     "sets": 2,
+     "reps": [
+      10,
+      10
+     ],
+     "top_weight_lbs": 30,
+     "duration_sec": null,
+     "skipped": 0
+    },
+    {
+     "exercise": "Lat pulldown",
+     "log_type": "strength_set",
+     "sets": 2,
+     "reps": [
+      12,
+      12
+     ],
+     "top_weight_lbs": 100,
+     "duration_sec": null,
+     "skipped": 0
+    },
+    {
+     "exercise": "Seated leg curl",
+     "log_type": "strength_set",
+     "sets": 2,
+     "reps": [
+      12,
+      10
+     ],
+     "top_weight_lbs": 70,
+     "duration_sec": null,
+     "skipped": 0
+    },
+    {
+     "exercise": "Cable face pull (rope)",
+     "log_type": "strength_set",
+     "sets": 2,
+     "reps": [
+      15,
+      15
+     ],
+     "top_weight_lbs": 30,
+     "duration_sec": null,
+     "skipped": 0
+    },
+    {
+     "exercise": "Captain's chair knee raise",
+     "log_type": "strength_set",
+     "sets": 2,
+     "reps": [
+      10,
+      9
+     ],
+     "top_weight_lbs": null,
+     "duration_sec": null,
+     "skipped": 0
+    }
+   ],
+   "summary_notes": null
+  },
+  {
+   "plan_id": 104,
+   "plan_date": "2026-09-17",
+   "session_type": "rest_mobility",
+   "display_name": "Recovery Flow",
+   "phase": 1,
+   "week_num": 1,
+   "target_rpe": 2.0,
+   "est_duration_min": 38,
+   "location": "office gym",
+   "is_skipped": false,
+   "adjusted": false,
+   "status": "partial",
+   "blocks": {
+    "type": "recovery_flow",
+    "display_name": "Recovery Flow",
+    "location": "office gym",
+    "rounds": 2,
+    "double_round": 2,
+    "double_steps": [
+     10,
+     16
+    ],
+    "preview_sec": 5,
+    "pre": [
+     {
+      "name": "Stretch Trainer",
+      "side": null,
+      "duration_sec": 480,
+      "cue": "Follow the 8 placard stretches"
+     }
+    ],
+    "flow": [
+     {
+      "step": "1",
+      "name": "Child's pose",
+      "side": null,
+      "side_label": null,
+      "duration_sec": 30,
+      "mirror_group": null,
+      "cue": "Knees wide, hips back toward your heels, arms long.",
+      "easier": null
+     },
+     {
+      "step": "2",
+      "name": "Cobra",
+      "side": null,
+      "side_label": null,
+      "duration_sec": 30,
+      "mirror_group": null,
+      "cue": "Hips stay down; press through the palms and lift the chest gently.",
+      "easier": null
+     },
+     {
+      "step": "3",
+      "name": "Downward dog",
+      "side": null,
+      "side_label": null,
+      "duration_sec": 60,
+      "mirror_group": null,
+      "cue": "Hips high, heels reaching down, long spine.",
+      "easier": "Dolphin — forearms down"
+     },
+     {
+      "step": "4",
+      "name": "Standing forward bend",
+      "side": null,
+      "side_label": null,
+      "duration_sec": 30,
+      "mirror_group": null,
+      "cue": "Soft knees, let your head hang heavy.",
+      "easier": null
+     },
+     {
+      "step": "5",
+      "name": "High lunge",
+      "side": "R",
+      "side_label": "Right leg forward",
+      "duration_sec": 30,
+      "mirror_group": "lunge-unit",
+      "cue": "Front knee over ankle, back heel lifted, arms up.",
+      "easier": "Knee down"
+     },
+     {
+      "step": "6",
+      "name": "Crescent lunge",
+      "side": "R",
+      "side_label": "Right leg forward",
+      "duration_sec": 30,
+      "mirror_group": "lunge-unit",
+      "cue": "Square the hips, sink a little deeper, reach up.",
+      "easier": "Knee down"
+     },
+     {
+      "step": "7",
+      "name": "Extended puppy",
+      "side": null,
+      "side_label": null,
+      "duration_sec": 30,
+      "mirror_group": null,
+      "cue": "From hands and knees, walk the hands forward, chest toward the mat.",
+      "easier": null
+     },
+     {
+      "step": "8",
+      "name": "High lunge",
+      "side": "L",
+      "side_label": "Left leg forward",
+      "duration_sec": 30,
+      "mirror_group": "lunge-unit",
+      "cue": "Front knee over ankle, back heel lifted, arms up.",
+      "easier": "Knee down"
+     },
+     {
+      "step": "9",
+      "name": "Crescent lunge",
+      "side": "L",
+      "side_label": "Left leg forward",
+      "duration_sec": 30,
+      "mirror_group": "lunge-unit",
+      "cue": "Square the hips, sink a little deeper, reach up.",
+      "easier": "Knee down"
+     },
+     {
+      "step": "10",
+      "name": "Bridge",
+      "side": null,
+      "side_label": null,
+      "duration_sec": 30,
+      "mirror_group": null,
+      "cue": "Feet hip-width, press through the heels, lift the hips.",
+      "easier": null
+     },
+     {
+      "step": "11a",
+      "name": "Supine twist",
+      "side": "R",
+      "side_label": "Right side",
+      "duration_sec": 30,
+      "mirror_group": "twist-supine",
+      "cue": "Knees drop to one side, both shoulders stay down.",
+      "easier": null
+     },
+     {
+      "step": "11b",
+      "name": "Supine twist",
+      "side": "L",
+      "side_label": "Left side",
+      "duration_sec": 30,
+      "mirror_group": "twist-supine",
+      "cue": "Knees drop to one side, both shoulders stay down.",
+      "easier": null
+     },
+     {
+      "step": "12a",
+      "name": "Wind release",
+      "side": "R",
+      "side_label": "Right knee",
+      "duration_sec": 30,
+      "mirror_group": "wind",
+      "cue": "Hug one knee to the chest, the other leg long.",
+      "easier": null
+     },
+     {
+      "step": "12b",
+      "name": "Wind release",
+      "side": "L",
+      "side_label": "Left knee",
+      "duration_sec": 30,
+      "mirror_group": "wind",
+      "cue": "Hug one knee to the chest, the other leg long.",
+      "easier": null
+     },
+     {
+      "step": "13a",
+      "name": "Seated side bend",
+      "side": "L",
+      "side_label": "Lean left",
+      "duration_sec": 30,
+      "mirror_group": "side-bend",
+      "cue": "Sit tall, reach the opposite arm overhead and lean.",
+      "easier": null
+     },
+     {
+      "step": "13b",
+      "name": "Seated side bend",
+      "side": "R",
+      "side_label": "Lean right",
+      "duration_sec": 30,
+      "mirror_group": "side-bend",
+      "cue": "Sit tall, reach the opposite arm overhead and lean.",
+      "easier": null
+     },
+     {
+      "step": "14a",
+      "name": "Seated twist",
+      "side": "L",
+      "side_label": "Twist left",
+      "duration_sec": 30,
+      "mirror_group": "twist-seated",
+      "cue": "Lengthen up first, then turn from the ribs.",
+      "easier": null
+     },
+     {
+      "step": "14b",
+      "name": "Seated twist",
+      "side": "R",
+      "side_label": "Twist right",
+      "duration_sec": 30,
+      "mirror_group": "twist-seated",
+      "cue": "Lengthen up first, then turn from the ribs.",
+      "easier": null
+     },
+     {
+      "step": "15",
+      "name": "Seated mountain",
+      "side": null,
+      "side_label": null,
+      "duration_sec": 30,
+      "mirror_group": null,
+      "cue": "Sit tall, arms overhead, slow breaths.",
+      "easier": null
+     },
+     {
+      "step": "16",
+      "name": "Easy pose",
+      "side": null,
+      "side_label": null,
+      "duration_sec": 30,
+      "mirror_group": null,
+      "cue": "Cross-legged, hands on knees, breathe slowly.",
+      "easier": null
+     }
+    ],
+    "close": {
+     "name": "Easy pose breathing",
+     "side": null,
+     "duration_sec": 180,
+     "cue": "Easy pose. Slow, even breaths."
+    },
+    "equipment": [
+     "mat",
+     "Stretch Trainer"
+    ],
+    "total_sec": 2250,
+    "notes": "8 min Stretch Trainer, then 2 rounds of 16 poses (round 2 holds 2× from bridge on), 3 min easy-pose breathing"
+   },
+   "logged": [],
+   "summary_notes": "recovery_flow: partial 14 of 38 min"
+  },
+  {
+   "plan_id": 105,
+   "plan_date": "2026-09-18",
+   "session_type": "strength_b",
+   "display_name": "Office Strength B",
+   "phase": 1,
+   "week_num": 1,
+   "target_rpe": 6.0,
+   "est_duration_min": 45,
+   "location": "office gym",
+   "is_skipped": false,
+   "adjusted": true,
+   "status": "done",
+   "blocks": {
+    "type": "circuit",
+    "display_name": "Office Strength B",
+    "location": "office gym",
+    "rounds": 2,
+    "warmup": "5 min elliptical, easy",
+    "cooldown": "5 min Stretch Trainer",
+    "exercises": [
+     {
+      "name": "DB goblet squat",
+      "format": "reps",
+      "target_reps": 12,
+      "notes": "2×8-12"
+     },
+     {
+      "name": "Seated cable row",
+      "format": "reps",
+      "target_reps": 12,
+      "notes": "2×8-12"
+     },
+     {
+      "name": "Incline DB press",
+      "format": "reps",
+      "target_reps": 12,
+      "notes": "2×8-12"
+     },
+     {
+      "name": "Leg extension",
+      "format": "reps",
+      "target_reps": 12,
+      "notes": "2×8-12"
+     },
+     {
+      "name": "Rear delt fly",
+      "format": "reps",
+      "target_reps": 12,
+      "notes": "2×8-12"
+     },
+     {
+      "name": "Cable Pallof press",
+      "format": "reps",
+      "target_reps": 12,
+      "notes": "2×8-12"
+     },
+     {
+      "name": "45° back extension",
+      "format": "reps",
+      "target_reps": 12,
+      "notes": "2×8-12"
+     }
+    ],
+    "adjustment": {
+     "reason": "Pain shoulder 2/5 → incline DB press 20 lb (last 25).",
+     "rules_fired": [
+      "pain_lighter"
+     ],
+     "summary": [
+      "Pain shoulder 2/5 → incline DB press 20 lb (last 25)."
+     ]
+    }
+   },
+   "logged": [
+    {
+     "exercise": "DB goblet squat",
+     "log_type": "strength_set",
+     "sets": 2,
+     "reps": [
+      12,
+      11
+     ],
+     "top_weight_lbs": 25,
+     "duration_sec": null,
+     "skipped": 0
+    },
+    {
+     "exercise": "Seated cable row",
+     "log_type": "strength_set",
+     "sets": 2,
+     "reps": [
+      12,
+      11
+     ],
+     "top_weight_lbs": 25,
+     "duration_sec": null,
+     "skipped": 0
+    },
+    {
+     "exercise": "Incline DB press",
+     "log_type": "strength_set",
+     "sets": 2,
+     "reps": [
+      12,
+      11
+     ],
+     "top_weight_lbs": 25,
+     "duration_sec": null,
+     "skipped": 0
+    },
+    {
+     "exercise": "Leg extension",
+     "log_type": "strength_set",
+     "sets": 2,
+     "reps": [
+      12,
+      11
+     ],
+     "top_weight_lbs": 25,
+     "duration_sec": null,
+     "skipped": 0
+    },
+    {
+     "exercise": "Rear delt fly",
+     "log_type": "strength_set",
+     "sets": 2,
+     "reps": [
+      12,
+      11
+     ],
+     "top_weight_lbs": 25,
+     "duration_sec": null,
+     "skipped": 0
+    },
+    {
+     "exercise": "Cable Pallof press",
+     "log_type": "strength_set",
+     "sets": 2,
+     "reps": [
+      12,
+      11
+     ],
+     "top_weight_lbs": 25,
+     "duration_sec": null,
+     "skipped": 0
+    },
+    {
+     "exercise": "45° back extension",
+     "log_type": "strength_set",
+     "sets": 2,
+     "reps": [
+      12,
+      11
+     ],
+     "top_weight_lbs": 25,
+     "duration_sec": null,
+     "skipped": 0
+    }
+   ],
+   "summary_notes": null
+  },
+  {
+   "plan_id": 106,
+   "plan_date": "2026-09-19",
+   "session_type": "recovery_flow",
+   "display_name": "Recovery Flow",
+   "phase": 1,
+   "week_num": 1,
+   "target_rpe": 2.0,
+   "est_duration_min": 30,
+   "location": "home",
+   "is_skipped": false,
+   "adjusted": false,
+   "status": "missed",
+   "blocks": {
+    "type": "recovery_flow",
+    "display_name": "Recovery Flow",
+    "location": "home",
+    "rounds": 2,
+    "double_round": 2,
+    "double_steps": [
+     10,
+     16
+    ],
+    "preview_sec": 5,
+    "pre": [],
+    "flow": [
+     {
+      "step": "1",
+      "name": "Child's pose",
+      "side": null,
+      "side_label": null,
+      "duration_sec": 30,
+      "mirror_group": null,
+      "cue": "Knees wide, hips back toward your heels, arms long.",
+      "easier": null
+     },
+     {
+      "step": "2",
+      "name": "Cobra",
+      "side": null,
+      "side_label": null,
+      "duration_sec": 30,
+      "mirror_group": null,
+      "cue": "Hips stay down; press through the palms and lift the chest gently.",
+      "easier": null
+     },
+     {
+      "step": "3",
+      "name": "Downward dog",
+      "side": null,
+      "side_label": null,
+      "duration_sec": 60,
+      "mirror_group": null,
+      "cue": "Hips high, heels reaching down, long spine.",
+      "easier": "Dolphin — forearms down"
+     },
+     {
+      "step": "4",
+      "name": "Standing forward bend",
+      "side": null,
+      "side_label": null,
+      "duration_sec": 30,
+      "mirror_group": null,
+      "cue": "Soft knees, let your head hang heavy.",
+      "easier": null
+     },
+     {
+      "step": "5",
+      "name": "High lunge",
+      "side": "R",
+      "side_label": "Right leg forward",
+      "duration_sec": 30,
+      "mirror_group": "lunge-unit",
+      "cue": "Front knee over ankle, back heel lifted, arms up.",
+      "easier": "Knee down"
+     },
+     {
+      "step": "6",
+      "name": "Crescent lunge",
+      "side": "R",
+      "side_label": "Right leg forward",
+      "duration_sec": 30,
+      "mirror_group": "lunge-unit",
+      "cue": "Square the hips, sink a little deeper, reach up.",
+      "easier": "Knee down"
+     },
+     {
+      "step": "7",
+      "name": "Extended puppy",
+      "side": null,
+      "side_label": null,
+      "duration_sec": 30,
+      "mirror_group": null,
+      "cue": "From hands and knees, walk the hands forward, chest toward the mat.",
+      "easier": null
+     },
+     {
+      "step": "8",
+      "name": "High lunge",
+      "side": "L",
+      "side_label": "Left leg forward",
+      "duration_sec": 30,
+      "mirror_group": "lunge-unit",
+      "cue": "Front knee over ankle, back heel lifted, arms up.",
+      "easier": "Knee down"
+     },
+     {
+      "step": "9",
+      "name": "Crescent lunge",
+      "side": "L",
+      "side_label": "Left leg forward",
+      "duration_sec": 30,
+      "mirror_group": "lunge-unit",
+      "cue": "Square the hips, sink a little deeper, reach up.",
+      "easier": "Knee down"
+     },
+     {
+      "step": "10",
+      "name": "Bridge",
+      "side": null,
+      "side_label": null,
+      "duration_sec": 30,
+      "mirror_group": null,
+      "cue": "Feet hip-width, press through the heels, lift the hips.",
+      "easier": null
+     },
+     {
+      "step": "11a",
+      "name": "Supine twist",
+      "side": "R",
+      "side_label": "Right side",
+      "duration_sec": 30,
+      "mirror_group": "twist-supine",
+      "cue": "Knees drop to one side, both shoulders stay down.",
+      "easier": null
+     },
+     {
+      "step": "11b",
+      "name": "Supine twist",
+      "side": "L",
+      "side_label": "Left side",
+      "duration_sec": 30,
+      "mirror_group": "twist-supine",
+      "cue": "Knees drop to one side, both shoulders stay down.",
+      "easier": null
+     },
+     {
+      "step": "12a",
+      "name": "Wind release",
+      "side": "R",
+      "side_label": "Right knee",
+      "duration_sec": 30,
+      "mirror_group": "wind",
+      "cue": "Hug one knee to the chest, the other leg long.",
+      "easier": null
+     },
+     {
+      "step": "12b",
+      "name": "Wind release",
+      "side": "L",
+      "side_label": "Left knee",
+      "duration_sec": 30,
+      "mirror_group": "wind",
+      "cue": "Hug one knee to the chest, the other leg long.",
+      "easier": null
+     },
+     {
+      "step": "13a",
+      "name": "Seated side bend",
+      "side": "L",
+      "side_label": "Lean left",
+      "duration_sec": 30,
+      "mirror_group": "side-bend",
+      "cue": "Sit tall, reach the opposite arm overhead and lean.",
+      "easier": null
+     },
+     {
+      "step": "13b",
+      "name": "Seated side bend",
+      "side": "R",
+      "side_label": "Lean right",
+      "duration_sec": 30,
+      "mirror_group": "side-bend",
+      "cue": "Sit tall, reach the opposite arm overhead and lean.",
+      "easier": null
+     },
+     {
+      "step": "14a",
+      "name": "Seated twist",
+      "side": "L",
+      "side_label": "Twist left",
+      "duration_sec": 30,
+      "mirror_group": "twist-seated",
+      "cue": "Lengthen up first, then turn from the ribs.",
+      "easier": null
+     },
+     {
+      "step": "14b",
+      "name": "Seated twist",
+      "side": "R",
+      "side_label": "Twist right",
+      "duration_sec": 30,
+      "mirror_group": "twist-seated",
+      "cue": "Lengthen up first, then turn from the ribs.",
+      "easier": null
+     },
+     {
+      "step": "15",
+      "name": "Seated mountain",
+      "side": null,
+      "side_label": null,
+      "duration_sec": 30,
+      "mirror_group": null,
+      "cue": "Sit tall, arms overhead, slow breaths.",
+      "easier": null
+     },
+     {
+      "step": "16",
+      "name": "Easy pose",
+      "side": null,
+      "side_label": null,
+      "duration_sec": 30,
+      "mirror_group": null,
+      "cue": "Cross-legged, hands on knees, breathe slowly.",
+      "easier": null
+     }
+    ],
+    "close": {
+     "name": "Easy pose breathing",
+     "side": null,
+     "duration_sec": 180,
+     "cue": "Easy pose. Slow, even breaths."
+    },
+    "equipment": [
+     "mat",
+     "Stretch Trainer"
+    ],
+    "total_sec": 1770,
+    "notes": "8 min Stretch Trainer, then 2 rounds of 16 poses (round 2 holds 2× from bridge on), 3 min easy-pose breathing"
+   },
+   "logged": [],
+   "summary_notes": null
+  },
+  {
+   "plan_id": 107,
+   "plan_date": "2026-09-20",
+   "session_type": "walk",
+   "display_name": "Walk",
+   "phase": 1,
+   "week_num": 1,
+   "target_rpe": null,
+   "est_duration_min": 30,
+   "location": "outside",
+   "is_skipped": false,
+   "adjusted": false,
+   "status": "done",
+   "blocks": {
+    "type": "steady",
+    "display_name": "Walk",
+    "location": "outside",
+    "duration_min": 30,
+    "intensity": "easy",
+    "equipment": [
+     "walking shoes"
+    ]
+   },
+   "logged": [],
+   "summary_notes": null
+  },
+  {
+   "plan_id": 108,
+   "plan_date": "2026-09-21",
+   "session_type": "strength_c",
+   "display_name": "Office Strength C",
+   "phase": 1,
+   "week_num": 1,
+   "target_rpe": 6.0,
+   "est_duration_min": 40,
+   "location": "office gym",
+   "is_skipped": false,
+   "adjusted": false,
+   "status": "partial",
+   "blocks": {
+    "type": "circuit",
+    "display_name": "Office Strength C",
+    "location": "office gym",
+    "rounds": 2,
+    "warmup": "5 min elliptical, easy",
+    "cooldown": "5 min Stretch Trainer",
+    "exercises": [
+     {
+      "name": "DB Romanian deadlift",
+      "format": "reps",
+      "target_reps": 12,
+      "notes": "2×8-12"
+     },
+     {
+      "name": "Pec fly",
+      "format": "reps",
+      "target_reps": 12,
+      "notes": "2×8-12"
+     },
+     {
+      "name": "Single-arm cable row",
+      "format": "reps",
+      "target_reps": 12,
+      "notes": "2×8-12"
+     },
+     {
+      "name": "Seated DB shoulder press",
+      "format": "reps",
+      "target_reps": 12,
+      "notes": "2×8-12"
+     },
+     {
+      "name": "Calf press",
+      "format": "reps",
+      "target_reps": 12,
+      "notes": "2×8-12"
+     },
+     {
+      "name": "Ab machine crunch",
+      "format": "reps",
+      "target_reps": 12,
+      "notes": "2×8-12"
+     }
+    ]
+   },
+   "logged": [
+    {
+     "exercise": "DB Romanian deadlift",
+     "log_type": "strength_set",
+     "sets": 1,
+     "reps": [
+      10
+     ],
+     "top_weight_lbs": 35,
+     "duration_sec": null,
+     "skipped": 0
+    }
+   ],
+   "summary_notes": null
+  },
+  {
+   "plan_id": 109,
+   "plan_date": "2026-09-22",
+   "session_type": "cardio_z2",
+   "display_name": "Zone 2 Cardio",
+   "phase": 1,
+   "week_num": 1,
+   "target_rpe": null,
+   "est_duration_min": 20,
+   "location": "office gym",
+   "is_skipped": false,
+   "adjusted": false,
+   "status": "upcoming",
+   "blocks": {
+    "type": "steady",
+    "display_name": "Zone 2 Cardio",
+    "location": "office gym",
+    "duration_min": 20,
+    "intensity": "Zone 2",
+    "equipment": [
+     "treadmill",
+     "elliptical"
+    ]
+   },
+   "logged": [],
+   "summary_notes": null
+  }
+ ],
+ "today": {
+  "date": "2026-09-21",
+  "day": {
+   "plan_id": 108,
+   "plan_date": "2026-09-21",
+   "session_type": "strength_c",
+   "display_name": "Office Strength C",
+   "phase": 1,
+   "week_num": 1,
+   "target_rpe": 6.0,
+   "est_duration_min": 40,
+   "location": "office gym",
+   "is_skipped": false,
+   "adjusted": false,
+   "status": "partial",
+   "blocks": {
+    "type": "circuit",
+    "display_name": "Office Strength C",
+    "location": "office gym",
+    "rounds": 2,
+    "warmup": "5 min elliptical, easy",
+    "cooldown": "5 min Stretch Trainer",
+    "exercises": [
+     {
+      "name": "DB Romanian deadlift",
+      "format": "reps",
+      "target_reps": 12,
+      "notes": "2×8-12"
+     },
+     {
+      "name": "Pec fly",
+      "format": "reps",
+      "target_reps": 12,
+      "notes": "2×8-12"
+     },
+     {
+      "name": "Single-arm cable row",
+      "format": "reps",
+      "target_reps": 12,
+      "notes": "2×8-12"
+     },
+     {
+      "name": "Seated DB shoulder press",
+      "format": "reps",
+      "target_reps": 12,
+      "notes": "2×8-12"
+     },
+     {
+      "name": "Calf press",
+      "format": "reps",
+      "target_reps": 12,
+      "notes": "2×8-12"
+     },
+     {
+      "name": "Ab machine crunch",
+      "format": "reps",
+      "target_reps": 12,
+      "notes": "2×8-12"
+     }
+    ]
+   },
+   "logged": [
+    {
+     "exercise": "DB Romanian deadlift",
+     "log_type": "strength_set",
+     "sets": 1,
+     "reps": [
+      10
+     ],
+     "top_weight_lbs": 35,
+     "duration_sec": null,
+     "skipped": 0
+    }
+   ],
+   "summary_notes": null
+  },
+  "progress": {
+   "unit": "sets",
+   "done": 1,
+   "planned": 12
+  },
+  "checkin": {
+   "date": "2026-09-21",
+   "sleep_hrs": 7.5,
+   "energy": 4,
+   "weight_lbs": 282.6,
+   "resting_hr": 58,
+   "soreness": {
+    "hamstrings": 2
+   },
+   "pain": {
+    "low back": 3
+   }
+  },
+  "adjustment": null
+ },
+ "strength_progress": [
+  {
+   "exercise": "Leg press",
+   "sessions": 1,
+   "last": {
+    "date": "2026-09-16",
+    "weight_lbs": 180,
+    "reps": 12,
+    "score": 2160
+   },
+   "previous": null,
+   "best": {
+    "date": "2026-09-16",
+    "weight_lbs": 180,
+    "reps": 12,
+    "score": 2160
+   },
+   "trend": null,
+   "setting": 4
+  },
+  {
+   "exercise": "DB bench press",
+   "sessions": 1,
+   "last": {
+    "date": "2026-09-16",
+    "weight_lbs": 30,
+    "reps": 10,
+    "score": 300
+   },
+   "previous": null,
+   "best": {
+    "date": "2026-09-16",
+    "weight_lbs": 30,
+    "reps": 10,
+    "score": 300
+   },
+   "trend": null,
+   "setting": null
+  },
+  {
+   "exercise": "Lat pulldown",
+   "sessions": 1,
+   "last": {
+    "date": "2026-09-16",
+    "weight_lbs": 100,
+    "reps": 12,
+    "score": 1200
+   },
+   "previous": null,
+   "best": {
+    "date": "2026-09-16",
+    "weight_lbs": 100,
+    "reps": 12,
+    "score": 1200
+   },
+   "trend": null,
+   "setting": 7
+  },
+  {
+   "exercise": "Seated leg curl",
+   "sessions": 1,
+   "last": {
+    "date": "2026-09-16",
+    "weight_lbs": 70,
+    "reps": 12,
+    "score": 840
+   },
+   "previous": null,
+   "best": {
+    "date": "2026-09-16",
+    "weight_lbs": 70,
+    "reps": 12,
+    "score": 840
+   },
+   "trend": null,
+   "setting": 3
+  },
+  {
+   "exercise": "Cable face pull (rope)",
+   "sessions": 1,
+   "last": {
+    "date": "2026-09-16",
+    "weight_lbs": 30,
+    "reps": 15,
+    "score": 450
+   },
+   "previous": null,
+   "best": {
+    "date": "2026-09-16",
+    "weight_lbs": 30,
+    "reps": 15,
+    "score": 450
+   },
+   "trend": null,
+   "setting": 5
+  },
+  {
+   "exercise": "Captain's chair knee raise",
+   "sessions": 1,
+   "last": {
+    "date": "2026-09-16",
+    "weight_lbs": null,
+    "reps": 10,
+    "score": 10.0
+   },
+   "previous": null,
+   "best": {
+    "date": "2026-09-16",
+    "weight_lbs": null,
+    "reps": 10,
+    "score": 10.0
+   },
+   "trend": null,
+   "setting": null
+  },
+  {
+   "exercise": "DB goblet squat",
+   "sessions": 1,
+   "last": {
+    "date": "2026-09-18",
+    "weight_lbs": 25,
+    "reps": 12,
+    "score": 300
+   },
+   "previous": null,
+   "best": {
+    "date": "2026-09-18",
+    "weight_lbs": 25,
+    "reps": 12,
+    "score": 300
+   },
+   "trend": null,
+   "setting": null
+  },
+  {
+   "exercise": "Seated cable row",
+   "sessions": 1,
+   "last": {
+    "date": "2026-09-18",
+    "weight_lbs": 25,
+    "reps": 12,
+    "score": 300
+   },
+   "previous": null,
+   "best": {
+    "date": "2026-09-18",
+    "weight_lbs": 25,
+    "reps": 12,
+    "score": 300
+   },
+   "trend": null,
+   "setting": 2
+  },
+  {
+   "exercise": "Incline DB press",
+   "sessions": 2,
+   "last": {
+    "date": "2026-09-18",
+    "weight_lbs": 25,
+    "reps": 12,
+    "score": 300
+   },
+   "previous": {
+    "date": "2026-09-11",
+    "weight_lbs": 20,
+    "reps": 10,
+    "score": 200
+   },
+   "best": {
+    "date": "2026-09-18",
+    "weight_lbs": 25,
+    "reps": 12,
+    "score": 300
+   },
+   "trend": "up",
+   "setting": null
+  },
+  {
+   "exercise": "Leg extension",
+   "sessions": 1,
+   "last": {
+    "date": "2026-09-18",
+    "weight_lbs": 25,
+    "reps": 12,
+    "score": 300
+   },
+   "previous": null,
+   "best": {
+    "date": "2026-09-18",
+    "weight_lbs": 25,
+    "reps": 12,
+    "score": 300
+   },
+   "trend": null,
+   "setting": 2
+  },
+  {
+   "exercise": "Rear delt fly",
+   "sessions": 1,
+   "last": {
+    "date": "2026-09-18",
+    "weight_lbs": 25,
+    "reps": 12,
+    "score": 300
+   },
+   "previous": null,
+   "best": {
+    "date": "2026-09-18",
+    "weight_lbs": 25,
+    "reps": 12,
+    "score": 300
+   },
+   "trend": null,
+   "setting": 2
+  },
+  {
+   "exercise": "Cable Pallof press",
+   "sessions": 1,
+   "last": {
+    "date": "2026-09-18",
+    "weight_lbs": 25,
+    "reps": 12,
+    "score": 300
+   },
+   "previous": null,
+   "best": {
+    "date": "2026-09-18",
+    "weight_lbs": 25,
+    "reps": 12,
+    "score": 300
+   },
+   "trend": null,
+   "setting": null
+  },
+  {
+   "exercise": "45° back extension",
+   "sessions": 1,
+   "last": {
+    "date": "2026-09-18",
+    "weight_lbs": 25,
+    "reps": 12,
+    "score": 300
+   },
+   "previous": null,
+   "best": {
+    "date": "2026-09-18",
+    "weight_lbs": 25,
+    "reps": 12,
+    "score": 300
+   },
+   "trend": null,
+   "setting": null
+  },
+  {
+   "exercise": "DB Romanian deadlift",
+   "sessions": 2,
+   "last": {
+    "date": "2026-09-21",
+    "weight_lbs": 35,
+    "reps": 10,
+    "score": 350
+   },
+   "previous": {
+    "date": "2026-09-14",
+    "weight_lbs": 30,
+    "reps": 12,
+    "score": 360
+   },
+   "best": {
+    "date": "2026-09-21",
+    "weight_lbs": 35,
+    "reps": 10,
+    "score": 350
+   },
+   "trend": "down",
+   "setting": null
+  },
+  {
+   "exercise": "Pec fly",
+   "sessions": 0,
+   "last": null,
+   "previous": null,
+   "best": null,
+   "trend": null,
+   "setting": null
+  },
+  {
+   "exercise": "Single-arm cable row",
+   "sessions": 0,
+   "last": null,
+   "previous": null,
+   "best": null,
+   "trend": null,
+   "setting": null
+  },
+  {
+   "exercise": "Seated DB shoulder press",
+   "sessions": 0,
+   "last": null,
+   "previous": null,
+   "best": null,
+   "trend": null,
+   "setting": null
+  },
+  {
+   "exercise": "Calf press",
+   "sessions": 0,
+   "last": null,
+   "previous": null,
+   "best": null,
+   "trend": null,
+   "setting": null
+  },
+  {
+   "exercise": "Ab machine crunch",
+   "sessions": 0,
+   "last": null,
+   "previous": null,
+   "best": null,
+   "trend": null,
+   "setting": null
+  }
+ ],
+ "checkins_14d": [
+  {
+   "date": "2026-09-16",
+   "sleep_hrs": 6.5,
+   "energy": 5,
+   "weight_lbs": 284.5,
+   "resting_hr": null,
+   "soreness": {
+    "overall": 0
+   },
+   "pain": {}
+  },
+  {
+   "date": "2026-09-17",
+   "sleep_hrs": 7.0,
+   "energy": 4,
+   "weight_lbs": null,
+   "resting_hr": null,
+   "soreness": {
+    "legs": 3
+   },
+   "pain": {
+    "shoulder": 1
+   }
+  },
+  {
+   "date": "2026-09-18",
+   "sleep_hrs": 6.0,
+   "energy": 3,
+   "weight_lbs": 283.8,
+   "resting_hr": 60,
+   "soreness": {
+    "legs": 2,
+    "quads": 2
+   },
+   "pain": {
+    "shoulder": 2
+   }
+  },
+  {
+   "date": "2026-09-20",
+   "sleep_hrs": 8.0,
+   "energy": 4,
+   "weight_lbs": 283.0,
+   "resting_hr": null,
+   "soreness": {},
+   "pain": {
+    "shoulder": 1
+   }
+  },
+  {
+   "date": "2026-09-21",
+   "sleep_hrs": 7.5,
+   "energy": 4,
+   "weight_lbs": 282.6,
+   "resting_hr": 58,
+   "soreness": {
+    "hamstrings": 2
+   },
+   "pain": {
+    "low back": 3
+   }
+  }
+ ],
+ "patterns": [
+  {
+   "id": 1,
+   "exercise": "Incline DB press",
+   "region": "shoulder",
+   "hits": 3,
+   "exposures": 4,
+   "text": "shoulder pain ≥2 after Incline DB press — 3 of 4 sessions (also that day: Rear delt fly)",
+   "last_reflection_at": "2026-09-20T13:05:00Z"
+  }
+ ],
+ "flags": [
+  {
+   "date": "2026-09-21",
+   "kind": "pain",
+   "text": "Pain chip: low back 3 on DB Romanian deadlift (9/21)"
+  },
+  {
+   "date": "2026-09-19",
+   "kind": "missed",
+   "text": "Missed: Recovery Flow (9/19)"
+  },
+  {
+   "date": "2026-09-18",
+   "kind": "rpe",
+   "text": "RPE 8 on Incline DB press (9/18), cap was 6"
+  },
+  {
+   "date": "2026-09-18",
+   "kind": "pain",
+   "text": "Pain chip: shoulder 2 on Incline DB press (9/18)"
+  },
+  {
+   "date": "2026-09-17",
+   "kind": "partial",
+   "text": "Partial: Recovery Flow (9/17) — 14 of 38 min"
+  },
+  {
+   "date": "2026-09-16",
+   "kind": "rpe",
+   "text": "RPE 8 on Leg press (9/16), cap was 6"
+  }
+ ],
+ "weight_30d": [
+  {
+   "date": "2026-08-30",
+   "value": 291.2
+  },
+  {
+   "date": "2026-09-05",
+   "value": 289.0
+  },
+  {
+   "date": "2026-09-12",
+   "value": 286.4
+  },
+  {
+   "date": "2026-09-16",
+   "value": 284.5
+  },
+  {
+   "date": "2026-09-18",
+   "value": 283.8
+  },
+  {
+   "date": "2026-09-20",
+   "value": 283.0
+  },
+  {
+   "date": "2026-09-21",
+   "value": 282.6
+  }
+ ],
+ "weight_summary": {
+  "first": {
+   "date": "2026-08-30",
+   "value": 291.2
+  },
+  "latest": {
+   "date": "2026-09-21",
+   "value": 282.6
+  },
+  "change": -8.6
+ },
+ "previous_program_end": "2026-09-13"
+}

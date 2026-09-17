@@ -69,6 +69,15 @@ export default function App() {
   const onBarNavigate = useCallback((target: BarTarget) => {
     setPeek(target === "today" ? null : target);
   }, []);
+  // Status: every bar target leads back to the Workout route; a tap on the
+  // Status tab while there re-opens the page (closing a day / previous view).
+  const [statusVisit, setStatusVisit] = useState(0);
+  const onStatusNavigate = useCallback((target: BarTarget) => {
+    // A deliberate trip to Workout: never bounce back to Status.
+    autoRedirectedRef.current = true;
+    setPeek(target === "today" ? null : target);
+    navigate("today");
+  }, [navigate]);
   const [totalElapsedSec, setTotalElapsedSec] = useState(0);
   const [interrupted, setInterrupted] = useState(() => {
     try {
@@ -193,6 +202,7 @@ export default function App() {
   useEffect(() => {
     if (autoRedirectedRef.current) return;
     if (route !== "today") return;
+    if (peek) return;                  // Tomorrow / Week asked for explicitly
     if (flow !== "setup") return;
     if (statusLoad.loading) return;
     // Wait for the plan too: its blocks.type decides (a Recovery Flow row can
@@ -218,7 +228,7 @@ export default function App() {
       autoRedirectedRef.current = true;
       navigate("status", { replace: true });
     }
-  }, [route, flow, statusLoad, planLoad, navigate]);
+  }, [route, flow, statusLoad, planLoad, navigate, peek]);
 
   const plan: Plan | null =
     planLoad.result?.status === "ok" ? planLoad.result.plan : null;
@@ -290,7 +300,12 @@ export default function App() {
   const immersive = route === "today" && (flow === "workout" || flowRunning);
   const chrome = immersive ? null : (
     <>
-      <Nav route={route} onNavigate={(r) => { setPeek(null); navigate(r); }} />
+      <Nav route={route} onNavigate={(r) => {
+        setPeek(null);
+        if (r === "status") setStatusVisit((n) => n + 1);
+        else autoRedirectedRef.current = true;   // the Workout tab means Workout
+        navigate(r);
+      }} />
       <div className="floating-badges">
         <SyncBadge />
       </div>
@@ -299,31 +314,10 @@ export default function App() {
 
   // ---- /status route ----
   if (route === "status") {
-    if (statusLoad.loading) {
-      return (
-        <>
-          {chrome}
-          <Loading />
-        </>
-      );
-    }
-    const sr = statusLoad.result;
-    if (!sr || sr.status === "error") {
-      return (
-        <>
-          {chrome}
-          <ErrorScreen
-            title="Status unavailable"
-            message={sr?.status === "error" ? sr.message : "Failed to load status."}
-            onRetry={refreshStatus}
-          />
-        </>
-      );
-    }
     return (
       <>
         {chrome}
-        <StatusScreen data={sr.data} />
+        <StatusScreen key={`status-${statusVisit}`} onNavigate={onStatusNavigate} />
       </>
     );
   }

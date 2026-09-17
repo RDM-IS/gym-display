@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import overview from "../tests/fixtures/overview.json" with { type: "json" };
 
 // PAIN-1: the in-session Pain chip on a real iPad-sized WebKit page — no
 // keyboard, 56 px targets, and the posted set carries `pain=shoulder:2`.
@@ -74,6 +75,12 @@ test("pain chip: region + rating, no keyboard, posted note, Status still flags i
       } } });
     }
     if (path.endsWith("/sessions")) return route.fulfill({ json: SESSIONS });
+    if (path.endsWith("/overview")) {
+      // The server's flag for the chip just logged (pain=shoulder:2).
+      return route.fulfill({ json: { ...overview, flags: [
+        { date: TODAY, kind: "pain", text: "Pain chip: shoulder 2 on Seated DB shoulder press (9/21)" },
+        ...overview.flags] } });
+    }
     if (path.endsWith("/log")) {
       posted.push(route.request().postDataJSON());
       return route.fulfill({ json: { plan_id: 106, inserted: 1, rows: [] } });
@@ -128,9 +135,8 @@ test("pain chip: region + rating, no keyboard, posted note, Status still flags i
   });
 
   await page.goto("/status");
-  const row = page.locator(".outlier-row", { hasText: "pain=shoulder:2" });
+  const row = page.getByTestId("st-flags").locator("li", { hasText: "Pain chip: shoulder 2 on Seated DB shoulder press" });
   await expect(row).toBeVisible();
-  await expect(row).toContainText("Pain note");
   await row.scrollIntoViewIfNeeded();
   await shot(page, "pain-status-outlier");
 });
@@ -153,6 +159,7 @@ test("check-in day off renders as a rest day with the adjustment", async ({ page
     }
     if (path.endsWith("/today/logged")) return route.fulfill({ json: { plan_id: 106, exercises: [], has_session_summary: false } });
     if (path.endsWith("/sessions")) return route.fulfill({ json: { days: [] } });
+    if (path.endsWith("/overview")) return route.fulfill({ json: overview });
     return route.fulfill({ json: { by_exercise: {} } });
   });
   // Like any rest day, Today redirects to Status first.
