@@ -158,7 +158,7 @@ test("check-in day off renders as a rest day with the adjustment", async ({ page
   // Like any rest day, Today redirects to Status first.
   await page.goto("/today");
   await expect(page).toHaveURL(/\/status$/);
-  await page.getByRole("link", { name: "Today" }).tap();
+  await page.getByRole("link", { name: "Workout" }).tap();
   await expect(page.getByText("No training today.")).toBeVisible();
   await expect(page.getByText("Day off", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /Adjusted: pain shoulder 4\/5/ })).toBeVisible();

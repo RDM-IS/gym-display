@@ -17,7 +17,7 @@ export default function Nav({ route, onNavigate }: Props) {
         className={route === "today" ? "active" : ""}
         onClick={(e) => go(e, "today")}
       >
-        Today
+        Workout
       </a>
       <a
         href="/status"

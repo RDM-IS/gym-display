@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import BottomBar from "../components/BottomBar";
 import PlanDayDetail, { sessionName, totalMinutes } from "../components/PlanDayDetail";
+import type { BarTarget } from "../lib/bottom-bar";
 import { fetchPlanRange, type FetchPlanRangeResult } from "../lib/api";
 import type { PlanDay } from "../lib/types";
 import {
@@ -19,24 +21,38 @@ export type PeekMode = "tomorrow" | "week";
 
 interface Props {
   mode: PeekMode;
-  onBack: () => void;
+  /** Bottom-bar navigation (Today / Tomorrow / Week). */
+  onNavigate: (target: BarTarget) => void;
   /** Injected in tests; defaults to the device date. */
   deviceToday?: string;
 }
 
 type Load = { loading: true } | { loading: false; result: FetchPlanRangeResult };
 
-/** GD-WEEK — read-only Tomorrow and Week views. Fetched when opened, never
- * polled; offline shows the last copy "as of HH:MM". No Start button. */
-export default function PeekScreen({ mode, onBack, deviceToday }: Props) {
+/** GD-WEEK — read-only Tomorrow and Week views (and a day opened from Week).
+ * Fetched when opened, never polled; offline shows the last copy
+ * "as of HH:MM". No Start button; the bottom bar is the only navigation. */
+export default function PeekScreen({ mode, onNavigate, deviceToday }: Props) {
   const guess = deviceToday ?? deviceTodayIso();
+  return mode === "tomorrow"
+    ? <TomorrowView guess={guess} onNavigate={onNavigate} />
+    : <WeekView guess={guess} onNavigate={onNavigate} />;
+}
+
+function PeekFrame({ title, view, testId, onNavigate, children }: {
+  title: string;
+  view: "tomorrow" | "week" | "day";
+  testId: string;
+  onNavigate: (target: BarTarget) => void;
+  children: React.ReactNode;
+}) {
   return (
-    <div className={`screen peek peek--${mode}`} data-testid={`peek-${mode}`}>
+    <div className={`screen peek peek--${view}`} data-testid={testId}>
       <header className="peek-head">
-        <button type="button" className="btn peek-back" onClick={onBack}>‹ Today</button>
-        <div className="h2">{mode === "tomorrow" ? "Tomorrow" : "Week"}</div>
+        <div className="h2 peek-title">{title}</div>
       </header>
-      {mode === "tomorrow" ? <TomorrowView guess={guess} /> : <WeekView guess={guess} />}
+      {children}
+      <BottomBar view={view} onNavigate={onNavigate} />
     </div>
   );
 }
@@ -66,32 +82,41 @@ function useRange(from: string | null, to: string | null): Load {
   return load;
 }
 
-function TomorrowView({ guess }: { guess: string }) {
+function TomorrowView({ guess, onNavigate }: { guess: string; onNavigate: (t: BarTarget) => void }) {
   // One day either side of the device's guess, so an active-timezone
   // difference can't miss the day. The API's `today` decides.
   const load = useRange(addDays(guess, -1), addDays(guess, 2));
-  if (load.loading) return <div className="peek-body muted">Loading…</div>;
-  const r = load.result;
-  if (r.status === "error") {
-    return <div className="peek-body muted" data-testid="peek-error">Couldn't load tomorrow ({r.message}).</div>;
+  let body: React.ReactNode;
+  if (load.loading) {
+    body = <div className="muted">Loading…</div>;
+  } else if (load.result.status === "error") {
+    body = <div className="muted" data-testid="peek-error">Couldn't load tomorrow ({load.result.message}).</div>;
+  } else {
+    const r = load.result;
+    const day = tomorrowOf(r.data);
+    body = (
+      <>
+        <StaleNote result={r} />
+        {day ? (
+          <PlanDayDetail day={day} today={r.data.today} />
+        ) : (
+          <div className="muted" data-testid="peek-empty">Nothing planned for tomorrow.</div>
+        )}
+      </>
+    );
   }
-  const day = tomorrowOf(r.data);
   return (
-    <div className="peek-body">
-      <StaleNote result={r} />
-      {day ? (
-        <PlanDayDetail day={day} today={r.data.today} />
-      ) : (
-        <div className="muted" data-testid="peek-empty">Nothing planned for tomorrow.</div>
-      )}
-    </div>
+    <PeekFrame title="Tomorrow" view="tomorrow" testId="peek-tomorrow" onNavigate={onNavigate}>
+      <div className="peek-body">{body}</div>
+    </PeekFrame>
   );
 }
 
-function WeekView({ guess }: { guess: string }) {
+function WeekView({ guess, onNavigate }: { guess: string; onNavigate: (t: BarTarget) => void }) {
   const [start, setStart] = useState(() => programWeekStart(guess));
   const [anchored, setAnchored] = useState(false);
-  const [selected, setSelected] = useState<string | null>(null);
+  // A day opened from the list; Week (bottom bar) closes it and keeps `start`.
+  const [openDay, setOpenDay] = useState<string | null>(null);
   const load = useRange(start, addDays(start, 6));
 
   // Re-anchor once on the API's `today` (active timezone) if the device's
@@ -105,7 +130,6 @@ function WeekView({ guess }: { guess: string }) {
 
   const move = (dir: -1 | 1) => {
     setAnchored(true);
-    setSelected(null);
     setStart((s) => shiftWeek(s, dir));
   };
 
@@ -115,10 +139,29 @@ function WeekView({ guess }: { guess: string }) {
   const dates = weekDates(start);
   const today = data?.today ?? guess;
   const heading = data ? weekHeading(data.days) : null;
-  const pick = selected ?? (dates.includes(today) ? today : dates.find((d) => byDate.has(d)) ?? null);
+  // Landscape preview column: today, else the week's first planned day.
+  const pick = dates.includes(today) ? today : dates.find((d) => byDate.has(d)) ?? null;
   const detail = pick ? byDate.get(pick) ?? null : null;
+  const opened = openDay ? byDate.get(openDay) ?? null : null;
+
+  if (openDay && opened) {
+    return (
+      <PeekFrame
+        title={dayLabel(openDay)}
+        view="day"
+        testId="peek-day"
+        onNavigate={(t) => (t === "week" ? setOpenDay(null) : onNavigate(t))}
+      >
+        <div className="peek-body">
+          {result && <StaleNote result={result} />}
+          <PlanDayDetail day={opened} today={today} />
+        </div>
+      </PeekFrame>
+    );
+  }
 
   return (
+    <PeekFrame title="Week" view="week" testId="peek-week" onNavigate={onNavigate}>
     <div className="peek-body peek-week">
       <div className="week-nav">
         <button type="button" className="btn week-arrow" aria-label="Previous week" onClick={() => move(-1)}>‹</button>
@@ -139,7 +182,7 @@ function WeekView({ guess }: { guess: string }) {
             const day = byDate.get(d);
             const st = day ? statusIcon(day.status) : null;
             const mins = day ? totalMinutes(day) : null;
-            const cls = ["week-row", d === today ? "week-row--today" : "", d === pick ? "week-row--selected" : "",
+            const cls = ["week-row", d === today ? "week-row--today" : "",
                          day ? `week-row--${day.status}` : "week-row--empty"].filter(Boolean).join(" ");
             return (
               <li key={d}>
@@ -147,10 +190,9 @@ function WeekView({ guess }: { guess: string }) {
                   type="button"
                   className={cls}
                   data-testid={`week-row-${d}`}
-                  aria-pressed={d === pick}
                   aria-current={d === today ? "date" : undefined}
                   disabled={!day}
-                  onClick={() => setSelected(d)}
+                  onClick={() => setOpenDay(d)}
                 >
                   <span className="week-day">{dayLabel(d)}</span>
                   <span className="week-session">
@@ -166,10 +208,11 @@ function WeekView({ guess }: { guess: string }) {
             );
           })}
         </ol>
-        <div className="week-detail">
+        <div className="week-detail" aria-hidden={false}>
           {detail ? <PlanDayDetail day={detail} today={today} /> : null}
         </div>
       </div>
     </div>
+    </PeekFrame>
   );
 }

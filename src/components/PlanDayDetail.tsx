@@ -43,6 +43,12 @@ export function exercisePlanLine(ex: PlannedExercise, rounds: number, sessionRpe
   return bits.join(" · ");
 }
 
+/** "✓ Done" / "Upcoming": the neutral "•" icon would read as a second
+ * separator after "FRI 9/18 ·", so it's left out of the date line. */
+export function dateLineStatus(st: { icon: string; label: string }): string {
+  return st.icon === "•" ? st.label : `${st.icon} ${st.label}`;
+}
+
 export function totalMinutes(day: PlanDay): number | null {
   if (day.blocks?.type === "recovery_flow") {
     return Math.round(flowTotalSec(day.blocks as RecoveryFlowBlocks) / 60);
@@ -72,7 +78,7 @@ export default function PlanDayDetail({ day, today }: Props) {
   return (
     <article className="plan-detail" data-testid="plan-detail" aria-label={`${dayLabel(day.plan_date)} plan`}>
       <div className="meta">
-        {dayLabel(day.plan_date)} · <span className={`day-status ds--${day.status}`}>{st.icon} {st.label}</span>
+        {dayLabel(day.plan_date)} · <span className={`day-status ds--${day.status}`}>{dateLineStatus(st)}</span>
       </div>
       <div className="h2 plan-detail-name">{sessionName(day)}</div>
       <div className="meta">{meta}</div>

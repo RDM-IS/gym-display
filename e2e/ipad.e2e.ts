@@ -304,7 +304,7 @@ test("rest_mobility: redirects to Status; Today shows the rest-day screen", asyn
   await expectTouchTargets(page);
   await shot(page, "5-rest-mobility-status");
 
-  await page.getByRole("link", { name: "Today" }).tap();
+  await page.getByRole("link", { name: "Workout" }).tap();
   await expect(page.getByText("See you tomorrow.")).toBeVisible();
   await expectSaneLayout(page);
   await shot(page, "6-rest-mobility-today");
@@ -316,7 +316,7 @@ test("no plan today: Status, then the empty Today screen", async ({ page }) => {
   await expect(page).toHaveURL(/\/status$/);
   await shot(page, "7-no-plan-status");
 
-  await page.getByRole("link", { name: "Today" }).tap();
+  await page.getByRole("link", { name: "Workout" }).tap();
   await expect(page.getByText("No workout today")).toBeVisible();
   await expectSaneLayout(page);
   await expectTouchTargets(page);

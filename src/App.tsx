@@ -7,6 +7,7 @@ import RestDayScreen from "./screens/RestDayScreen";
 import StatusScreen from "./screens/StatusScreen";
 import FlowScreen from "./screens/FlowScreen";
 import PeekScreen, { type PeekMode } from "./screens/PeekScreen";
+import type { BarTarget } from "./lib/bottom-bar";
 import Nav from "./components/Nav";
 import SyncBadge from "./components/SyncBadge";
 import {
@@ -65,6 +66,9 @@ export default function App() {
   const [flowRunning, setFlowRunning] = useState(false);
   // GD-WEEK: read-only Tomorrow / Week, opened from Setup — never mid-workout.
   const [peek, setPeek] = useState<PeekMode | null>(null);
+  const onBarNavigate = useCallback((target: BarTarget) => {
+    setPeek(target === "today" ? null : target);
+  }, []);
   const [totalElapsedSec, setTotalElapsedSec] = useState(0);
   const [interrupted, setInterrupted] = useState(() => {
     try {
@@ -286,7 +290,7 @@ export default function App() {
   const immersive = route === "today" && (flow === "workout" || flowRunning);
   const chrome = immersive ? null : (
     <>
-      <Nav route={route} onNavigate={navigate} />
+      <Nav route={route} onNavigate={(r) => { setPeek(null); navigate(r); }} />
       <div className="floating-badges">
         <SyncBadge />
       </div>
@@ -366,7 +370,7 @@ export default function App() {
     return (
       <>
         {chrome}
-        <PeekScreen mode={peek} onBack={() => setPeek(null)} />
+        <PeekScreen key={peek} mode={peek} onNavigate={onBarNavigate} />
       </>
     );
   }
@@ -380,7 +384,7 @@ export default function App() {
           key={`flow-${result.plan.plan_id}`}
           plan={result.plan}
           onRunningChange={setFlowRunning}
-          onPeek={setPeek}
+          onNavigate={onBarNavigate}
         />
       </>
     );
@@ -394,7 +398,7 @@ export default function App() {
     return (
       <>
         {chrome}
-        <RestDayScreen plan={result.plan} onPeek={setPeek} />
+        <RestDayScreen plan={result.plan} onNavigate={onBarNavigate} />
       </>
     );
   }
@@ -416,7 +420,7 @@ export default function App() {
     <>
       {chrome}
       {flow === "setup" && (
-        <SetupScreen plan={result.plan} interrupted={interrupted} onStart={onStart} onPeek={setPeek} />
+        <SetupScreen plan={result.plan} interrupted={interrupted} onStart={onStart} onNavigate={onBarNavigate} />
       )}
       {flow === "workout" && (
         <WorkoutScreen
