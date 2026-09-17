@@ -5,10 +5,12 @@ import type {
   IntervalsBlocks,
   MobilityBlocks,
   PlannedExercise,
+  RecoveryFlowBlocks,
   SteadyBlocks,
   WalkBlocks,
 } from "./types";
 import { assertNeverBlock } from "./types";
+import { buildFlowTimeline } from "./flow";
 
 // ---------------------------------------------------------------------------
 // Single source of truth for the workout sequence.
@@ -394,6 +396,15 @@ function appendFinisher(b: Builder, f: Finisher | null | undefined): void {
 // Public entry
 // ---------------------------------------------------------------------------
 
+/** Recovery Flow: the player (FlowScreen) runs its own timeline; here each
+ * timed item becomes one auto-advancing step so counts and the map agree. */
+function buildRecoveryFlow(b: Builder, blocks: RecoveryFlowBlocks) {
+  for (const item of buildFlowTimeline(blocks)) {
+    b.steps.push({ kind: item.kind === "pose" ? "exercise" : "cooldown", label: item.title,
+      duration_sec: item.duration_sec });
+  }
+}
+
 export function flattenBlocksToSteps(blocks: Blocks): FlatSession {
   const b: Builder = { steps: [], sections: [] };
   switch (blocks.type) {
@@ -402,6 +413,7 @@ export function flattenBlocksToSteps(blocks: Blocks): FlatSession {
     case "steady":    buildSteady(b, blocks); break;
     case "mobility":  buildMobility(b, blocks); break;
     case "walk":      buildWalk(b, blocks); break;
+    case "recovery_flow": buildRecoveryFlow(b, blocks); break;
     default:          return assertNeverBlock(blocks);
   }
   return { steps: b.steps, sections: b.sections };

@@ -9,7 +9,8 @@ export type SessionType =
   | "cardio_intervals"
   | "cardio_z2"
   | "walk"
-  | "rest_mobility";
+  | "rest_mobility"
+  | "recovery_flow";
 
 export type ExerciseFormat = "reps" | "duration";
 
@@ -129,6 +130,46 @@ export interface MobilityBlocks extends BlocksBase {
   duration_min?: number | null;
 }
 
+/** One timed hold in a Recovery Flow (YOGA-1). */
+export interface FlowStep {
+  /** Table number: "1".."16", "11a", "11b"… */
+  step: string;
+  name: string;
+  side: "R" | "L" | null;
+  /** "Right leg forward", "Lean left"… */
+  side_label?: string | null;
+  duration_sec: number;
+  /** R and L entries of one group must hold equally long. */
+  mirror_group: string | null;
+  cue?: string | null;
+  /** Easier option, e.g. "Dolphin — forearms down". */
+  easier?: string | null;
+}
+
+export interface FlowHold {
+  name: string;
+  side?: null;
+  duration_sec: number;
+  cue?: string | null;
+}
+
+/** Guided, hands-free mobility flow (YOGA-1). */
+export interface RecoveryFlowBlocks extends BlocksBase {
+  type: "recovery_flow";
+  location?: string | null;
+  rounds: number;
+  /** Round whose holds double, and the step-number range that doubles. */
+  double_round?: number | null;
+  double_steps?: [number, number] | null;
+  preview_sec?: number | null;
+  /** Timed blocks before round 1 (office: Stretch Trainer). */
+  pre?: FlowHold[] | null;
+  flow: FlowStep[];
+  close?: FlowHold | null;
+  total_sec?: number | null;
+  notes?: string | null;
+}
+
 /** Legacy walk block — pre-dates the `steady`/`mobility` split. */
 export interface WalkBlocks extends BlocksBase {
   type: "walk";
@@ -141,7 +182,8 @@ export type Blocks =
   | IntervalsBlocks
   | SteadyBlocks
   | MobilityBlocks
-  | WalkBlocks;
+  | WalkBlocks
+  | RecoveryFlowBlocks;
 
 /** Compile-time exhaustiveness helper — any new Blocks variant that isn't
  * handled in a switch will hit this and fail to type-check. */

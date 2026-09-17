@@ -8,6 +8,7 @@ const MAX_MS = 700;
 
 /** Pure classifier: a quick, mostly-horizontal drag of ≥60px. */
 export function detectSwipe(dx: number, dy: number, dtMs: number): SwipeDirection | null {
+  if (![dx, dy, dtMs].every(Number.isFinite)) return null;
   if (dtMs > MAX_MS) return null;
   if (Math.abs(dx) < MIN_DX) return null;
   if (Math.abs(dx) < 1.5 * Math.abs(dy)) return null;

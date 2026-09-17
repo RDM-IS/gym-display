@@ -10,6 +10,7 @@ const SESSION_LABELS: Record<SessionType, string> = {
   cardio_z2: "Cardio Z2",
   walk: "Walk",
   rest_mobility: "Rest / Mobility",
+  recovery_flow: "Recovery Flow",
 };
 
 export function sessionLabel(plan: Plan | { session_type: SessionType }): string {

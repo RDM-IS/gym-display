@@ -88,6 +88,8 @@ function BlockDetail({ blocks, sessionRpe }: { blocks: Plan["blocks"]; sessionRp
     case "steady":    return <SteadyDetail b={blocks} />;
     case "mobility":  return <MobilityDetail b={blocks} />;
     case "walk":      return <WalkDetail b={blocks} />;
+    // A Recovery Flow never reaches Setup — App renders FlowScreen for it.
+    case "recovery_flow": return null;
     default:          return assertNeverBlock(blocks);
   }
 }
