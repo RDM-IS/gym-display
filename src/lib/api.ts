@@ -83,7 +83,10 @@ function isRetryableStatus(status: number): boolean {
   return status >= 500 || status === 408 || status === 429;
 }
 
-export async function postLog(body: LogExerciseIn): Promise<PostLogResult> {
+export async function postLog(
+  body: LogExerciseIn,
+  opts: { keepalive?: boolean } = {},
+): Promise<PostLogResult> {
   // A fetch that throws (offline, DNS, CORS abort) is retryable by default.
   let retryable = true;
   try {
@@ -96,6 +99,8 @@ export async function postLog(body: LogExerciseIn): Promise<PostLogResult> {
       method: "POST",
       headers,
       body: JSON.stringify(body),
+      // keepalive lets a log sent while the page is hiding/closing finish.
+      ...(opts.keepalive ? { keepalive: true } : {}),
     });
     if (!res.ok) {
       retryable = isRetryableStatus(res.status);

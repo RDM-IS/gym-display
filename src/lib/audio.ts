@@ -90,6 +90,12 @@ interface ToneOpts {
   gain?: number;
 }
 
+/** Every tone the app asked for, newest last (observable in tests). */
+export const toneLog: string[] = [];
+if (typeof window !== "undefined") {
+  (window as unknown as { __gymDisplayTones?: string[] }).__gymDisplayTones = toneLog;
+}
+
 function playTone(opts: ToneOpts): void {
   if (muted) return;
   const c = ensureCtx();
@@ -134,4 +140,85 @@ export function beepEndOfRound(): void {
 
 export function beepEndOfWorkout(): void {
   playTone({ freq: 880, end_freq: 440, duration_ms: 1500 });
+}
+
+// ── Recovery Flow (YOGA-1) ──────────────────────────────────────────────────
+
+function logged(name: string, play: () => void): void {
+  toneLog.push(name);
+  play();
+}
+
+/** Soft chime: the 5 s "next" preview. */
+export function chimeNext(): void {
+  logged("next", () => {
+    playTone({ freq: 988, duration_ms: 350, gain: 0.25 });
+    playTone({ freq: 1319, duration_ms: 450, start_offset_ms: 180, gain: 0.2 });
+  });
+}
+
+/** Distinct two-note swoop: switch sides. */
+export function toneSwitchSides(): void {
+  logged("switch", () => {
+    playTone({ freq: 392, end_freq: 784, duration_ms: 350 });
+    playTone({ freq: 784, end_freq: 392, duration_ms: 350, start_offset_ms: 420 });
+  });
+}
+
+/** Round change. */
+export function toneRound(): void {
+  logged("round", () => beepEndOfRound());
+}
+
+export function toneFlowDone(): void {
+  logged("done", () => beepEndOfWorkout());
+}
+
+// ── Voice cues: on-device speechSynthesis, no network ───────────────────────
+
+export function speechSupported(): boolean {
+  return typeof window !== "undefined" && "speechSynthesis" in window &&
+    typeof (window as unknown as { SpeechSynthesisUtterance?: unknown }).SpeechSynthesisUtterance === "function";
+}
+
+export const speechLog: string[] = [];
+if (typeof window !== "undefined") {
+  (window as unknown as { __gymDisplaySpeech?: string[] }).__gymDisplaySpeech = speechLog;
+}
+
+/** Say `text` unless muted. Never throws; without speech the tones still play. */
+export function speak(text: string): void {
+  if (muted || !text) return;
+  speechLog.push(text);
+  if (!speechSupported()) return;
+  try {
+    const synth = window.speechSynthesis;
+    synth.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 0.95;
+    synth.speak(u);
+  } catch {
+    /* speech unavailable — tones still play */
+  }
+}
+
+/** Unlock speech from a user gesture (iOS needs one utterance inside a tap). */
+export function unlockSpeech(): void {
+  if (!speechSupported()) return;
+  try {
+    const u = new SpeechSynthesisUtterance(" ");
+    u.volume = 0;
+    window.speechSynthesis.speak(u);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function stopSpeech(): void {
+  if (!speechSupported()) return;
+  try {
+    window.speechSynthesis.cancel();
+  } catch {
+    /* ignore */
+  }
 }

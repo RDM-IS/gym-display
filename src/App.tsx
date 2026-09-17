@@ -5,6 +5,7 @@ import DoneScreen from "./screens/DoneScreen";
 import ErrorScreen from "./screens/ErrorScreen";
 import RestDayScreen from "./screens/RestDayScreen";
 import StatusScreen from "./screens/StatusScreen";
+import FlowScreen from "./screens/FlowScreen";
 import Nav from "./components/Nav";
 import SyncBadge from "./components/SyncBadge";
 import {
@@ -60,6 +61,7 @@ export default function App() {
   const [planLoad, setPlanLoad] = useState<PlanLoad>({ loading: true, result: null });
   const [statusLoad, setStatusLoad] = useState<StatusLoad>({ loading: true, result: null });
   const [flow, setFlow] = useState<WorkoutFlow>("setup");
+  const [flowRunning, setFlowRunning] = useState(false);
   const [totalElapsedSec, setTotalElapsedSec] = useState(0);
   const [interrupted, setInterrupted] = useState(() => {
     try {
@@ -99,6 +101,9 @@ export default function App() {
   // — and applied when he's back on the Setup screen.
   const flowRef = useRef(flow);
   flowRef.current = flow;
+  // A running Recovery Flow holds plan changes like a running workout does.
+  const flowRunningRef = useRef(flowRunning);
+  flowRunningRef.current = flowRunning;
   const planLoadRef = useRef(planLoad);
   planLoadRef.current = planLoad;
   const [pendingPlan, setPendingPlan] = useState<FetchTodayResult | null>(null);
@@ -110,7 +115,7 @@ export default function App() {
     const cur = planLoadRef.current.result;
     const curPlan = cur?.status === "ok" ? cur.plan : null;
     if (planFingerprint(curPlan) === planFingerprint(result.plan)) return;
-    if (flowRef.current === "setup") {
+    if (flowRef.current === "setup" && !flowRunningRef.current) {
       setPendingPlan(null);
       setPlanLoad({ loading: false, result });
     } else {
@@ -119,11 +124,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (flow === "setup" && pendingPlan) {
+    if (flow === "setup" && !flowRunning && pendingPlan) {
       setPlanLoad({ loading: false, result: pendingPlan });
       setPendingPlan(null);
     }
-  }, [flow, pendingPlan]);
+  }, [flow, flowRunning, pendingPlan]);
 
   useEffect(() => {
     const onVisible = () => {
@@ -183,6 +188,9 @@ export default function App() {
     if (route !== "today") return;
     if (flow !== "setup") return;
     if (statusLoad.loading) return;
+    // Wait for the plan too: its blocks.type decides (a Recovery Flow row can
+    // still carry session_type rest_mobility).
+    if (planLoad.loading) return;
     if (statusLoad.result?.status !== "ok") return;
     const t = statusLoad.result.data.today_summary;
     if (!t) return;
@@ -272,7 +280,7 @@ export default function App() {
   // Render --------------------------------------------------------------
 
   // The workout screen is full-immersive — it carries its own header.
-  const immersive = route === "today" && flow === "workout";
+  const immersive = route === "today" && (flow === "workout" || flowRunning);
   const chrome = immersive ? null : (
     <>
       <Nav route={route} onNavigate={navigate} />
@@ -350,6 +358,20 @@ export default function App() {
   // Rest-day classification: is_skipped, session_type='rest_mobility', or
   // blocks.type='mobility' (session_type alone is ambiguous).
   const blocksType = result.plan.blocks?.type;
+
+  // YOGA-1: a Recovery Flow runs in its own hands-free player.
+  if (blocksType === "recovery_flow" && !result.plan.is_skipped) {
+    return (
+      <>
+        {chrome}
+        <FlowScreen
+          key={`flow-${result.plan.plan_id}`}
+          plan={result.plan}
+          onRunningChange={setFlowRunning}
+        />
+      </>
+    );
+  }
   const isRestDay =
     result.plan.is_skipped ||
     result.plan.session_type === "rest_mobility" ||

@@ -123,13 +123,16 @@ export async function flushQueue(): Promise<void> {
 
 /** Write one log body. Resolves "ok" when the server accepted it, "queued"
  * when it will be retried in the background, "error" when rejected outright. */
-export async function submitLog(body: LogExerciseIn): Promise<SubmitResult> {
+export async function submitLog(
+  body: LogExerciseIn,
+  opts: { keepalive?: boolean } = {},
+): Promise<SubmitResult> {
   if (queue.length > 0) {
     enqueue(body);
     void flushQueue();
     return { status: "queued" };
   }
-  const r = await postLog(body);
+  const r = await postLog(body, opts);
   if (r.status === "ok") return r;
   if (r.retryable) {
     enqueue(body);

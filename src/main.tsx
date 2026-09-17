@@ -6,6 +6,7 @@ import "./styles/base.css";
 import "./styles/workout.css";
 import "./styles/logger.css";
 import "./styles/status-page.css";
+import "./styles/flow.css";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("#root not found");

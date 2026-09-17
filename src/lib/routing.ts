@@ -53,6 +53,9 @@ export function shouldRedirectTodayToStatus(t: {
 }): boolean {
   if (!t.exists) return true;
   if (t.is_skipped) return true;
+  // YOGA-1: a Recovery Flow is a session to run here, whatever session_type
+  // the row carries (9/17 is a rest_mobility row with flow blocks).
+  if (t.blocks_type === "recovery_flow" || t.session_type === "recovery_flow") return t.is_logged;
   if (t.blocks_type === "mobility") return true;
   if (t.session_type === "rest_mobility") return true;
   if (t.is_logged) return true;
