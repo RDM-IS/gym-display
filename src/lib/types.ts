@@ -453,3 +453,43 @@ export interface SessionsResponse {
   window_end: string;
   days: SessionDayRow[];
 }
+
+// ── GD-WEEK: GET /api/health/plan ───────────────────────────────────────────
+
+export type PlanDayStatus = "done" | "partial" | "missed" | "upcoming" | "today";
+
+export interface LoggedExerciseSummary {
+  exercise: string;
+  log_type: string;
+  sets: number;
+  reps: Array<number | null>;
+  top_weight_lbs: number | null;
+  duration_sec: number | null;
+  skipped: number;
+}
+
+export interface PlanDay {
+  plan_id: number;
+  plan_date: string;
+  session_type: SessionType;
+  display_name: string | null;
+  phase: number;
+  week_num: number;
+  target_rpe: number | null;
+  est_duration_min: number | null;
+  location: string | null;
+  is_skipped: boolean;
+  adjusted: boolean;
+  status: PlanDayStatus;
+  blocks: Blocks;
+  logged: LoggedExerciseSummary[];
+  summary_notes: string | null;
+}
+
+export interface PlanRangeResponse {
+  today: string;
+  timezone: string;
+  range_from: string;
+  range_to: string;
+  days: PlanDay[];
+}
