@@ -21,6 +21,7 @@ describe("inferEquipmentClass — office gym name map", () => {
     ["Calf press", "machine"],
     ["Ab machine crunch", "machine"],
     ["Ab crunch", "machine"],
+    ["Seated back extension", "machine"],  // Precor Abdominal / Back Extension (seated)
     // cable (S3.23)
     ["Cable face pull (rope)", "cable"],
     ["Cable Pallof press", "cable"],
@@ -40,7 +41,6 @@ describe("inferEquipmentClass — office gym name map", () => {
     ["Barbell back squat", "barbell"],
     // bodyweight
     ["Captain's chair knee raise", "bodyweight"],
-    ["45° back extension", "bodyweight"],
     ["Plank", "bodyweight"],
   ];
   for (const [name, cls] of cases) {

@@ -20,7 +20,7 @@ const B_EXERCISES: PlannedExercise[] = [
   { name: "Leg extension", format: "reps", target_reps: 12, rest_after_sec: 60, notes: "2×10-12; log seat + pin setting", target_load_lbs: null },
   { name: "Rear delt fly", format: "reps", target_reps: 15, rest_after_sec: 60, notes: "2×12-15; log seat + pin setting", target_load_lbs: null },
   { name: "Cable Pallof press", format: "reps", target_reps: 10, rest_after_sec: 60, notes: "2×10 each side", target_load_lbs: null },
-  { name: "45° back extension", format: "reps", target_reps: 12, rest_after_sec: 60, notes: "2×10-12", target_load_lbs: null },
+  { name: "Seated back extension", format: "reps", target_reps: 12, rest_after_sec: 60, notes: "2×10-12", target_load_lbs: null },
 ];
 
 function sessionB(blocks: Partial<CircuitBlocks> = {}): Plan {
@@ -102,7 +102,7 @@ describe("per-exercise sets in a circuit", () => {
     const seq = walk(LEGS_EASED);
     const round2 = seq.filter(([, r]) => r === 2).map(([n]) => n);
     expect(round2).toEqual(["Seated cable row", "Incline DB press", "Rear delt fly",
-      "Cable Pallof press", "45° back extension"]);
+      "Cable Pallof press", "Seated back extension"]);
     expect(seq.filter(([, r]) => r === 1)).toHaveLength(7);
     const { steps } = flattenBlocksToSteps(LEGS_EASED.blocks);
     // After round 2 the cursor still reaches the cooldown.

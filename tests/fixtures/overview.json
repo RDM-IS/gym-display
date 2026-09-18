@@ -459,7 +459,7 @@
       "notes": "2×8-12"
      },
      {
-      "name": "45° back extension",
+      "name": "Seated back extension",
       "format": "reps",
       "target_reps": 12,
       "notes": "2×8-12"
@@ -549,7 +549,7 @@
      "skipped": 0
     },
     {
-     "exercise": "45° back extension",
+     "exercise": "Seated back extension",
      "log_type": "strength_set",
      "sets": 2,
      "reps": [
@@ -1265,7 +1265,7 @@
    "setting": null
   },
   {
-   "exercise": "45° back extension",
+   "exercise": "Seated back extension",
    "sessions": 1,
    "last": {
     "date": "2026-09-18",
