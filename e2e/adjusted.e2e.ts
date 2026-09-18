@@ -26,7 +26,7 @@ const ADJUSTED = {
       { name: "Leg extension", format: "reps", target_reps: 12, notes: "1×10-12", sets: 1, rpe_cap: 5 },
       { name: "Captain's chair knee raise", format: "reps", target_reps: 12, notes: "2×8-12", added_by: "checkin", replaces: "Rear delt fly" },
       { name: "Cable Pallof press", format: "reps", target_reps: 10, notes: "2×10 each side" },
-      { name: "45° back extension", format: "reps", target_reps: 12, notes: "2×10-12" },
+      { name: "Seated back extension", format: "reps", target_reps: 12, notes: "2×10-12" },
     ],
     adjustment: {
       rules_fired: ["replace", "ease"],

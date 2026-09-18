@@ -2,8 +2,10 @@ import type { PlannedExercise } from "./types";
 
 // ---------------------------------------------------------------------------
 // Equipment classes — the ONE place an exercise maps to how its load is
-// adjusted. Office gym (all Precor): selectorized machines, S3.23 functional
-// trainer, Icarian Smith machine, hex dumbbells.
+// adjusted. Office gym (all Precor): selectorized machines (the seated
+// Abdominal / Back Extension machine covers back extensions — there is no 45°
+// back extension / roman chair), S3.23 functional trainer, Icarian Smith
+// machine, hex dumbbells. TODO(office): the whole list is unverified in person.
 // ---------------------------------------------------------------------------
 
 export type EquipmentClass =
@@ -109,7 +111,7 @@ const EXACT: Record<string, EquipmentClass> = {
 const RULES: ReadonlyArray<readonly [EquipmentClass, readonly string[]]> = [
   ["smith", ["smith"]],
   ["bodyweight", [
-    "captain's chair", "captains chair", "back extension", "plank", "push-up",
+    "captain's chair", "captains chair", "plank", "push-up",
     "pushup", "dead bug", "bird dog", "hollow", "mountain climber", "glute bridge",
   ]],
   ["cable", ["cable", "rope", "pallof", "face pull"]],
@@ -117,7 +119,7 @@ const RULES: ReadonlyArray<readonly [EquipmentClass, readonly string[]]> = [
   ["barbell", ["barbell", "back squat", "front squat"]],
   ["machine", [
     "leg press", "pulldown", "row", "leg curl", "leg extension", "pec fly",
-    "rear delt", "calf press", "ab crunch", "ab machine",
+    "rear delt", "calf press", "ab crunch", "ab machine", "back extension",
   ]],
 ];
 
