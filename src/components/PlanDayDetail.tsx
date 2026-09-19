@@ -6,6 +6,7 @@ import type {
 } from "../lib/types";
 import { exerciseSets } from "../lib/adjustment";
 import { buildFlowTimeline, flowTotalSec, formatClock } from "../lib/flow";
+import { formatEstimate } from "../lib/format";
 import { dayLabel, statusIcon } from "../lib/week";
 
 // ---------------------------------------------------------------------------
@@ -70,7 +71,7 @@ export default function PlanDayDetail({ day, today }: Props) {
   const mins = totalMinutes(day);
   const isPast = day.plan_date < today;
   const sessionRpe = (b && "rpe_cap" in b ? b.rpe_cap : null) ?? day.target_rpe;
-  const meta = [day.location, mins != null ? `${mins} min` : null,
+  const meta = [day.location, mins != null ? formatEstimate(mins) : null,
                 `Phase ${day.phase} · Week ${day.week_num}`].filter(Boolean).join(" · ");
   const st = statusIcon(day.status);
   const summary = b?.adjustment?.summary ?? [];

@@ -4,6 +4,7 @@ import PlanDayDetail, { sessionName, totalMinutes } from "../components/PlanDayD
 import type { BarTarget } from "../lib/bottom-bar";
 import { fetchPlanRange, type FetchPlanRangeResult } from "../lib/api";
 import type { PlanDay } from "../lib/types";
+import { formatEstimate } from "../lib/format";
 import {
   addDays,
   asOfLabel,
@@ -199,7 +200,7 @@ function WeekView({ guess, onNavigate }: { guess: string; onNavigate: (t: BarTar
                     {day ? sessionName(day) : "—"}
                     {day?.adjusted && <span className="badge badge--adjusted">Adjusted</span>}
                   </span>
-                  <span className="week-mins mono">{mins != null ? `${mins} min` : ""}</span>
+                  <span className="week-mins mono">{formatEstimate(mins)}</span>
                   <span className={`week-status ds--${day?.status ?? "none"}`} aria-label={st?.label} title={st?.label}>
                     {st?.icon ?? ""}
                   </span>
