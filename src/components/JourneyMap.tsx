@@ -15,6 +15,8 @@ interface Props {
   collapsed?: boolean;
   /** When set, the map shows a collapse / expand toggle. */
   onToggleCollapsed?: () => void;
+  /** GD-DEFER: exercises moved "later" this round (tagged until they come up). */
+  deferred?: readonly string[];
 }
 
 /** Journey map listing every step of the session once. Steps inside a
@@ -24,6 +26,7 @@ export default function JourneyMap({
   steps,
   sections,
   cursor,
+  deferred = [],
   completion,
   collapsed,
   onToggleCollapsed,
@@ -113,6 +116,9 @@ export default function JourneyMap({
                 <span className="jmap-dur mono">{formatMMSS(step.duration_sec)}</span>
                 <span className="jmap-label">{step.label}</span>
                 {roundLabel && <span className="jmap-round mono">({roundLabel})</span>}
+                {step.kind === "exercise" && !isPast && !isCurrent && exName && deferred.includes(exName) && (
+                  <span className="jmap-later" data-testid="jmap-later">later</span>
+                )}
                 {step.kind === "exercise" && isFullyLogged && (
                   <span className="jmap-check" aria-label="fully logged">✓</span>
                 )}

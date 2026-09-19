@@ -1,4 +1,5 @@
 import type { Blocks, Plan } from "./types";
+import { deferExercise, isDeferrable, leavesRound, upcomingExercise } from "./defer";
 import {
   flattenBlocksToSteps,
   nextCursor,
@@ -25,6 +26,13 @@ export type TimerStatus = "idle" | "running" | "paused" | "done";
 export interface TimerState {
   steps: Step[];
   sections: Section[];
+  /** GD-DEFER: the plan-order steps and blocks, and the blocks behind the
+   * current (possibly swapped) steps. */
+  planSteps: Step[];
+  planBlocks: Blocks | null;
+  blocks: Blocks | null;
+  /** Exercises deferred ("Busy — later") in the current round. */
+  deferred: string[];
   cursor: Cursor;
   status: TimerStatus;
   workout_started_at_ms: number | null;
@@ -41,6 +49,10 @@ export type TimerAction =
   | { type: "PREV_STEP"; now_ms: number }
   | { type: "NEXT_STEP"; now_ms: number }
   | { type: "RESTART_WORKOUT"; now_ms: number }
+  /** The current exercise's machine is busy: swap it with the next one. */
+  | { type: "DEFER_CURRENT"; now_ms: number }
+  /** From a rest: the upcoming exercise's machine is busy. */
+  | { type: "DEFER_NEXT" }
   | { type: "END_WORKOUT" }
   | { type: "RESET" };
 
@@ -56,6 +68,10 @@ export function initTimer(session: FlatSession): TimerState {
   return {
     steps: session.steps,
     sections: session.sections,
+    planSteps: session.steps,
+    planBlocks: session.source ?? null,
+    blocks: session.source ?? null,
+    deferred: [],
     cursor: { stepIndex: 0, currentRound: 1 },
     status: "idle",
     workout_started_at_ms: null,
@@ -68,6 +84,20 @@ function effectiveNow(state: TimerState, now_ms: number): number {
   return state.status === "paused" && state.paused_at_ms !== null
     ? state.paused_at_ms
     : now_ms;
+}
+
+/** Next cursor; when it leaves the round, the plan order is restored first
+ * (the round-break / circuit-exit index is the same in both layouts). */
+function advance(state: TimerState, cursor: Cursor): { cursor: Cursor | null; restore: boolean } {
+  const next = nextCursor(state.steps, cursor);
+  if (state.steps === state.planSteps || next === null || !leavesRound(state.steps, cursor, next)) {
+    return { cursor: next, restore: false };
+  }
+  return { cursor: nextCursor(state.planSteps, cursor), restore: true };
+}
+
+function restored(state: TimerState): Pick<TimerState, "steps" | "blocks" | "deferred"> {
+  return { steps: state.planSteps, blocks: state.planBlocks, deferred: [] };
 }
 
 export function timerReducer(state: TimerState, action: TimerAction): TimerState {
@@ -89,29 +119,31 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
       if (state.status !== "running" || state.step_started_at_ms === null) {
         return state;
       }
+      let s = state;
       let cursor = state.cursor;
       let stepStart = state.step_started_at_ms;
       // Advance through any expired steps in one pass.
       while (true) {
-        const cur = state.steps[cursor.stepIndex];
+        const cur = s.steps[cursor.stepIndex];
         if (!cur) break;
         const dur_ms = cur.duration_sec * 1000;
         if (action.now_ms - stepStart < dur_ms) break;
         // Strength sets and their logging rests wait for the user.
         if (cur.holdAtEnd) break;
-        const next = nextCursor(state.steps, cursor);
+        const { cursor: next, restore } = advance(s, cursor);
         if (next === null) {
           return {
-            ...state,
+            ...s,
             status: "done",
             step_started_at_ms: null,
           };
         }
+        if (restore) s = { ...s, ...restored(s) };
         stepStart += dur_ms;
         cursor = next;
       }
       if (cursor === state.cursor) return state;
-      return { ...state, cursor, step_started_at_ms: stepStart };
+      return { ...s, cursor, step_started_at_ms: stepStart };
     }
     case "PAUSE": {
       if (state.status !== "running") return state;
@@ -154,15 +186,45 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
     }
     case "NEXT_STEP": {
       if (state.status === "idle" || state.status === "done") return state;
-      const next = nextCursor(state.steps, state.cursor);
+      const { cursor: next, restore } = advance(state, state.cursor);
       if (next === null) {
         return { ...state, status: "done", step_started_at_ms: null, paused_at_ms: null };
       }
       return {
         ...state,
+        ...(restore ? restored(state) : {}),
         cursor: next,
         step_started_at_ms: action.now_ms,
         paused_at_ms: state.status === "paused" ? action.now_ms : null,
+      };
+    }
+    case "DEFER_CURRENT": {
+      if (state.status === "idle" || state.status === "done" || !state.blocks) return state;
+      const r = deferExercise(state.blocks, state.steps, state.cursor.stepIndex, state.cursor.currentRound);
+      if (!r) return state;
+      return {
+        ...state,
+        steps: r.steps,
+        blocks: r.blocks,
+        deferred: state.deferred.includes(r.deferredName) ? state.deferred : [...state.deferred, r.deferredName],
+        // The swapped-in exercise takes this slot; its timer starts fresh.
+        cursor: { ...state.cursor, stepIndex: r.swappedInIndex },
+        step_started_at_ms: action.now_ms,
+        paused_at_ms: state.status === "paused" ? action.now_ms : null,
+      };
+    }
+    case "DEFER_NEXT": {
+      if (state.status === "idle" || state.status === "done" || !state.blocks) return state;
+      const up = upcomingExercise(state.steps, state.cursor.stepIndex, state.cursor.currentRound);
+      if (up === null) return state;
+      const r = deferExercise(state.blocks, state.steps, up, state.cursor.currentRound);
+      if (!r) return state;
+      // Stay on this rest; only what comes next changes.
+      return {
+        ...state,
+        steps: r.steps,
+        blocks: r.blocks,
+        deferred: state.deferred.includes(r.deferredName) ? state.deferred : [...state.deferred, r.deferredName],
       };
     }
     case "RESTART_WORKOUT": {
@@ -172,6 +234,7 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
       return {
         ...state,
         status: "running",
+        ...restored(state),
         cursor: { stepIndex: 0, currentRound: 1 },
         workout_started_at_ms: action.now_ms,
         step_started_at_ms: action.now_ms,
@@ -250,4 +313,25 @@ export function formatMMSS(seconds: number): string {
   const m = Math.floor(total / 60);
   const s = total % 60;
   return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+// ---------------------------------------------------------------------------
+// GD-DEFER selectors
+// ---------------------------------------------------------------------------
+
+/** "Busy — later" on the current exercise: possible, or why not. */
+export function selectCanDeferCurrent(state: TimerState): "yes" | "last" | "no" {
+  if (state.status === "idle" || state.status === "done" || !state.blocks) return "no";
+  const cur = state.steps[state.cursor.stepIndex];
+  if (!isDeferrable(cur)) return "no";
+  return deferExercise(state.blocks, state.steps, state.cursor.stepIndex, state.cursor.currentRound)
+    ? "yes" : "last";
+}
+
+/** "Busy — later" on the rest's "Next:" exercise. */
+export function selectCanDeferNext(state: TimerState): "yes" | "last" | "no" {
+  if (state.status === "idle" || state.status === "done" || !state.blocks) return "no";
+  const up = upcomingExercise(state.steps, state.cursor.stepIndex, state.cursor.currentRound);
+  if (up === null || !isDeferrable(state.steps[up])) return "no";
+  return deferExercise(state.blocks, state.steps, up, state.cursor.currentRound) ? "yes" : "last";
 }

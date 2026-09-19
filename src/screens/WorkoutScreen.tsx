@@ -7,6 +7,8 @@ import {
   selectElapsedSec,
   selectIsHolding,
   selectNextStep,
+  selectCanDeferCurrent,
+  selectCanDeferNext,
   selectRemainingSec,
   selectStepElapsedSec,
   timerReducer,
@@ -137,6 +139,9 @@ export default function WorkoutScreen({
   const holding = selectIsHolding(state, now);
   const isPaused = state.status === "paused";
   const strengthSet = current?.kind === "exercise" && !!current.holdAtEnd;
+  // GD-DEFER: "Busy — later" on this exercise, or on the rest's "Next:".
+  const canDeferCurrent = selectCanDeferCurrent(state);
+  const canDeferNext = selectCanDeferNext(state);
   const stepKey = `${state.cursor.stepIndex}:${state.cursor.currentRound}:${state.step_started_at_ms}`;
 
   // End-of-previous-step cue on cursor change.
@@ -205,6 +210,15 @@ export default function WorkoutScreen({
     suppressIndexAudioRef.current = true;
     dispatch({ type: "NEXT_STEP", now_ms: performance.now() });
   }
+  function deferCurrent() {
+    haptic();
+    suppressIndexAudioRef.current = true;
+    dispatch({ type: "DEFER_CURRENT", now_ms: performance.now() });
+  }
+  function deferNext() {
+    haptic();
+    dispatch({ type: "DEFER_NEXT" });
+  }
   function restartWorkout() {
     suppressIndexAudioRef.current = true;
     dispatch({ type: "RESTART_WORKOUT", now_ms: performance.now() });
@@ -269,6 +283,7 @@ export default function WorkoutScreen({
           steps={state.steps}
           sections={state.sections}
           cursor={state.cursor}
+          deferred={state.deferred}
           completion={completionMap}
           collapsed={stacked && !mapOpen}
           onToggleCollapsed={stacked ? () => setMapOpen((o) => !o) : undefined}
@@ -291,6 +306,7 @@ export default function WorkoutScreen({
                 isFinisher={current.circuitId === "finisher"}
                 onLoggedSet={onLoggedSet}
                 onNext={nextStep}
+                onDeferNext={canDeferNext === "yes" ? deferNext : null}
               />
             ) : (
               <Glance
@@ -323,6 +339,12 @@ export default function WorkoutScreen({
                   {isPaused ? "▶ Resume" : "⏸ Pause"}
                 </button>
               ))}
+            {density === "glance" && canDeferCurrent === "last" && current?.exerciseRef
+              && state.deferred.includes(current.exerciseRef.name) && (
+              <div className="defer-hint" data-testid="defer-hint">
+                Last one this round — Skip if it stays busy
+              </div>
+            )}
             <div className="workout-controls">
               <button type="button" className="btn" onClick={prevStep} disabled={isFirstStepCursor(state)} aria-label="Previous step">
                 ◀ Prev
@@ -335,6 +357,12 @@ export default function WorkoutScreen({
               <button type="button" className="btn" onClick={nextStep} aria-label="Skip to next">
                 {density === "log" ? "Skip rest ▶" : "Skip ▶"}
               </button>
+              {density === "glance" && canDeferCurrent === "yes" && (
+                <button type="button" className="btn btn--defer" onClick={deferCurrent}
+                        data-testid="defer-current" aria-label="Machine busy — do the next exercise first">
+                  Busy — later
+                </button>
+              )}
               <button
                 type="button"
                 className="btn"
@@ -517,6 +545,7 @@ function RestLog({
   isFinisher,
   onLoggedSet,
   onNext,
+  onDeferNext,
 }: {
   plan: Plan;
   exerciseName: string;
@@ -530,6 +559,8 @@ function RestLog({
   isFinisher: boolean;
   onLoggedSet: (exerciseName: string, set: SetEntry) => void;
   onNext: () => void;
+  /** GD-DEFER: the next exercise's machine is busy — swap it with the one after. */
+  onDeferNext: (() => void) | null;
 }) {
   const exercise = findExercise(plan, exerciseName);
   const total = totalSetsFor(plan, exerciseName);
@@ -543,6 +574,12 @@ function RestLog({
         <span className="restlog-label">{holding ? "Rest over" : "Rest"}</span>
         <span className="restlog-time mono">{formatMMSS(remaining)}</span>
         {upNextLabel && <span className="restlog-next">Next: {upNextLabel}</span>}
+        {onDeferNext && (
+          <button type="button" className="btn btn--defer restlog-defer" onClick={onDeferNext}
+                  data-testid="defer-next" aria-label={`${upNextLabel} busy — do the one after first`}>
+            Busy — later
+          </button>
+        )}
       </div>
       {thisSetLogged || setNum > total || !exercise ? (
         <div className="restlog-done">
