@@ -27,6 +27,7 @@ import type {
   TrendPoint,
 } from "../lib/types";
 import { addDays, asOfLabel, dayLabel, statusIcon } from "../lib/week";
+import { formatSetup } from "../lib/set-notes";
 
 // ---------------------------------------------------------------------------
 // STATUS-1 — the Status page. One read (/api/health/overview), scoped to the
@@ -282,7 +283,7 @@ export function StrengthSection({ rows }: { rows: StrengthProgressRow[] }) {
                       {tr ? <span className={`st-trend st-trend--${r.trend}`} aria-label={tr.label} title={tr.label}>{tr.arrow}</span> : "—"}
                     </td>
                     <td><TopSetCell t={r.best} /></td>
-                    <td>{r.setting != null ? `setting ${fmtNum(r.setting)}` : "—"}</td>
+                    <td>{formatSetup(r.setup) || (r.setting != null ? `seat ${fmtNum(r.setting)}` : "—")}</td>
                   </tr>
                 );
               })}

@@ -549,7 +549,10 @@ export interface StrengthProgressRow {
   previous: TopSetInfo | null;
   best: TopSetInfo | null;
   trend: "up" | "flat" | "down" | null;
+  /** Legacy single setting (before named positions). */
   setting: number | null;
+  /** Named machine positions from the latest set: {seat, pad, range}. */
+  setup?: Record<string, number> | null;
 }
 
 export interface PatternInfo {

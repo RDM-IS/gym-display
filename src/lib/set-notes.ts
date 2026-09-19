@@ -5,7 +5,7 @@ import type { EquipmentClass } from "./equipment";
 // structured tokens — quick flags, a machine setting and in-session pain.
 // Subjective detail goes to @artemis in Mattermost.
 //
-//   "finisher; setting=7; pain=shoulder:2; pain=low back:3; machine taken; felt off"
+//   "finisher; seat=4; pad=3; pain=shoulder:2; pain=low back:3; machine taken"
 //
 // Artemis reads `pain=` for pattern surfacing only (artemis/health_patterns.py),
 // never for today's plan. The Status page flags any note containing "pain".
@@ -14,9 +14,27 @@ import type { EquipmentClass } from "./equipment";
 export const QUICK_FLAGS = ["skipped", "machine taken", "felt off", "form breakdown"] as const;
 export type QuickFlag = (typeof QUICK_FLAGS)[number];
 
-/** Classes with a seat / pin / setting worth recording. */
+/** Classes with a seat / pad / range position worth recording. */
 export function supportsSetting(cls: EquipmentClass): boolean {
   return cls === "machine" || cls === "cable" || cls === "smith";
+}
+
+/** Named machine positions (Ryan, 2026-09-19): each a separate number, written
+ * as `seat=4; pad=3; range=2` — only the ones entered, always in this order. */
+export const SETUP_FIELDS = ["seat", "pad", "range"] as const;
+export type SetupField = (typeof SETUP_FIELDS)[number];
+export type MachineSetup = Partial<Record<SetupField, number>>;
+
+export const SETUP_LABELS: Record<SetupField, string> = { seat: "Seat", pad: "Pad", range: "Range" };
+
+export function hasSetup(s: MachineSetup | null | undefined): boolean {
+  return !!s && SETUP_FIELDS.some((f) => s[f] != null);
+}
+
+/** "seat 4 · pad 3", or "" when nothing is set. */
+export function formatSetup(s: MachineSetup | null | undefined): string {
+  if (!s) return "";
+  return SETUP_FIELDS.filter((f) => s[f] != null).map((f) => `${f} ${s[f]}`).join(" · ");
 }
 
 /** Artemis's check-in region vocabulary (artemis/health_regions.py REGIONS). */
@@ -42,13 +60,16 @@ export function upsertPain(entries: readonly PainEntry[], entry: PainEntry): Pai
 
 export function composeSetNotes(opts: {
   finisher?: boolean;
-  setting?: number | null;
+  setup?: MachineSetup | null;
   pain?: readonly PainEntry[];
   flags?: readonly QuickFlag[];
 }): string | null {
   const parts: string[] = [];
   if (opts.finisher) parts.push("finisher");
-  if (opts.setting != null) parts.push(`setting=${opts.setting}`);
+  for (const f of SETUP_FIELDS) {
+    const v = opts.setup?.[f];
+    if (v != null) parts.push(`${f}=${v}`);
+  }
   for (const p of opts.pain ?? []) parts.push(`pain=${p.region}:${p.level}`);
   for (const f of QUICK_FLAGS) {
     if (opts.flags?.includes(f)) parts.push(f);
@@ -56,13 +77,22 @@ export function composeSetNotes(opts: {
   return parts.length > 0 ? parts.join("; ") : null;
 }
 
-const SETTING_RE = /(?:^|;\s*)setting=(-?\d+(?:\.\d+)?)(?:\s*;|\s*$)/;
+const FIELD_RE = (key: string) => new RegExp(`(?:^|;)\\s*${key}=(\\d+(?:\\.\\d+)?)\\s*(?=;|$)`);
 
-/** The `setting=<n>` value from a notes string, or null. */
-export function parseSetting(notes: string | null | undefined): number | null {
-  if (!notes) return null;
-  const m = notes.match(SETTING_RE);
-  return m ? Number(m[1]) : null;
+/** The named positions in a notes string. A legacy single `setting=<n>`
+ * (written before 2026-09-19) reads back as the seat. */
+export function parseSetup(notes: string | null | undefined): MachineSetup {
+  const out: MachineSetup = {};
+  if (!notes) return out;
+  for (const f of SETUP_FIELDS) {
+    const m = notes.match(FIELD_RE(f));
+    if (m) out[f] = Number(m[1]);
+  }
+  if (out.seat == null) {
+    const legacy = notes.match(FIELD_RE("setting"));
+    if (legacy) out.seat = Number(legacy[1]);
+  }
+  return out;
 }
 
 const PAIN_RE = /(?:^|;)\s*pain=([a-z][a-z ]*?)\s*:\s*([0-5])\s*(?=;|$)/g;

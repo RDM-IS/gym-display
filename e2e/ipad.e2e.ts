@@ -232,9 +232,10 @@ test.describe("strength day", () => {
 
     await page.getByRole("button", { name: "Set done" }).tap();
     await expect(page.getByTestId("inline-logger")).toBeVisible();
-    // Week 1, set 1: Machine setup is open, pre-filled from last session.
-    await expect(page.getByRole("button", { name: /Machine setup 4/ })).toBeVisible();
-    await expect(page.getByText(/numbered seat\/pad position/)).toBeVisible();
+    // Week 1, set 1: Machine setup is open, pre-filled from last session
+    // (a legacy "setting=4" reads back as the seat).
+    await expect(page.getByRole("button", { name: /^Seat 4, tap to enter$/ })).toBeVisible();
+    await expect(page.getByText(/numbered positions you used/)).toBeVisible();
     await expectRestLogNotClipped(page);
     await expectTouchTargets(page);
     await expectNoKeyboardTriggers(page);
@@ -255,7 +256,7 @@ test.describe("strength day", () => {
     expect(posted).toHaveLength(1);
     expect(posted[0]).toMatchObject({
       plan_id: 101, exercise: "Leg press", log_type: "strength_set",
-      sets: [{ set_num: 1, weight_lbs: 180, reps_done: 12, rpe_actual: 7, is_skipped: false, notes: "setting=4" }],
+      sets: [{ set_num: 1, weight_lbs: 180, reps_done: 12, rpe_actual: 7, is_skipped: false, notes: "seat=4" }],
     });
     await shot(page, "3-rest-logged");
   });

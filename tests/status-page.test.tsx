@@ -162,7 +162,9 @@ describe("labels", () => {
     const lp = screen.getByRole("row", { name: /Leg press/ });
     expect(within(lp).getAllByText("180 lb × 12")).toHaveLength(2);     // last + best
     expect(within(lp).getAllByTitle("9/16 · 180 lb × 12")).toHaveLength(2);
-    expect(lp.textContent).toContain("setting 4");
+    expect(lp.textContent).toContain("seat 4");                          // legacy setting
+    const pd = screen.getByRole("row", { name: /Lat pulldown/ });
+    expect(pd.textContent).toContain("seat 5 · pad 2");                 // named positions
     expect(screen.getByLabelText("Up")).toBeDefined();
     expect(screen.getByLabelText("Down")).toBeDefined();
   });
