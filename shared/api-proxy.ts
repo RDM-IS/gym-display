@@ -2,23 +2,48 @@
  * The /api/* proxy, as a plain Request -> Response function so it can be
  * exercised outside the Workers runtime. The Pages Function is a thin wrapper.
  *
- * Host guard: the proxy attaches HEALTH_API_KEY, so it must only answer on
- * hostnames that sit behind Cloudflare Access:
- *   - gym.rdm.is                      (production Access app)
- *   - *.gym-display.pages.dev         (preview + branch aliases, preview Access app)
- * Everything else — including the bare gym-display.pages.dev production alias,
- * which is NOT behind Access — gets 403 before the key is ever touched.
+ * Two independent gates run before HEALTH_API_KEY is ever attached:
+ *
+ * 1. Host guard (defense in depth). Only hostnames that sit behind Cloudflare
+ *    Access are proxied:
+ *      - gym.rdm.is                   (production Access app)
+ *      - *.gym-display.pages.dev      (preview + branch aliases, preview Access app)
+ *    Everything else — including the bare gym-display.pages.dev alias, which is
+ *    NOT behind Access — gets 403.
+ *
+ * 2. Access JWT. The Cf-Access-Jwt-Assertion header (or CF_Authorization
+ *    cookie) must verify against the team JWKS with an audience that matches
+ *    one of the configured Access applications. Failure is 401 JSON
+ *    {"error":"access_required"} — never a redirect, because the caller is a
+ *    fetch() that cannot follow an Access login.
  */
+import {
+  JwksCache,
+  accessRequiredResponse,
+  extractAccessToken,
+  verifyAccessJwt,
+} from "./access-jwt";
 
 export interface ApiProxyEnv {
-  /** Lambda API key. Only ever attached to a request that passed the host guard. */
+  /** Lambda API key. Only ever attached to a request that passed both gates. */
   HEALTH_API_KEY: string;
+  /** AUD tag of the gym.rdm.is Access application. */
+  ACCESS_AUD_PRODUCTION?: string;
+  /** AUD tag of the Pages preview (*.gym-display.pages.dev) Access application. */
+  ACCESS_AUD_PREVIEW?: string;
+  /** Legacy single-AUD variable from the first cut of this change; still honoured. */
+  ACCESS_AUD?: string;
+  /** Optional override; defaults to the rdmis team domain. */
+  ACCESS_TEAM_DOMAIN?: string;
 }
 
 export interface ApiProxyDeps {
   fetchImpl?: typeof fetch;
+  now?: number;
+  cache?: JwksCache;
 }
 
+export const DEFAULT_TEAM_DOMAIN = "rdmis.cloudflareaccess.com";
 export const UPSTREAM =
   "https://inolj7bn99.execute-api.us-east-1.amazonaws.com/default/rdmis-crm-api/api";
 
@@ -41,6 +66,14 @@ export function forbiddenHostResponse(): Response {
   });
 }
 
+/** Every configured Access audience, trimmed and de-duplicated. */
+export function configuredAudiences(env: ApiProxyEnv): string[] {
+  const all = [env.ACCESS_AUD_PRODUCTION, env.ACCESS_AUD_PREVIEW, env.ACCESS_AUD]
+    .map((a) => (a ?? "").trim())
+    .filter(Boolean);
+  return [...new Set(all)];
+}
+
 export async function handleApiRequest(
   request: Request,
   env: ApiProxyEnv,
@@ -48,6 +81,20 @@ export async function handleApiRequest(
 ): Promise<Response> {
   const url = new URL(request.url);
   if (!isAllowedApiHost(url.hostname)) return forbiddenHostResponse();
+
+  // Fail closed: an environment with no AUD configured can authenticate
+  // nobody, so it proxies nothing.
+  const audiences = configuredAudiences(env);
+  if (audiences.length === 0) return accessRequiredResponse();
+
+  const verdict = await verifyAccessJwt(extractAccessToken(request), {
+    teamDomain: env.ACCESS_TEAM_DOMAIN || DEFAULT_TEAM_DOMAIN,
+    aud: audiences,
+    now: deps.now,
+    fetchImpl: deps.fetchImpl,
+    cache: deps.cache,
+  });
+  if (!verdict.ok) return accessRequiredResponse();
 
   const path = url.pathname.replace(/^\/api/, "");
   const target = UPSTREAM + path + url.search;
