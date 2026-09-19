@@ -20,11 +20,15 @@
 }
 .flow-list li {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: var(--gap);
   padding: 6px 0;
   border-bottom: 1px solid var(--line);
 }
+.flow-list-title { flex: 1; }
+/* Every row reserves the thumbnail box, drawn or not, so titles line up. */
+.flow-thumb-slot { flex: none; width: 64px; height: 48px; }
 
 
 .flow-run {
@@ -54,6 +58,7 @@
 
 .flow-body {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -61,6 +66,59 @@
   gap: 14px;
   text-align: center;
 }
+.flow-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+/* ── YOGA-2 pose figures ─────────────────────────────────────────────── */
+/* Line drawings take the foreground token; the box size is fixed in CSS so
+   nothing shifts when a figure paints. Figures never take pointer input —
+   the flow stays tap-to-pause / swipe-to-skip only. */
+.pose-figure {
+  color: var(--fg);
+  pointer-events: none;
+  flex: none;
+}
+.pose-figure svg { display: block; width: 100%; height: 100%; }
+
+/* Portrait: figure on top, about 40% of the screen. The bottom is kept clear
+   for the 5 s "Next" bar so it never covers the cue. */
+.flow-body--figure {
+  justify-content: flex-start;
+  gap: 10px;
+  padding-bottom: calc(var(--next-bar-h) + 24px);
+}
+.flow-figure {
+  height: calc(var(--vvh, 100dvh) * 0.4);
+  width: 100%;
+  max-width: calc(var(--vvh, 100dvh) * 0.4 * 4 / 3);
+}
+.flow-body--figure .flow-text { flex: 1; justify-content: center; gap: 10px; }
+
+/* Landscape: figure left, text right. */
+@media (orientation: landscape) and (min-width: 900px) {
+  .flow-body--figure {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 32px;
+  }
+  .flow-body--figure .flow-figure {
+    width: 46%;
+    max-width: none;
+    height: auto;
+    aspect-ratio: 4 / 3;
+  }
+  .flow-body--figure .flow-text { flex: 1; min-width: 0; }
+  .flow-body--figure .flow-clock { font-size: 130px; }
+}
+
+.pose-thumb { width: 64px; height: 48px; }
+.flow-next-thumb { width: 120px; height: 90px; margin: -12px 0; }
+.flow-switch-figure { width: 280px; height: 210px; }
 .flow-step { font-size: 18px; }
 .flow-name { font-size: 64px; font-weight: 800; line-height: 1.05; }
 .flow-side {
@@ -77,7 +135,10 @@
 .flow-cue { font-size: 24px; color: var(--fg-dim); max-width: 34ch; }
 .flow-easier { font-size: 20px; color: var(--fg-faint); }
 
+.flow-run { --next-bar-h: 110px; }
 .flow-next {
+  min-height: var(--next-bar-h);
+  box-sizing: border-box;
   position: absolute;
   left: var(--gutter);
   right: var(--gutter);
@@ -89,6 +150,10 @@
   font-size: 30px;
   font-weight: 800;
   text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
 }
 
 .flow-switch {
@@ -123,6 +188,8 @@
 }
 
 @media (max-width: 700px) {
+  .flow-figure { height: calc(var(--vvh, 100dvh) * 0.32); }
+  .flow-switch-figure { width: 200px; height: 150px; }
   .flow-name { font-size: 44px; }
   .flow-side { font-size: 30px; }
   .flow-clock { font-size: 110px; }
