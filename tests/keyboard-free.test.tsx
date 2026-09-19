@@ -42,7 +42,7 @@ function renderLogger(overrides: Partial<Parameters<typeof InlineExerciseLogger>
       plan_id={7}
       set_num={2}
       total_sets={3}
-      prefill={{ weight: 180, reps: 12, rpe: null, setting: null }}
+      prefill={{ weight: 180, reps: 12, rpe: null, setup: {} }}
       lastHint={null}
       alreadyFullyLogged={false}
       onLoggedSet={() => {}}
@@ -70,8 +70,8 @@ describe("strength logger never raises the OS keyboard", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
     fireEvent.click(screen.getByTestId("machine-setup-toggle"));
-    fireEvent.click(screen.getByRole("button", { name: /Machine setup not set/ }));
-    expect(screen.getByRole("dialog", { name: "Machine setup keypad" })).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: /Seat not set/ }));
+    expect(screen.getByRole("dialog", { name: "Seat keypad" })).toBeDefined();
     expect(keyboardTriggers(document.body)).toHaveLength(0);
   });
 
@@ -83,7 +83,7 @@ describe("strength logger never raises the OS keyboard", () => {
 });
 
 describe("keypad + chips + flags → one session_log row", () => {
-  it("writes weight from the keypad, RPE chip, setting=<n> and flags into notes", async () => {
+  it("writes weight from the keypad, RPE chip, seat=<n> and flags into notes", async () => {
     const logged: unknown[] = [];
     renderLogger({ onLoggedSet: (_n, s) => logged.push(s) });
 
@@ -95,10 +95,10 @@ describe("keypad + chips + flags → one session_log row", () => {
     }
     fireEvent.click(within(weightPad).getByRole("button", { name: "Done" }));
 
-    // Machine setup 7 (collapsed on set 2 — one tap to open).
+    // Seat 7 (collapsed on set 2 — one tap to open).
     fireEvent.click(screen.getByTestId("machine-setup-toggle"));
-    fireEvent.click(screen.getByRole("button", { name: /Machine setup not set/ }));
-    const settingPad = screen.getByRole("dialog", { name: "Machine setup keypad" });
+    fireEvent.click(screen.getByRole("button", { name: /Seat not set/ }));
+    const settingPad = screen.getByRole("dialog", { name: "Seat keypad" });
     fireEvent.click(within(settingPad).getByRole("button", { name: "Digit 7" }));
     fireEvent.click(within(settingPad).getByRole("button", { name: "Done" }));
 
@@ -111,10 +111,10 @@ describe("keypad + chips + flags → one session_log row", () => {
     const set = posted[0].sets[0];
     expect(set).toMatchObject({
       set_num: 2, weight_lbs: 135, reps_done: 12, rpe_actual: 8.5, is_skipped: false,
-      notes: "setting=7; machine taken",
+      notes: "seat=7; machine taken",
     });
     await waitFor(() => expect(logged).toHaveLength(1));
-    expect(logged[0]).toMatchObject({ set_num: 2, weight_lbs: 135, setting: 7 });
+    expect(logged[0]).toMatchObject({ set_num: 2, weight_lbs: 135, setup: { seat: 7 } });
   });
 
   it("the 'skipped' flag writes is_skipped=true with no metrics", async () => {
@@ -128,14 +128,14 @@ describe("keypad + chips + flags → one session_log row", () => {
     });
   });
 
-  it("prefills the setting from last session's notes", () => {
+  it("prefills a legacy setting from last session's notes as the seat", () => {
     const prefill = computePrefill("Leg press", "reps", 180, 12, null, {}, {
       weight_lbs: 170, reps_done: 12, notes: "setting=4; felt off",
     });
-    expect(prefill.setting).toBe(4);
+    expect(prefill.setup).toEqual({ seat: 4 });
     renderLogger({ prefill });
     // Collapsed on set 2, but the pre-filled value is visible on the toggle.
-    expect(screen.getByTestId("machine-setup-toggle").textContent).toBe("Machine setup: 4 ▸");
+    expect(screen.getByTestId("machine-setup-toggle").textContent).toBe("Machine setup: seat 4 ▸");
   });
 
   it("shows no setting field for dumbbells or bodyweight", () => {

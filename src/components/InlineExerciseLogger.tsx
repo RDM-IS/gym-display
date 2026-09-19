@@ -4,7 +4,8 @@ import RpeChips from "./RpeChips";
 import FlagChips from "./FlagChips";
 import NumericKeypad from "./NumericKeypad";
 import { submitLog } from "../lib/log-queue";
-import { composeSetNotes, supportsSetting, type PainEntry, type QuickFlag } from "../lib/set-notes";
+import { composeSetNotes, formatSetup, SETUP_FIELDS, SETUP_LABELS, supportsSetting,
+         type MachineSetup, type PainEntry, type QuickFlag, type SetupField } from "../lib/set-notes";
 import { plateLabel, weightStepFor } from "../lib/weight-step";
 import type { Prefill, SetEntry } from "../lib/log-state";
 import type { LastLoggedEntry, LogExerciseIn, PlannedExercise } from "../lib/types";
@@ -26,7 +27,7 @@ interface Props {
 }
 
 export const MACHINE_SETUP_HELP =
-  "The numbered seat/pad position you used, e.g. seat 4, pad 2. Next time it's pre-filled.";
+  "The numbered positions you used — seat, pad, range. Next time they're pre-filled.";
 
 /** Machine setup starts expanded on set 1 of a machine exercise in week 1 —
  * that's when the seat/pad numbers are first found and worth writing down. */
@@ -40,7 +41,7 @@ interface State {
   weight: number | null;
   reps: number | null;
   rpe: number | null;
-  setting: number | null;
+  setup: MachineSetup;
   flags: QuickFlag[];
   pain: PainEntry[];
   status: Status;
@@ -51,7 +52,7 @@ type Action =
   | { type: "set_weight"; v: number | null }
   | { type: "set_reps"; v: number | null }
   | { type: "set_rpe"; v: number | null }
-  | { type: "set_setting"; v: number | null }
+  | { type: "set_setup"; field: SetupField; v: number | null }
   | { type: "set_flags"; flags: QuickFlag[] }
   | { type: "set_pain"; pain: PainEntry[] }
   | { type: "save_start" }
@@ -64,7 +65,12 @@ function reducer(state: State, action: Action): State {
     case "set_weight":  return { ...state, weight: action.v, status: "idle", error: null };
     case "set_reps":    return { ...state, reps: action.v, status: "idle", error: null };
     case "set_rpe":     return { ...state, rpe: action.v, status: "idle", error: null };
-    case "set_setting": return { ...state, setting: action.v, status: "idle", error: null };
+    case "set_setup": {
+      const setup = { ...state.setup };
+      if (action.v == null) delete setup[action.field];
+      else setup[action.field] = action.v;
+      return { ...state, setup, status: "idle", error: null };
+    }
     case "set_flags":   return { ...state, flags: action.flags, status: "idle", error: null };
     case "set_pain":    return { ...state, pain: action.pain, status: "idle", error: null };
     case "save_start":  return { ...state, status: "saving", error: null };
@@ -78,9 +84,9 @@ function reducer(state: State, action: Action): State {
  * button, with the supplied set_num.
  *
  * No OS keyboard: weight / reps are steppers whose value opens the in-app
- * keypad, RPE and quick flags are chips, and the optional machine setting is a
- * keypad field. Flags, pain and the setting are written to the row's notes
- * ("setting=7; pain=shoulder:2; machine taken").
+ * keypad, RPE and quick flags are chips, and the optional machine setup is up
+ * to three keypad fields (seat, pad, range). Flags, pain and the positions are
+ * written to the row's notes ("seat=4; pad=3; pain=shoulder:2; machine taken").
  *
  * Pre-fills from `prefill` (previous set this session > last session > plan
  * target). A write that can't reach the server is queued and counts as logged
@@ -101,14 +107,14 @@ export default function InlineExerciseLogger({
   const w = weightStepFor(exercise);
   const useReps = exercise.format === "reps";
   const showSetting = useReps && supportsSetting(w.cls);
-  const [settingPadOpen, setSettingPadOpen] = useState(false);
+  const [setupPad, setSetupPad] = useState<SetupField | null>(null);
   const [setupOpen, setSetupOpen] = useState(() => machineSetupOpenByDefault(week_num, set_num));
 
   const [state, dispatch] = useReducer(reducer, {
     weight: prefill.weight,
     reps: prefill.reps,
     rpe: prefill.rpe,
-    setting: prefill.setting ?? null,
+    setup: prefill.setup ?? {},
     flags: [],
     pain: [],
     status: "idle",
@@ -130,7 +136,7 @@ export default function InlineExerciseLogger({
       is_skipped: skipped,
       notes: composeSetNotes({
         finisher: isFinisher,
-        setting: showSetting ? state.setting : null,
+        setup: showSetting ? state.setup : null,
         pain: state.pain,
         flags: state.flags,
       }),
@@ -152,7 +158,7 @@ export default function InlineExerciseLogger({
       weight_lbs: setRow.weight_lbs,
       reps_done: setRow.reps_done,
       rpe_actual: setRow.rpe_actual,
-      setting: showSetting ? state.setting : null,
+      setup: showSetting ? state.setup : null,
     });
   }
 
@@ -215,7 +221,7 @@ export default function InlineExerciseLogger({
             aria-expanded={false}
             onClick={() => setSetupOpen(true)}
           >
-            Machine setup{state.setting == null ? " ▸" : `: ${prettyN(state.setting)} ▸`}
+            Machine setup{formatSetup(state.setup) ? `: ${formatSetup(state.setup)} ▸` : " ▸"}
           </button>
         )}
         {showSetting && setupOpen && (
@@ -229,25 +235,34 @@ export default function InlineExerciseLogger({
               Machine setup ▾
             </button>
             <div className="setting-help">{MACHINE_SETUP_HELP}</div>
-            <button
-              type="button"
-              className="setting-value mono"
-              disabled={isDone}
-              onClick={() => setSettingPadOpen(true)}
-              aria-label={`Machine setup ${state.setting ?? "not set"}, tap to enter`}
-            >
-              {state.setting == null ? "—" : prettyN(state.setting)}
-            </button>
-            {settingPadOpen && (
+            <div className="setting-positions">
+              {SETUP_FIELDS.map((f) => (
+                <label key={f} className="setting-position">
+                  <span className="setting-position-label">{SETUP_LABELS[f]}</span>
+                  <button
+                    type="button"
+                    className="setting-value mono"
+                    disabled={isDone}
+                    data-testid={`setup-${f}`}
+                    onClick={() => setSetupPad(f)}
+                    aria-label={`${SETUP_LABELS[f]} ${state.setup[f] ?? "not set"}, tap to enter`}
+                  >
+                    {state.setup[f] == null ? "—" : prettyN(state.setup[f]!)}
+                  </button>
+                </label>
+              ))}
+            </div>
+            {setupPad && (
               <NumericKeypad
-                title="Machine setup"
-                initial={state.setting}
+                title={SETUP_LABELS[setupPad]}
+                initial={state.setup[setupPad] ?? null}
                 allowDecimal
                 allowNegative={false}
-                onCancel={() => setSettingPadOpen(false)}
+                onCancel={() => setSetupPad(null)}
                 onDone={(v) => {
-                  setSettingPadOpen(false);
-                  dispatch({ type: "set_setting", v });
+                  const f = setupPad;
+                  setSetupPad(null);
+                  dispatch({ type: "set_setup", field: f, v });
                 }}
               />
             )}

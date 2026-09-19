@@ -428,3 +428,23 @@
 .done-unlogged-cell { display: flex; flex-direction: column; gap: 8px; }
 
 .done-footer { padding-bottom: 12px; }
+
+/* Named positions (seat / pad / range), side by side. */
+.setting-positions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--gap);
+}
+.setting-position {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.setting-position-label {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+.setting-position .setting-value { width: 100%; }

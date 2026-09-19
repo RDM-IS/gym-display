@@ -1,6 +1,6 @@
 import { exerciseSets } from "./adjustment";
 import type { Plan } from "./types";
-import { parseSetting } from "./set-notes";
+import { parseSetup, type MachineSetup } from "./set-notes";
 
 // ---------------------------------------------------------------------------
 // Per-set logging model.
@@ -15,8 +15,8 @@ export interface SetEntry {
   weight_lbs: number | null;
   reps_done: number | null;
   rpe_actual: number | null;
-  /** Machine seat / pin setting recorded with this set, if any. */
-  setting?: number | null;
+  /** Machine positions recorded with this set (seat / pad / range), if any. */
+  setup?: MachineSetup | null;
 }
 
 export type SessionSets = Record<string, SetEntry[]>;
@@ -102,8 +102,8 @@ export interface Prefill {
   weight: number | null;
   reps: number | null;
   rpe: number | null;
-  /** Machine setting: previous set this session > last session's notes. */
-  setting: number | null;
+  /** Machine positions: previous set this session > last session's notes. */
+  setup: MachineSetup;
 }
 
 export function computePrefill(
@@ -126,7 +126,7 @@ export function computePrefill(
       ?? lastSession?.weight_lbs ?? target_load_lbs ?? null,
     reps: repsFromPrev ?? lastSession?.reps_done ?? repsTarget,
     rpe: prev?.rpe_actual ?? null,
-    setting: prev?.setting ?? parseSetting(lastSession?.notes),
+    setup: prev?.setup ?? parseSetup(lastSession?.notes),
   };
 }
 

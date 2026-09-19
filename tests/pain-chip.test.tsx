@@ -8,7 +8,7 @@ import { _resetQueueForTests } from "../src/lib/log-queue";
 import {
   composeSetNotes,
   parsePain,
-  parseSetting,
+  parseSetup,
   PAIN_REGIONS,
   upsertPain,
 } from "../src/lib/set-notes";
@@ -19,24 +19,24 @@ import type { LogExerciseIn, LogResponse, Plan, PlannedExercise } from "../src/l
 // ---------------------------------------------------------------------------
 
 describe("pain notes", () => {
-  it("composes pain after the setting and before the flags", () => {
+  it("composes pain after the machine positions and before the flags", () => {
     expect(
       composeSetNotes({
         finisher: true,
-        setting: 7,
+        setup: { seat: 7 },
         pain: [{ region: "shoulder", level: 2 }, { region: "low back", level: 3 }],
         flags: ["felt off"],
       }),
-    ).toBe("finisher; setting=7; pain=shoulder:2; pain=low back:3; felt off");
+    ).toBe("finisher; seat=7; pain=shoulder:2; pain=low back:3; felt off");
     expect(composeSetNotes({ pain: [{ region: "knee", level: 0 }] })).toBe("pain=knee:0");
     expect(composeSetNotes({ pain: [] })).toBeNull();
   });
 
-  it("round-trips through parsePain, and the setting still parses", () => {
+  it("round-trips through parsePain, and the positions still parse", () => {
     const pain = [{ region: "shoulder", level: 2 }, { region: "low back", level: 3 }] as const;
-    const notes = composeSetNotes({ setting: 4, pain: [...pain], flags: ["machine taken"] });
+    const notes = composeSetNotes({ setup: { seat: 4, pad: 2 }, pain: [...pain], flags: ["machine taken"] });
     expect(parsePain(notes)).toEqual(pain);
-    expect(parseSetting(notes)).toBe(4);
+    expect(parseSetup(notes)).toEqual({ seat: 4, pad: 2 });
     for (const region of PAIN_REGIONS) {
       for (const level of [0, 5]) {
         expect(parsePain(composeSetNotes({ pain: [{ region, level }] }))).toEqual([{ region, level }]);
@@ -69,7 +69,7 @@ describe("pain notes", () => {
 
   it("the Status page's pain detector (keyword 'pain') still matches", () => {
     // api/app/routers/health.py PAIN_KEYWORDS — any note containing "pain".
-    const note = composeSetNotes({ setting: 7, pain: [{ region: "shoulder", level: 2 }] })!;
+    const note = composeSetNotes({ setup: { seat: 7 }, pain: [{ region: "shoulder", level: 2 }] })!;
     expect(["pain", "injury", "hurt", "tweak"].some((k) => note.toLowerCase().includes(k))).toBe(true);
   });
 });
@@ -107,7 +107,7 @@ function renderLogger(exercise: PlannedExercise = REAR_DELT) {
       plan_id={7}
       set_num={1}
       total_sets={2}
-      prefill={{ weight: 50, reps: 15, rpe: null, setting: null }}
+      prefill={{ weight: 50, reps: 15, rpe: null, setup: {} }}
       lastHint={null}
       alreadyFullyLogged={false}
       week_num={2}

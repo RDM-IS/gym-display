@@ -126,7 +126,7 @@ describe("Machine setup field", () => {
         set_num={set_num}
         total_sets={2}
         week_num={week_num}
-        prefill={{ weight: null, reps: null, rpe: null, setting: null }}
+        prefill={{ weight: null, reps: null, rpe: null, setup: {} }}
         lastHint={null}
         alreadyFullyLogged={false}
         onLoggedSet={() => {}}
@@ -147,8 +147,10 @@ describe("Machine setup field", () => {
     expect(screen.getByText("Machine setup ▾")).toBeTruthy();
     expect(screen.getByText(MACHINE_SETUP_HELP)).toBeTruthy();
     expect(MACHINE_SETUP_HELP).toBe(
-      "The numbered seat/pad position you used, e.g. seat 4, pad 2. Next time it's pre-filled.",
+      "The numbered positions you used — seat, pad, range. Next time they're pre-filled.",
     );
+    // One field per named position.
+    for (const f of ["seat", "pad", "range"]) expect(screen.getByTestId(`setup-${f}`)).toBeTruthy();
   });
 
   it("is collapsed (but one tap away) otherwise", () => {
@@ -163,7 +165,7 @@ describe("Machine setup field", () => {
       <InlineExerciseLogger
         exercise={{ name: "DB bench press", format: "reps", target_reps: 12 }}
         plan_id={1} set_num={1} total_sets={2} week_num={1}
-        prefill={{ weight: null, reps: null, rpe: null, setting: null }}
+        prefill={{ weight: null, reps: null, rpe: null, setup: {} }}
         lastHint={null} alreadyFullyLogged={false} onLoggedSet={() => {}}
       />,
     );

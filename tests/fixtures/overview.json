@@ -1086,7 +1086,8 @@
     "score": 1200
    },
    "trend": null,
-   "setting": 7
+   "setting": 7,
+   "setup": {"seat": 5, "pad": 2}
   },
   {
    "exercise": "Seated leg curl",
