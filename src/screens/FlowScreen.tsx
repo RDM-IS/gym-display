@@ -37,6 +37,7 @@ import { acquireWakeLock, releaseWakeLock } from "../lib/wake-lock";
 import { formatPlanDate } from "../lib/format";
 import type { Plan, RecoveryFlowBlocks } from "../lib/types";
 import BottomBar from "../components/BottomBar";
+import PoseFigure, { hasPoseArt } from "../assets/poses";
 import type { BarTarget } from "../lib/bottom-bar";
 
 interface Props {
@@ -263,7 +264,10 @@ export default function FlowScreen({ plan, onRunningChange, onNavigate }: Props)
         <ol className="flow-list">
           {items.filter((i) => i.kind !== "pose" || i.round === 1).map((i, n) => (
             <li key={n}>
-              <span>{i.title}</span>
+              <span className="flow-thumb-slot" aria-hidden="true">
+                <PoseFigure name={i.name} side={i.side} className="pose-thumb" />
+              </span>
+              <span className="flow-list-title">{i.title}</span>
               <span className="mono dim">{formatClock(i.duration_sec)}</span>
             </li>
           ))}
@@ -325,32 +329,41 @@ export default function FlowScreen({ plan, onRunningChange, onNavigate }: Props)
         )}
       </div>
 
-      <div className="flow-body">
-        {item.step && <div className="flow-step mono dim">Step {item.step}</div>}
-        <div className="flow-name" data-testid="flow-name">{item.name}</div>
-        {item.sideLabel && (
-          <div className="flow-side" data-testid="flow-side">{item.sideLabel}</div>
-        )}
-        <div className="flow-clock mono" data-testid="flow-clock">{formatClock(secLeft)}</div>
-        {item.cue && <div className="flow-cue">{item.cue}</div>}
-        {item.easier && <div className="flow-easier">Easier: {item.easier}</div>}
+      <div className={`flow-body${hasPoseArt(item.name) ? " flow-body--figure" : ""}`}
+           data-testid="flow-body">
+        {/* The figure's box is sized by CSS before it paints, and the SVG is
+            inline (nothing to load), so the text never moves under it. */}
+        <PoseFigure name={item.name} side={item.side} className="flow-figure" />
+        <div className="flow-text">
+          {item.step && <div className="flow-step mono dim">Step {item.step}</div>}
+          <div className="flow-name" data-testid="flow-name">{item.name}</div>
+          {item.sideLabel && (
+            <div className="flow-side" data-testid="flow-side">{item.sideLabel}</div>
+          )}
+          <div className="flow-clock mono" data-testid="flow-clock">{formatClock(secLeft)}</div>
+          {item.cue && <div className="flow-cue">{item.cue}</div>}
+          {item.easier && <div className="flow-easier">Easier: {item.easier}</div>}
+        </div>
       </div>
 
       {showPreview && pkind === "switch" && (
         <div className="flow-switch" data-testid="flow-switch" role="status">
           <div className="flow-switch-title">Switch sides</div>
+          <PoseFigure name={next.name} side={next.side} className="flow-switch-figure" />
           <div className="flow-switch-next">{next.sideLabel}</div>
         </div>
       )}
       {showPreview && pkind === "round" && (
         <div className="flow-switch flow-roundcard" data-testid="flow-round-change" role="status">
           <div className="flow-switch-title">Round {next.round}</div>
+          <PoseFigure name={next.name} side={next.side} className="flow-switch-figure" />
           <div className="flow-switch-next">Next: {next.title}</div>
         </div>
       )}
       {showPreview && pkind === "next" && (
         <div className="flow-next" data-testid="flow-next" role="status">
-          Next: {next.title}
+          <PoseFigure name={next.name} side={next.side} className="pose-thumb flow-next-thumb" />
+          <span>Next: {next.title}</span>
         </div>
       )}
       {state.paused && (

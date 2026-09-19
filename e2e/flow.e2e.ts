@@ -188,3 +188,108 @@ test("tap pauses and resumes; the remaining time holds", async ({ page }) => {
   await expect(page.getByTestId("flow-clock")).toHaveText("0:15");
   expect(posted).toHaveLength(0);
 });
+
+// ── YOGA-2: pose figures ────────────────────────────────────────────────────
+
+type Box = { x: number; y: number; width: number; height: number };
+
+test("active pose shows its figure, mirrored per side, with no layout shift", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.clock.install({ time: new Date("2026-09-19T12:29:00Z") });
+  await mockApi(page, HOME_PLAN);
+  await page.goto("/today");
+  // Ready list: a thumbnail on every drawn row.
+  await expect(page.getByTestId("flow-ready").getByTestId("pose-figure")).toHaveCount(21);  // 20 poses + breathing
+  await pausedStart(page, "2026-09-19T12:30:00Z");
+
+  const figure = page.getByTestId("flow-body").getByTestId("pose-figure");
+  await expect(figure).toHaveAttribute("data-pose", "child's pose");
+
+  // Snapshot the figure + name boxes on the very first mutation that shows a
+  // new pose name, before any later frame can move them.
+  await page.evaluate(() => {
+    const w = window as unknown as { __firstPaint: Record<string, unknown> };
+    w.__firstPaint = {};
+    const box = (el: Element | null) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { x: r.x, y: r.y, width: r.width, height: r.height };
+    };
+    new MutationObserver(() => {
+      const name = document.querySelector('[data-testid="flow-name"]');
+      const key = name?.textContent ?? "";
+      if (key && !(key in w.__firstPaint)) {
+        w.__firstPaint[key] = {
+          figure: box(document.querySelector('[data-testid="flow-body"] [data-testid="pose-figure"]')),
+          name: box(name),
+        };
+      }
+    }).observe(document.body, { subtree: true, childList: true, characterData: true });
+  });
+
+  // 150 s → High lunge, right leg forward (base drawing).
+  await runSeconds(page, 151);
+  await expect(page.getByTestId("flow-name")).toHaveText("High lunge");
+  await expect(page.getByTestId("flow-side")).toHaveText("Right leg forward");
+  await expect(figure).toHaveAttribute("data-pose", "high lunge");
+  await expect(figure).toHaveAttribute("data-mirrored", "false");
+  await shot(page, "flow-7-figure-lunge-right");
+
+  // Same pose one clock second (and its frames) later: nothing moved.
+  const settled = async () => ({
+    figure: (await figure.boundingBox()) as Box,
+    name: (await page.getByTestId("flow-name").boundingBox()) as Box,
+  });
+  const first = await page.evaluate(() =>
+    (window as unknown as { __firstPaint: Record<string, { figure: Box; name: Box }> }).__firstPaint["High lunge"]);
+  // The fake clock drives rAF too, so one clock second also runs the frames.
+  await runSeconds(page, 1);
+  const later = await settled();
+  for (const k of ["figure", "name"] as const) {
+    expect(first[k], `${k} was missing on first paint`).not.toBeNull();
+    for (const p of ["x", "y", "width", "height"] as const) {
+      expect(Math.abs(first[k][p] - later[k][p]), `${k}.${p} shifted`).toBeLessThanOrEqual(0.5);
+    }
+  }
+
+  // Layout: portrait stacks figure (~40% of the height) over the text;
+  // landscape puts the figure left of the text.
+  const vp = page.viewportSize()!;
+  const text = (await page.locator(".flow-text").boundingBox()) as Box;
+  if (vp.width > vp.height) {
+    expect(later.figure.x + later.figure.width).toBeLessThanOrEqual(text.x + 0.5);
+    expect(later.figure.width / vp.width).toBeGreaterThan(0.35);
+  } else {
+    expect(later.figure.y + later.figure.height).toBeLessThanOrEqual(later.name.y);
+    expect(later.figure.height / vp.height).toBeGreaterThan(0.37);
+    expect(later.figure.height / vp.height).toBeLessThan(0.43);
+  }
+  // The whole screen still fits: the cue isn't pushed off the bottom.
+  const cue = (await page.locator(".flow-cue").boundingBox()) as Box;
+  expect(cue.y + cue.height).toBeLessThanOrEqual(vp.height);
+
+  // The 5 s preview before extended puppy (at 205 s) shows a small figure.
+  await runSeconds(page, 205 - 152);
+  const next = page.getByTestId("flow-next");
+  await expect(next).toBeVisible();
+  await expect(next.getByTestId("pose-figure")).toHaveAttribute("data-pose", "extended puppy");
+  // The bar never covers the cue or the easier option.
+  const bar = (await next.boundingBox()) as Box;
+  for (const sel of [".flow-cue", ".flow-easier"]) {
+    const b = (await page.locator(sel).boundingBox()) as Box;
+    expect(b.y + b.height, `${sel} runs under the Next bar`).toBeLessThanOrEqual(bar.y);
+  }
+  await shot(page, "flow-8-next-preview");
+
+  // The switch screen before the left-leg lunge shows the mirrored figure.
+  await runSeconds(page, 30);
+  const sw = page.getByTestId("flow-switch");
+  await expect(sw).toBeVisible();
+  await expect(sw.getByTestId("pose-figure")).toHaveAttribute("data-mirrored", "true");
+  await shot(page, "flow-9-switch-figure");
+
+  await runSeconds(page, 5);
+  await expect(page.getByTestId("flow-side")).toHaveText("Left leg forward");
+  await expect(figure).toHaveAttribute("data-mirrored", "true");
+  await shot(page, "flow-10-figure-lunge-left");
+});
