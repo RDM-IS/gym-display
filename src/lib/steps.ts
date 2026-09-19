@@ -69,6 +69,8 @@ export interface Section {
 export interface FlatSession {
   steps: Step[];
   sections: Section[];
+  /** The blocks these steps were built from (GD-DEFER rebuilds from them). */
+  source?: Blocks;
 }
 
 // ---------------------------------------------------------------------------
@@ -416,7 +418,7 @@ export function flattenBlocksToSteps(blocks: Blocks): FlatSession {
     case "recovery_flow": buildRecoveryFlow(b, blocks); break;
     default:          return assertNeverBlock(blocks);
   }
-  return { steps: b.steps, sections: b.sections };
+  return { steps: b.steps, sections: b.sections, source: blocks };
 }
 
 // ---------------------------------------------------------------------------

@@ -359,3 +359,29 @@
   .workout-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .workout-bar { font-size: 13px; letter-spacing: 0.08em; }
 }
+
+/* ── GD-DEFER: "Busy — later" ─────────────────────────────────────────── */
+.btn--defer {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.restlog-defer {
+  min-height: var(--tap);
+  padding: 0 18px;
+  font-size: 17px;
+  font-weight: 800;
+}
+.defer-hint {
+  font-size: 16px;
+  color: var(--fg-dim);
+  text-align: center;
+}
+.jmap-later {
+  font-size: 0.8em;
+  font-weight: 800;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 0 8px;
+  margin-left: 6px;
+}
