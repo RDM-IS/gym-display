@@ -53,3 +53,12 @@ export function formatPlanDate(plan: Plan): string {
     year: "numeric",
   });
 }
+
+/** TIME-CAP (2026-09-19): 45 min is a target, not a limit. An estimate over
+ * it reads "~52 min"; at or under it, "40 min". No warnings, no apologies. */
+export const TARGET_MIN = 45;
+
+export function formatEstimate(minutes: number | null | undefined): string {
+  if (minutes == null) return "";
+  return minutes > TARGET_MIN ? `~${minutes} min` : `${minutes} min`;
+}

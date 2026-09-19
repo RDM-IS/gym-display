@@ -9,7 +9,7 @@ import type {
   WalkBlocks,
 } from "../lib/types";
 import { assertNeverBlock } from "../lib/types";
-import { dedupe, displayTitle, formatPlanDate } from "../lib/format";
+import { dedupe, displayTitle, formatEstimate, formatPlanDate } from "../lib/format";
 import { adjustmentOf, exerciseSets, exerciseTags } from "../lib/adjustment";
 import AdjustmentBanner from "../components/AdjustmentBanner";
 import BottomBar from "../components/BottomBar";
@@ -32,7 +32,7 @@ export default function SetupScreen({ plan, interrupted, onStart, onNavigate }: 
         <div className="meta">{formatPlanDate(plan)}</div>
         <div className="h1">{displayTitle(plan)}</div>
         <div className="meta">
-          ~{plan.est_duration_min} min · Phase {plan.phase} · Week {plan.week_num} · RPE {plan.target_rpe}
+          {formatEstimate(plan.est_duration_min)} · Phase {plan.phase} · Week {plan.week_num} · RPE {plan.target_rpe}
         </div>
       </header>
 
