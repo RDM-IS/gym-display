@@ -100,10 +100,12 @@ describe("detail lines", () => {
                                      blocks: office.blocks as unknown as PlanDay["blocks"] });
     render(<PlanDayDetail day={flow} today="2026-09-23" />);
     const d = screen.getByTestId("plan-detail");
-    expect(d.textContent).toContain("37:30 total · 2 rounds");
+    expect(d.textContent).toContain("41:07 total · 2 rounds");
     expect(d.textContent).toContain("High lunge · Right leg forward");
     expect(d.textContent).toContain("Stretch Trainer");
-    expect(d.textContent).toContain("38 min");
+    expect(d.textContent).toContain("42 min");
+    expect(d.textContent).toContain("Seated meditation");
+    expect(d.textContent).toContain("Savasana 3:00");
     expect(d.textContent).toContain("Adjusts after your morning check-in.");
   });
 

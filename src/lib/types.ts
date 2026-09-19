@@ -144,6 +144,10 @@ export interface FlowStep {
   cue?: string | null;
   /** Easier option, e.g. "Dolphin — forearms down". */
   easier?: string | null;
+  /** Body position (YOGA-3) — sets the transition before the next pose. */
+  posture?: string | null;
+  /** How the voice says it, when it differs ("Downward facing dog"). */
+  spoken?: string | null;
 }
 
 export interface FlowHold {
@@ -151,6 +155,7 @@ export interface FlowHold {
   side?: null;
   duration_sec: number;
   cue?: string | null;
+  posture?: string | null;
 }
 
 /** Guided, hands-free mobility flow (YOGA-1). */
@@ -161,8 +166,17 @@ export interface RecoveryFlowBlocks extends BlocksBase {
   /** Round whose holds double, and the step-number range that doubles. */
   double_round?: number | null;
   double_steps?: [number, number] | null;
+  /** Legacy (YOGA-1): the old 5 s preview. Ignored since YOGA-3. */
   preview_sec?: number | null;
-  /** Timed blocks before round 1 (office: Stretch Trainer). */
+  /** YOGA-3: seconds to move between poses — short when the body position
+   * doesn't change (or floor to floor), long when getting up or down. */
+  transition_short_sec?: number | null;
+  transition_long_sec?: number | null;
+  /** Seconds before a hold ends that the next pose is announced. */
+  leadin_sec?: number | null;
+  /** Posture when Start is tapped (standing at the iPad). */
+  start_posture?: string | null;
+  /** Timed blocks before round 1 (seated meditation; office: Stretch Trainer). */
   pre?: FlowHold[] | null;
   flow: FlowStep[];
   close?: FlowHold | null;

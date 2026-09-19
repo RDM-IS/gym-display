@@ -6,7 +6,7 @@
   "session_type": "recovery_flow",
   "target_rpe": 2.0,
   "target_hr_zone": null,
-  "est_duration_min": 38,
+  "est_duration_min": 42,
   "is_skipped": false,
   "blocks": {
     "type": "recovery_flow",
@@ -18,13 +18,24 @@
       10,
       16
     ],
-    "preview_sec": 5,
+    "transition_short_sec": 3,
+    "transition_long_sec": 5,
+    "leadin_sec": 3,
+    "start_posture": "standing",
     "pre": [
+      {
+        "name": "Seated meditation",
+        "side": null,
+        "duration_sec": 60,
+        "cue": "Sit tall and comfortable, eyes soft, slow breaths.",
+        "posture": "seated"
+      },
       {
         "name": "Stretch Trainer",
         "side": null,
         "duration_sec": 480,
-        "cue": "Follow the 8 placard stretches"
+        "cue": "Follow the 8 placard stretches",
+        "posture": "standing"
       }
     ],
     "flow": [
@@ -36,7 +47,8 @@
         "duration_sec": 30,
         "mirror_group": null,
         "cue": "Knees wide, hips back toward your heels, arms long.",
-        "easier": null
+        "easier": null,
+        "posture": "kneeling"
       },
       {
         "step": "2",
@@ -46,7 +58,8 @@
         "duration_sec": 30,
         "mirror_group": null,
         "cue": "Hips stay down; press through the palms and lift the chest gently.",
-        "easier": null
+        "easier": null,
+        "posture": "prone"
       },
       {
         "step": "3",
@@ -56,7 +69,9 @@
         "duration_sec": 60,
         "mirror_group": null,
         "cue": "Hips high, heels reaching down, long spine.",
-        "easier": "Dolphin — forearms down"
+        "easier": "Dolphin — forearms down",
+        "posture": "quadruped",
+        "spoken": "Downward facing dog"
       },
       {
         "step": "4",
@@ -66,7 +81,8 @@
         "duration_sec": 30,
         "mirror_group": null,
         "cue": "Soft knees, let your head hang heavy.",
-        "easier": null
+        "easier": null,
+        "posture": "standing"
       },
       {
         "step": "5",
@@ -76,7 +92,8 @@
         "duration_sec": 30,
         "mirror_group": "lunge-unit",
         "cue": "Front knee over ankle, back heel lifted, arms up.",
-        "easier": "Knee down"
+        "easier": "Knee down",
+        "posture": "standing"
       },
       {
         "step": "6",
@@ -86,7 +103,8 @@
         "duration_sec": 30,
         "mirror_group": "lunge-unit",
         "cue": "Square the hips, sink a little deeper, reach up.",
-        "easier": "Knee down"
+        "easier": "Knee down",
+        "posture": "standing"
       },
       {
         "step": "7",
@@ -96,7 +114,8 @@
         "duration_sec": 30,
         "mirror_group": null,
         "cue": "From hands and knees, walk the hands forward, chest toward the mat.",
-        "easier": null
+        "easier": null,
+        "posture": "kneeling"
       },
       {
         "step": "8",
@@ -106,7 +125,8 @@
         "duration_sec": 30,
         "mirror_group": "lunge-unit",
         "cue": "Front knee over ankle, back heel lifted, arms up.",
-        "easier": "Knee down"
+        "easier": "Knee down",
+        "posture": "standing"
       },
       {
         "step": "9",
@@ -116,7 +136,8 @@
         "duration_sec": 30,
         "mirror_group": "lunge-unit",
         "cue": "Square the hips, sink a little deeper, reach up.",
-        "easier": "Knee down"
+        "easier": "Knee down",
+        "posture": "standing"
       },
       {
         "step": "10",
@@ -126,7 +147,8 @@
         "duration_sec": 30,
         "mirror_group": null,
         "cue": "Feet hip-width, press through the heels, lift the hips.",
-        "easier": null
+        "easier": null,
+        "posture": "supine"
       },
       {
         "step": "11a",
@@ -136,7 +158,8 @@
         "duration_sec": 30,
         "mirror_group": "twist-supine",
         "cue": "Knees drop to one side, both shoulders stay down.",
-        "easier": null
+        "easier": null,
+        "posture": "supine"
       },
       {
         "step": "11b",
@@ -146,7 +169,8 @@
         "duration_sec": 30,
         "mirror_group": "twist-supine",
         "cue": "Knees drop to one side, both shoulders stay down.",
-        "easier": null
+        "easier": null,
+        "posture": "supine"
       },
       {
         "step": "12a",
@@ -156,7 +180,8 @@
         "duration_sec": 30,
         "mirror_group": "wind",
         "cue": "Hug one knee to the chest, the other leg long.",
-        "easier": null
+        "easier": null,
+        "posture": "supine"
       },
       {
         "step": "12b",
@@ -166,7 +191,8 @@
         "duration_sec": 30,
         "mirror_group": "wind",
         "cue": "Hug one knee to the chest, the other leg long.",
-        "easier": null
+        "easier": null,
+        "posture": "supine"
       },
       {
         "step": "13a",
@@ -176,7 +202,8 @@
         "duration_sec": 30,
         "mirror_group": "side-bend",
         "cue": "Sit tall, reach the opposite arm overhead and lean.",
-        "easier": null
+        "easier": null,
+        "posture": "seated"
       },
       {
         "step": "13b",
@@ -186,7 +213,8 @@
         "duration_sec": 30,
         "mirror_group": "side-bend",
         "cue": "Sit tall, reach the opposite arm overhead and lean.",
-        "easier": null
+        "easier": null,
+        "posture": "seated"
       },
       {
         "step": "14a",
@@ -196,7 +224,8 @@
         "duration_sec": 30,
         "mirror_group": "twist-seated",
         "cue": "Lengthen up first, then turn from the ribs.",
-        "easier": null
+        "easier": null,
+        "posture": "seated"
       },
       {
         "step": "14b",
@@ -206,7 +235,8 @@
         "duration_sec": 30,
         "mirror_group": "twist-seated",
         "cue": "Lengthen up first, then turn from the ribs.",
-        "easier": null
+        "easier": null,
+        "posture": "seated"
       },
       {
         "step": "15",
@@ -216,7 +246,8 @@
         "duration_sec": 30,
         "mirror_group": null,
         "cue": "Sit tall, arms overhead, slow breaths.",
-        "easier": null
+        "easier": null,
+        "posture": "seated"
       },
       {
         "step": "16",
@@ -226,20 +257,22 @@
         "duration_sec": 30,
         "mirror_group": null,
         "cue": "Cross-legged, hands on knees, breathe slowly.",
-        "easier": null
+        "easier": null,
+        "posture": "seated"
       }
     ],
     "close": {
-      "name": "Easy pose breathing",
+      "name": "Savasana",
       "side": null,
       "duration_sec": 180,
-      "cue": "Easy pose. Slow, even breaths."
+      "cue": "Lie on your back, arms by your sides, let everything go.",
+      "posture": "supine"
     },
     "equipment": [
       "mat",
       "Stretch Trainer"
     ],
-    "total_sec": 2250,
-    "notes": "8 min Stretch Trainer, then 2 rounds of 16 poses (round 2 holds 2× from bridge on), 3 min easy-pose breathing"
+    "total_sec": 2467,
+    "notes": "1 min seated meditation, 8 min Stretch Trainer, 2 rounds of 16 poses (round 2 holds 2× from bridge on), 3 min savasana; 3–5 s to move between poses"
   }
 }

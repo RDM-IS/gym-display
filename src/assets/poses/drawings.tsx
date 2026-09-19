@@ -2,7 +2,8 @@ import type { ReactNode } from "react";
 import { ArcArrow, Floor, Head, Limb, Torso } from "./figure";
 
 // ---------------------------------------------------------------------------
-// The 14 Recovery Flow poses plus the Stretch Trainer and breathing screens.
+// The 14 Recovery Flow poses, savasana and seated meditation (YOGA-3), plus the
+// Stretch Trainer and the legacy breathing screen.
 // Original line figures drawn for gym-display — not traced from any source.
 //
 // `sided` drawings are the RIGHT-side version: profile poses face right with
@@ -238,6 +239,20 @@ export const DRAWINGS: Record<string, Drawing> = {
       </>
     ),
   },
+  // YOGA-3: the closing rest — flat on the back, arms by the sides.
+  savasana: {
+    sided: false,
+    art: () => (
+      <>
+        <Floor />
+        <Limb p={[[180, 258], [240, 262], [300, 264], [308, 246]]} far />
+        <Limb p={[[180, 262], [240, 266], [300, 268], [310, 250]]} />
+        <Torso neck={[96, 256]} hip={[180, 260]} />
+        <Head at={[72, 252]} />
+        <Limb p={[[98, 262], [140, 268], [176, 270]]} />
+      </>
+    ),
+  },
   // ── Icons for the two non-pose screens ──
   "stretch trainer": {
     sided: false,
@@ -271,3 +286,6 @@ export const DRAWINGS: Record<string, Drawing> = {
     ),
   },
 };
+
+// YOGA-3: the opening minute sits cross-legged, like easy pose.
+DRAWINGS["seated meditation"] = DRAWINGS["easy pose"];
