@@ -28,8 +28,9 @@ const ALL_NAMES = [...new Set([
 ])];
 
 describe("every pose in the flow resolves to an asset", () => {
-  it("covers all 16 screens: 14 poses + Stretch Trainer + breathing", () => {
-    expect(ALL_NAMES).toHaveLength(16);
+  it("covers all 17 screens: 14 poses + meditation + Stretch Trainer + savasana", () => {
+    expect(ALL_NAMES).toHaveLength(17);
+    expect(ALL_NAMES).toEqual(expect.arrayContaining(["Seated meditation", "Savasana"]));
     const missing = ALL_NAMES.filter((n) => !(poseKey(n) in DRAWINGS));
     expect(missing, `no drawing for: ${missing.join(", ")}`).toEqual([]);
   });
@@ -81,6 +82,7 @@ describe("text-only fallback", () => {
 
   it("a flow step with no drawing keeps the text-only layout", () => {
     const blocks = structuredClone(HOME);
+    blocks.pre = [];
     blocks.flow[0] = { ...blocks.flow[0], name: "Handstand" };
     const plan = { ...home, blocks } as unknown as Plan;
     render(<FlowScreen plan={plan} />);
@@ -122,7 +124,7 @@ describe("flow screen", () => {
     const body = await screen.findByTestId("flow-body");
     expect(body.className).toBe("flow-body flow-body--figure");
     const fig = body.querySelector('[data-testid="pose-figure"]') as HTMLElement;
-    expect(fig.dataset.pose).toBe("child's pose");
+    expect(fig.dataset.pose).toBe("seated meditation");
     // Figure first, then the text column.
     expect(body.firstElementChild).toBe(fig);
   });
@@ -131,7 +133,7 @@ describe("flow screen", () => {
     render(<FlowScreen plan={home as unknown as Plan} />);
     const rows = screen.getByTestId("flow-ready").querySelectorAll(".flow-list li");
     const withSlot = [...rows].filter((li) => li.querySelector(".flow-thumb-slot"));
-    expect(withSlot).toHaveLength(21);   // 20 round-1 poses + breathing
-    expect(screen.getByTestId("flow-ready").querySelectorAll('[data-testid="pose-figure"]')).toHaveLength(21);
+    expect(withSlot).toHaveLength(22);   // meditation + 20 round-1 poses + savasana
+    expect(screen.getByTestId("flow-ready").querySelectorAll('[data-testid="pose-figure"]')).toHaveLength(22);
   });
 });

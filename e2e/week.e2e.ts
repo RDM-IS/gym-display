@@ -202,7 +202,7 @@ test("Week: statuses, adjusted badge, today, past detail, navigation", async ({ 
   await expect(row("2026-09-16")).toContainText("40 min");
   await expect(row("2026-09-16").locator(".week-status")).toHaveText("✓");
   await expect(row("2026-09-17")).toContainText("Recovery Flow");
-  await expect(row("2026-09-17")).toContainText("38 min");
+  await expect(row("2026-09-17")).toContainText("42 min");
   await expect(row("2026-09-18").locator(".week-status")).toHaveText("◐");
   await expect(row("2026-09-18")).toContainText("Adjusted");
   await expect(row("2026-09-19").locator(".week-status")).toHaveText("✕");
@@ -244,7 +244,7 @@ test("Week: statuses, adjusted badge, today, past detail, navigation", async ({ 
   await expect(page.getByTestId("plan-detail")).toContainText("Incline DB press — 2 × 8-12 · RPE ≤6 · 20 lb (last 25)");
   await back();
   await row("2026-09-17").tap();
-  await expect(page.getByTestId("plan-detail")).toContainText("37:30 total · 2 rounds");
+  await expect(page.getByTestId("plan-detail")).toContainText("41:07 total · 2 rounds");
   await expect(page.getByTestId("plan-detail")).toContainText("recovery_flow: complete 37 min");
   await back();
 

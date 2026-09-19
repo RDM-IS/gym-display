@@ -5,24 +5,27 @@ import {
   chimeNext,
   isMuted,
   speak,
+  speechSupported,
   stopSpeech,
   subscribeAudio,
   toggleMuted,
   toneFlowDone,
+  toneHoldStart,
+  toneMove,
   toneRound,
   toneSwitchSides,
   unlockAudio,
   unlockSpeech,
 } from "../lib/audio";
 import {
-  DEFAULT_PREVIEW_SEC,
+  CHIME_LEAD_MS,
+  DEFAULT_LEADIN_SEC,
   buildFlowTimeline,
   flowLogNotes,
   flowTotalSec,
   formatClock,
   initialFlowState,
-  previewKind,
-  remainingInItemSec,
+  remainingInStageSec,
   remainingTotalSec,
   skipFlow,
   tickFlow,
@@ -57,16 +60,19 @@ function now(): number {
   return typeof performance !== "undefined" ? performance.now() : Date.now();
 }
 
-/** YOGA-1 Recovery Flow — one Start tap, then hands-free: every hold
- * auto-advances with a 5 s preview, a Switch sides screen between R and L,
- * voice cues, and automatic complete / partial logging. Tap to pause, swipe
- * to skip — both optional. */
+/** YOGA-1 Recovery Flow — one Start tap, then hands-free. YOGA-3 timing:
+ * the next pose is always on screen; 3 s before a hold ends a chime and the
+ * full lead-in ("Next we'll move into …"); at 0 a "Move into position"
+ * transition (3 s or 5 s by the change in body position) with the short
+ * cue; then a start tone and the hold. Switch sides and round changes keep
+ * their own screens and tones. Logs complete / partial by itself. Tap to
+ * pause (transitions too), swipe to skip — both optional. */
 export default function FlowScreen({ plan, onRunningChange, onNavigate }: Props) {
   const blocks = plan.blocks as RecoveryFlowBlocks;
   const items = useMemo(() => buildFlowTimeline(blocks), [blocks]);
   const errors = useMemo(() => validateFlow(blocks), [blocks]);
   const totalSec = useMemo(() => flowTotalSec(blocks), [blocks]);
-  const previewSec = blocks.preview_sec ?? DEFAULT_PREVIEW_SEC;
+  const leadinSec = blocks.leadin_sec ?? DEFAULT_LEADIN_SEC;
 
   const [phase, setPhase] = useState<Phase>("ready");
   const [state, setState] = useState<FlowState>(initialFlowState);
@@ -113,19 +119,18 @@ export default function FlowScreen({ plan, onRunningChange, onNavigate }: Props)
   const handleEvents = useCallback(
     (events: FlowEvent[]) => {
       for (const e of events) {
-        if (e.type === "enter") {
-          speak(items[e.index].speech);
-        } else if (e.type === "preview") {
-          const next = items[e.next];
-          if (e.kind === "switch") {
-            toneSwitchSides();
-            speak("Switch sides");
-          } else if (e.kind === "round") {
-            toneRound();
-            speak(`Round ${next.round}`);
-          } else {
-            chimeNext();
-          }
+        if (e.type === "transition") {
+          // Cancels anything still being said: the move cue is never talked over.
+          speak(items[e.index].moveCue);
+          if (!speechSupported()) toneMove();
+        } else if (e.type === "hold") {
+          toneHoldStart();
+        } else if (e.type === "leadin") {
+          if (e.kind === "switch") toneSwitchSides();
+          else if (e.kind === "round") toneRound();
+          else chimeNext();
+          // The words start once the tone is done — on the lead-in second.
+          speak(items[e.next].leadIn, Math.max(0, CHIME_LEAD_MS[e.kind] - e.lateMs));
         } else if (e.type === "done") {
           toneFlowDone();
           speak("Flow complete");
@@ -149,12 +154,12 @@ export default function FlowScreen({ plan, onRunningChange, onNavigate }: Props)
       const t = now();
       const dt = t - lastRef.current;
       lastRef.current = t;
-      const { state: next, events } = tickFlow(items, stateRef.current, dt, previewSec);
+      const { state: next, events } = tickFlow(items, stateRef.current, dt, leadinSec);
       if (next !== stateRef.current) commit(next);
       if (events.length) handleEvents(events);
     }, TICK_MS);
     return () => window.clearInterval(id);
-  }, [phase, items, previewSec, commit, handleEvents]);
+  }, [phase, items, leadinSec, commit, handleEvents]);
 
   // Closing or backgrounding mid-flow logs a partial and pauses; coming back
   // resumes on its own.
@@ -204,7 +209,9 @@ export default function FlowScreen({ plan, onRunningChange, onNavigate }: Props)
     const s = initialFlowState();
     commit(s);
     setPhase("running");
-    speak(items[0].speech);
+    // "We'll begin with seated meditation for 60 seconds." — then the first
+    // transition gets you into position.
+    speak(items[0].leadIn);
   }
 
   function togglePause() {
@@ -273,7 +280,10 @@ export default function FlowScreen({ plan, onRunningChange, onNavigate }: Props)
           ))}
           <li className="dim">Round 2: same order, bridge → easy pose held 2×</li>
         </ol>
-        <div className="desc">Hands-free after Start: it advances, switches sides and logs itself.</div>
+        <div className="desc">
+          Hands-free after Start: it announces each pose, gives you 3–5 s to move into it,
+          switches sides and logs itself.
+        </div>
         <BottomBar view="today" start={{ label: "Start", onStart: start }} onNavigate={onNavigate ?? (() => {})} />
       </div>
     );
@@ -296,18 +306,18 @@ export default function FlowScreen({ plan, onRunningChange, onNavigate }: Props)
 
   const item: FlowItem = items[state.index];
   const next = items[state.index + 1] ?? null;
-  const pkind = previewKind(items, state.index);
-  const showPreview = state.previewed && next !== null;
-  const secLeft = remainingInItemSec(items, state);
+  const moving = state.stage === "transition";
+  const secLeft = remainingInStageSec(items, state);
   const roundLabel = item.kind === "pose"
     ? `Round ${item.round}/${item.totalRounds}`
     : item.kind === "pre" ? "Before round 1" : "Close";
 
   return (
     <div
-      className={`screen flow-run${state.paused ? " flow-run--paused" : ""}`}
+      className={`screen flow-run${state.paused ? " flow-run--paused" : ""}${moving ? " flow-run--moving" : ""}`}
       data-testid="flow-run"
       data-index={state.index}
+      data-stage={state.stage}
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
       onPointerCancel={() => { pointerRef.current = null; }}
@@ -340,30 +350,50 @@ export default function FlowScreen({ plan, onRunningChange, onNavigate }: Props)
           {item.sideLabel && (
             <div className="flow-side" data-testid="flow-side">{item.sideLabel}</div>
           )}
-          <div className="flow-clock mono" data-testid="flow-clock">{formatClock(secLeft)}</div>
+          {/* Keeps its line during the hold (just hidden) so the name and
+              figure don't jump when the transition ends. */}
+          <div className={`flow-move${moving ? "" : " flow-move--idle"}`}
+               data-testid={moving ? "flow-move" : undefined} aria-hidden={!moving}>
+            Move into position
+          </div>
+          <div className={`flow-clock mono${moving ? " flow-clock--moving" : ""}`}
+               data-testid="flow-clock">
+            {moving ? secLeft : formatClock(secLeft)}
+          </div>
           {item.cue && <div className="flow-cue">{item.cue}</div>}
           {item.easier && <div className="flow-easier">Easier: {item.easier}</div>}
         </div>
       </div>
 
-      {showPreview && pkind === "switch" && (
+      {/* Always there — for the whole hold and the transition — so it never
+          appears or disappears mid-pose. */}
+      <div className="flow-next" data-testid="flow-next">
+        {next ? (
+          <>
+            <span className="flow-next-thumb-slot" aria-hidden="true">
+              <PoseFigure name={next.name} side={next.side} className="pose-thumb flow-next-thumb" />
+            </span>
+            <span data-testid="flow-next-title">Next: {next.title}</span>
+          </>
+        ) : (
+          <span data-testid="flow-next-title">Last one — the flow ends after this</span>
+        )}
+      </div>
+
+      {moving && item.switchBefore && (
         <div className="flow-switch" data-testid="flow-switch" role="status">
           <div className="flow-switch-title">Switch sides</div>
-          <PoseFigure name={next.name} side={next.side} className="flow-switch-figure" />
-          <div className="flow-switch-next">{next.sideLabel}</div>
+          <PoseFigure name={item.name} side={item.side} className="flow-switch-figure" />
+          <div className="flow-switch-next">{item.name} · {item.sideLabel}</div>
+          <div className="flow-move">Move into position · <span className="mono">{secLeft}</span></div>
         </div>
       )}
-      {showPreview && pkind === "round" && (
+      {moving && item.roundStart && (
         <div className="flow-switch flow-roundcard" data-testid="flow-round-change" role="status">
-          <div className="flow-switch-title">Round {next.round}</div>
-          <PoseFigure name={next.name} side={next.side} className="flow-switch-figure" />
-          <div className="flow-switch-next">Next: {next.title}</div>
-        </div>
-      )}
-      {showPreview && pkind === "next" && (
-        <div className="flow-next" data-testid="flow-next" role="status">
-          <PoseFigure name={next.name} side={next.side} className="pose-thumb flow-next-thumb" />
-          <span>Next: {next.title}</span>
+          <div className="flow-switch-title">Round {item.round}</div>
+          <PoseFigure name={item.name} side={item.side} className="flow-switch-figure" />
+          <div className="flow-switch-next">{item.title}</div>
+          <div className="flow-move">Move into position · <span className="mono">{secLeft}</span></div>
         </div>
       )}
       {state.paused && (

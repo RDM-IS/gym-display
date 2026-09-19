@@ -52,7 +52,8 @@ export function dateLineStatus(st: { icon: string; label: string }): string {
 
 export function totalMinutes(day: PlanDay): number | null {
   if (day.blocks?.type === "recovery_flow") {
-    return Math.round(flowTotalSec(day.blocks as RecoveryFlowBlocks) / 60);
+    // Rounded up, like artemis est_duration_min.
+    return Math.ceil(flowTotalSec(day.blocks as RecoveryFlowBlocks) / 60);
   }
   return day.est_duration_min ?? null;
 }

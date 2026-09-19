@@ -1,6 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import office from "../tests/fixtures/recovery-flow-office.json" with { type: "json" };
 import home from "../tests/fixtures/recovery-flow-home.json" with { type: "json" };
+import { buildFlowTimeline, type FlowItem } from "../src/lib/flow";
+import type { RecoveryFlowBlocks } from "../src/lib/types";
 
 // YOGA-1 Recovery Flow on an iPad-sized WebKit page, with Playwright's fake
 // clock: one Start tap, then no input at all.
@@ -45,7 +47,8 @@ async function shot(page: Page, name: string) {
   await page.screenshot({ path: `e2e/screenshots/${test.info().project.name}-${name}.png` });
 }
 
-/** Record every Switch sides / Round screen as it appears. */
+/** Record every Switch sides / Round screen as it appears (title + what's
+ * next; the move countdown inside it is left out). */
 async function watchCues(page: Page) {
   await page.evaluate(() => {
     const w = window as unknown as { __cues: string[] };
@@ -53,12 +56,34 @@ async function watchCues(page: Page) {
     let last = "";
     new MutationObserver(() => {
       const el = document.querySelector('[data-testid="flow-switch"], [data-testid="flow-round-change"]');
-      const text = el ? (el.textContent ?? "") : "";
+      const text = el
+        ? `${el.querySelector(".flow-switch-title")?.textContent}|${el.querySelector(".flow-switch-next")?.textContent}`
+        : "";
       if (text && text !== last) w.__cues.push(text);
       last = text;
     }).observe(document.body, { subtree: true, childList: true, characterData: true });
   });
 }
+
+/** When each item's transition starts, its hold starts and its hold ends —
+ * seconds after Start, from the same timeline the app runs. */
+function schedule(blocks: unknown) {
+  const items = buildFlowTimeline(blocks as RecoveryFlowBlocks);
+  let t = 0;
+  const out = items.map((it) => {
+    const move = t;
+    const hold = move + it.transitionSec;
+    t = hold + it.duration_sec;
+    return { it, move, hold, end: t };
+  });
+  const find = (pred: (i: FlowItem) => boolean) => out.find((x) => pred(x.it))!;
+  return { items, out, total: t, find };
+}
+
+const speech = (page: Page) =>
+  page.evaluate(() => [...(window as unknown as { __gymDisplaySpeech: string[] }).__gymDisplaySpeech]);
+const tones = (page: Page) =>
+  page.evaluate(() => [...(window as unknown as { __gymDisplayTones: string[] }).__gymDisplayTones]);
 
 /** Freeze the fake clock (install() lets it flow in real time) so every
  * second is test-driven, then tap Start. */
@@ -71,14 +96,16 @@ async function runSeconds(page: Page, seconds: number) {
   for (let i = 0; i < seconds; i++) await page.clock.runFor(1000);
 }
 
-test("office flow runs hands-free: Stretch Trainer, switch-sides cues, round 2, auto-log", async ({ page }) => {
-  test.setTimeout(240_000);
+test("office flow runs hands-free: meditation, Stretch Trainer, spoken lead-in + move cue, switch sides, round 2, savasana, auto-log", async ({ page }) => {
+  test.setTimeout(300_000);
+  const S = schedule(office.blocks);
+  expect(S.total).toBe(2467);
   await page.clock.install({ time: new Date("2026-09-17T10:59:00Z") });
   const posted = await mockApi(page, OFFICE_PLAN);
   await page.goto("/today");
   await expect(page.getByTestId("flow-ready")).toBeVisible();
   await expect(page).toHaveURL(/\/today$/);
-  await expect(page.getByText("37:30 · 2 rounds · office gym")).toBeVisible();
+  await expect(page.getByText("41:07 · 2 rounds · office gym")).toBeVisible();
   // Start is on screen without scrolling.
   const startBox = await page.getByRole("button", { name: "Start" }).boundingBox();
   const vh = page.viewportSize()!.height;
@@ -89,36 +116,70 @@ test("office flow runs hands-free: Stretch Trainer, switch-sides cues, round 2, 
   await pausedStart(page, "2026-09-17T11:00:00Z");
   // Nothing below touches the page again.
   await watchCues(page);
+  // Start: the lead-in, then "Move into position" for the first pose.
+  expect(await speech(page)).toEqual(["We'll begin with seated meditation for 60 seconds."]);
+  await expect(page.getByTestId("flow-name")).toHaveText("Seated meditation");
+  await expect(page.getByTestId("flow-move")).toHaveText("Move into position");
+  await expect(page.getByTestId("flow-clock")).toHaveText("5");
+  await expect(page.getByTestId("flow-next-title")).toHaveText("Next: Stretch Trainer");
+  await expect(page.getByRole("navigation")).toHaveCount(0);
+  await shot(page, "flow-1-move-into-meditation");
+  await runSeconds(page, 5);
+  await expect(page.getByTestId("flow-clock")).toHaveText("1:00");
+  await expect(page.getByTestId("flow-move")).toHaveCount(0);
+  expect(await tones(page)).toEqual(["start"]);
+
+  const st = S.find((i) => i.name === "Stretch Trainer");
+  await runSeconds(page, st.hold + 1 - 5);
   await expect(page.getByTestId("flow-name")).toHaveText("Stretch Trainer");
   await expect(page.getByText("Follow the 8 placard stretches")).toBeVisible();
-  await expect(page.getByTestId("flow-clock")).toHaveText("8:00");
-  await expect(page.getByRole("navigation")).toHaveCount(0);
-  await shot(page, "flow-1-stretch-trainer");
+  await expect(page.getByTestId("flow-clock")).toHaveText("7:59");
+  await shot(page, "flow-1b-stretch-trainer");
 
-  // Stretch Trainer 480 s + steps 1-7 (240 s) → the switch before the
-  // left-leg lunge shows at 715 s.
-  await runSeconds(page, 716);
+  // The left-leg lunge: switch tone + lead-in 3 s out, move cue at 0.
+  const lunge = S.find((i) => i.step === "8" && i.round === 1);
+  let t = st.hold + 1;
+  await runSeconds(page, lunge.move - 4 - t); t = lunge.move - 4;
+  expect((await speech(page)).at(-1)).not.toContain("left leg");
+  await runSeconds(page, 1); t += 1;                          // 3 s before the hold ends
+  expect((await speech(page)).at(-1)).toBe("Next, high lunge, left leg forward, for 30 seconds.");
+  expect((await tones(page)).at(-1)).toBe("switch");
+  await expect(page.getByTestId("flow-name")).toHaveText("Extended puppy");
+  await expect(page.getByTestId("flow-next-title")).toHaveText("Next: High lunge · Left leg forward");
+  await runSeconds(page, 3); t += 3;                          // 0 → the move cue + switch screen
+  expect((await speech(page)).at(-1)).toBe("High lunge, left leg forward.");
   const sw = page.getByTestId("flow-switch");
   await expect(sw).toBeVisible();
   await expect(sw).toContainText("Switch sides");
   await expect(sw).toContainText("Left leg forward");
-  const tones = await page.evaluate(() => (window as unknown as { __gymDisplayTones: string[] }).__gymDisplayTones);
-  expect(tones).toContain("switch");
+  await expect(sw).toContainText("Move into position");
   await shot(page, "flow-2-switch-sides");
 
-  await runSeconds(page, 5);
+  await runSeconds(page, lunge.hold + 1 - t); t = lunge.hold + 1;
+  await expect(sw).toHaveCount(0);
   await expect(page.getByTestId("flow-name")).toHaveText("High lunge");
   await expect(page.getByTestId("flow-side")).toHaveText("Left leg forward");
   await expect(page.getByText("Easier: Knee down")).toBeVisible();
+  await expect(page.getByTestId("flow-clock")).toHaveText("0:29");
   await expect(page.getByTestId("flow-round")).toHaveText("Round 1/2");
+  expect((await tones(page)).at(-1)).toBe("start");
   await shot(page, "flow-3-left-lunge");
 
-  // Rest of round 1 (390 s from here, less the 1 s we're in) → round 2.
-  await runSeconds(page, 390);
+  const r2 = S.find((i) => i.roundStart);
+  await runSeconds(page, r2.move + 1 - t); t = r2.move + 1;
   await expect(page.getByTestId("flow-round")).toHaveText("Round 2/2");
+  await expect(page.getByTestId("flow-round-change")).toBeVisible();
   await shot(page, "flow-4-round-2");
 
-  await runSeconds(page, 2250 - 716 - 5 - 390 + 3);
+  const sav = S.out.at(-1)!;
+  await runSeconds(page, sav.move + 1 - t); t = sav.move + 1;
+  await expect(page.getByTestId("flow-name")).toHaveText("Savasana");
+  await expect(page.getByTestId("flow-move")).toBeVisible();
+  await expect(page.getByTestId("flow-next-title")).toHaveText("Last one — the flow ends after this");
+  expect((await speech(page)).slice(-2)).toEqual(["Next we'll move into savasana for 3 minutes.", "Savasana."]);
+  await shot(page, "flow-4b-savasana");
+
+  await runSeconds(page, S.total - t + 3);
   await expect(page.getByTestId("flow-done")).toBeVisible();
   await expect(page.getByTestId("flow-log-status")).toHaveText("Logged ✓");
   await shot(page, "flow-5-done");
@@ -127,17 +188,26 @@ test("office flow runs hands-free: Stretch Trainer, switch-sides cues, round 2, 
   const switches = cues.filter((c) => c.startsWith("Switch sides"));
   expect(switches).toEqual([
     // each round: lunge unit, supine twist, wind release, side bend, seated twist
-    "Switch sidesLeft leg forward", "Switch sidesLeft side", "Switch sidesLeft knee",
-    "Switch sidesLean right", "Switch sidesTwist right",
-    "Switch sidesLeft leg forward", "Switch sidesLeft side", "Switch sidesLeft knee",
-    "Switch sidesLean right", "Switch sidesTwist right",
+    "Switch sides|High lunge · Left leg forward", "Switch sides|Supine twist · Left side",
+    "Switch sides|Wind release · Left knee", "Switch sides|Seated side bend · Lean right",
+    "Switch sides|Seated twist · Twist right",
+    "Switch sides|High lunge · Left leg forward", "Switch sides|Supine twist · Left side",
+    "Switch sides|Wind release · Left knee", "Switch sides|Seated side bend · Lean right",
+    "Switch sides|Seated twist · Twist right",
   ]);
   expect(cues.filter((c) => c.startsWith("Round 2"))).toHaveLength(1);
+
+  // Every pose: lead-in, then move cue — each exactly once, in order.
+  const said = await speech(page);
+  const expected = [S.items[0].leadIn];
+  for (const it of S.items.slice(1)) expected.push(it.leadIn, it.moveCue);
+  expect(said).toEqual([...expected, "Flow complete"]);
+  expect((await tones(page)).filter((x) => x === "start")).toHaveLength(S.items.length);
 
   expect(posted).toHaveLength(1);
   expect(posted[0]).toMatchObject({
     plan_id: 104, log_type: "session_summary",
-    sets: [{ duration_sec: 2250, notes: "recovery_flow: complete 37 min" }],
+    sets: [{ duration_sec: 2467, notes: "recovery_flow: complete 41 min" }],
   });
 });
 
@@ -147,8 +217,8 @@ test("backgrounding at 50% logs a partial; coming back resumes without a tap", a
   const posted = await mockApi(page, HOME_PLAN);
   await page.goto("/today");
   await pausedStart(page, "2026-09-19T14:00:00Z");
-  await expect(page.getByTestId("flow-name")).toHaveText("Child's pose");
-  await runSeconds(page, 885);
+  await expect(page.getByTestId("flow-name")).toHaveText("Seated meditation");
+  await runSeconds(page, 990);
 
   const setVisibility = (state: "hidden" | "visible") => page.evaluate((s) => {
     Object.defineProperty(document, "visibilityState", { configurable: true, get: () => s });
@@ -158,7 +228,7 @@ test("backgrounding at 50% logs a partial; coming back resumes without a tap", a
   await setVisibility("hidden");
   await expect.poll(() => posted.length).toBe(1);
   expect(posted[0].sets[0]).toMatchObject({
-    duration_sec: 885, notes: "recovery_flow: partial 14 of 30 min",
+    duration_sec: 990, notes: "recovery_flow: partial 16 of 33 min",
   });
   await page.clock.runFor(60_000);
   await setVisibility("visible");
@@ -173,19 +243,28 @@ test("tap pauses and resumes; the remaining time holds", async ({ page }) => {
   const posted = await mockApi(page, HOME_PLAN);
   await page.goto("/today");
   await pausedStart(page, "2026-09-19T14:00:00Z");
-  await runSeconds(page, 10);
-  await expect(page.getByTestId("flow-clock")).toHaveText("0:20");
+  // Pause inside the first transition: the move countdown holds too.
+  await runSeconds(page, 2);
+  await expect(page.getByTestId("flow-clock")).toHaveText("3");
+  await page.getByTestId("flow-name").tap();
+  await expect(page.getByTestId("flow-paused")).toBeVisible();
+  await runSeconds(page, 20);
+  await expect(page.getByTestId("flow-clock")).toHaveText("3");
+  await page.getByTestId("flow-paused").tap();
 
+  // 3 s to finish moving, then 5 s into the minute of meditation.
+  await runSeconds(page, 8);
+  await expect(page.getByTestId("flow-clock")).toHaveText("0:55");
   await page.getByTestId("flow-name").tap();
   await expect(page.getByTestId("flow-paused")).toBeVisible();
   await shot(page, "flow-6-paused");
   await runSeconds(page, 30);
-  await expect(page.getByTestId("flow-clock")).toHaveText("0:20");
+  await expect(page.getByTestId("flow-clock")).toHaveText("0:55");
 
   await page.getByTestId("flow-paused").tap();
   await expect(page.getByTestId("flow-paused")).toHaveCount(0);
   await runSeconds(page, 5);
-  await expect(page.getByTestId("flow-clock")).toHaveText("0:15");
+  await expect(page.getByTestId("flow-clock")).toHaveText("0:50");
   expect(posted).toHaveLength(0);
 });
 
@@ -199,11 +278,12 @@ test("active pose shows its figure, mirrored per side, with no layout shift", as
   await mockApi(page, HOME_PLAN);
   await page.goto("/today");
   // Ready list: a thumbnail on every drawn row.
-  await expect(page.getByTestId("flow-ready").getByTestId("pose-figure")).toHaveCount(21);  // 20 poses + breathing
+  await expect(page.getByTestId("flow-ready").getByTestId("pose-figure")).toHaveCount(22);  // meditation + 20 poses + savasana
+  const S = schedule(home.blocks);
   await pausedStart(page, "2026-09-19T12:30:00Z");
 
   const figure = page.getByTestId("flow-body").getByTestId("pose-figure");
-  await expect(figure).toHaveAttribute("data-pose", "child's pose");
+  await expect(figure).toHaveAttribute("data-pose", "seated meditation");
 
   // Snapshot the figure + name boxes on the very first mutation that shows a
   // new pose name, before any later frame can move them.
@@ -227,8 +307,9 @@ test("active pose shows its figure, mirrored per side, with no layout shift", as
     }).observe(document.body, { subtree: true, childList: true, characterData: true });
   });
 
-  // 150 s → High lunge, right leg forward (base drawing).
-  await runSeconds(page, 151);
+  // High lunge, right leg forward (base drawing), 1 s into its hold.
+  const lungeR = S.find((i) => i.step === "5" && i.round === 1);
+  await runSeconds(page, lungeR.hold + 1);
   await expect(page.getByTestId("flow-name")).toHaveText("High lunge");
   await expect(page.getByTestId("flow-side")).toHaveText("Right leg forward");
   await expect(figure).toHaveAttribute("data-pose", "high lunge");
@@ -268,27 +349,31 @@ test("active pose shows its figure, mirrored per side, with no layout shift", as
   const cue = (await page.locator(".flow-cue").boundingBox()) as Box;
   expect(cue.y + cue.height).toBeLessThanOrEqual(vp.height);
 
-  // The 5 s preview before extended puppy (at 205 s) shows a small figure.
-  await runSeconds(page, 205 - 152);
+  // The Next strip is there for the whole hold, with a small figure.
   const next = page.getByTestId("flow-next");
   await expect(next).toBeVisible();
-  await expect(next.getByTestId("pose-figure")).toHaveAttribute("data-pose", "extended puppy");
-  // The bar never covers the cue or the easier option.
+  await expect(next.getByTestId("pose-figure")).toHaveAttribute("data-pose", "crescent lunge");
+  // The strip never covers the cue or the easier option.
   const bar = (await next.boundingBox()) as Box;
   for (const sel of [".flow-cue", ".flow-easier"]) {
     const b = (await page.locator(sel).boundingBox()) as Box;
-    expect(b.y + b.height, `${sel} runs under the Next bar`).toBeLessThanOrEqual(bar.y);
+    expect(b.y + b.height, `${sel} runs under the Next strip`).toBeLessThanOrEqual(bar.y);
   }
-  await shot(page, "flow-8-next-preview");
+  // …and it doesn't move during the hold or into the next transition.
+  await runSeconds(page, lungeR.end - lungeR.hold - 2);
+  const bar2 = (await next.boundingBox()) as Box;
+  expect(Math.abs(bar2.y - bar.y)).toBeLessThanOrEqual(0.5);
+  await shot(page, "flow-8-next-strip");
 
   // The switch screen before the left-leg lunge shows the mirrored figure.
-  await runSeconds(page, 30);
+  const lungeL = S.find((i) => i.step === "8" && i.round === 1);
+  await runSeconds(page, lungeL.move + 1 - (lungeR.end - 1));
   const sw = page.getByTestId("flow-switch");
   await expect(sw).toBeVisible();
   await expect(sw.getByTestId("pose-figure")).toHaveAttribute("data-mirrored", "true");
   await shot(page, "flow-9-switch-figure");
 
-  await runSeconds(page, 5);
+  await runSeconds(page, lungeL.hold - lungeL.move);
   await expect(page.getByTestId("flow-side")).toHaveText("Left leg forward");
   await expect(figure).toHaveAttribute("data-mirrored", "true");
   await shot(page, "flow-10-figure-lunge-left");

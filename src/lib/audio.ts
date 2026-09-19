@@ -149,7 +149,7 @@ function logged(name: string, play: () => void): void {
   play();
 }
 
-/** Soft chime: the 5 s "next" preview. */
+/** Soft chime: just before the "Next we'll move into …" lead-in. */
 export function chimeNext(): void {
   logged("next", () => {
     playTone({ freq: 988, duration_ms: 350, gain: 0.25 });
@@ -170,6 +170,19 @@ export function toneRound(): void {
   logged("round", () => beepEndOfRound());
 }
 
+/** Distinct rising pair: the hold timer starts (after "Move into position"). */
+export function toneHoldStart(): void {
+  logged("start", () => {
+    playTone({ freq: 587, duration_ms: 140, gain: 0.4 });
+    playTone({ freq: 880, duration_ms: 260, start_offset_ms: 160, gain: 0.4 });
+  });
+}
+
+/** Marks the move point when speech is unavailable (no move cue to hear). */
+export function toneMove(): void {
+  logged("move", () => playTone({ freq: 523, duration_ms: 220, gain: 0.35 }));
+}
+
 export function toneFlowDone(): void {
   logged("done", () => beepEndOfWorkout());
 }
@@ -186,9 +199,29 @@ if (typeof window !== "undefined") {
   (window as unknown as { __gymDisplaySpeech?: string[] }).__gymDisplaySpeech = speechLog;
 }
 
-/** Say `text` unless muted. Never throws; without speech the tones still play. */
-export function speak(text: string): void {
+let pendingSpeech: ReturnType<typeof setTimeout> | null = null;
+
+function clearPending(): void {
+  if (pendingSpeech !== null) {
+    clearTimeout(pendingSpeech);
+    pendingSpeech = null;
+  }
+}
+
+/** Say `text` unless muted — one utterance at a time: anything in flight (or
+ * still waiting for its delay) is cancelled first, so a long lead-in never
+ * talks over the move cue. `delayMs` lets a chime finish before the words.
+ * Never throws; without speech the tones still play. */
+export function speak(text: string, delayMs = 0): void {
+  clearPending();
   if (muted || !text) return;
+  if (delayMs > 0) {
+    pendingSpeech = setTimeout(() => {
+      pendingSpeech = null;
+      speak(text);
+    }, delayMs);
+    return;
+  }
   speechLog.push(text);
   if (!speechSupported()) return;
   try {
@@ -215,6 +248,7 @@ export function unlockSpeech(): void {
 }
 
 export function stopSpeech(): void {
+  clearPending();
   if (!speechSupported()) return;
   try {
     window.speechSynthesis.cancel();

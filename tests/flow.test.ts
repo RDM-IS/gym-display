@@ -7,8 +7,11 @@ import {
   flowTotalSec,
   holdsForRound,
   initialFlowState,
-  remainingInItemSec,
+  remainingInStageSec,
+  remainingTotalSec,
   skipFlow,
+  transitionSec,
+  CHIME_LEAD_MS,
   stepNumber,
   tickFlow,
   validateFlow,
@@ -73,15 +76,22 @@ describe("timeline", () => {
     expect(r2.reduce((a, b) => a + b)).toBe(960);
   });
 
-  it("totals: office 37:30 (Stretch Trainer first), home 29:30", () => {
-    expect(flowTotalSec(OFFICE)).toBe(2250);
-    expect(flowTotalSec(HOME)).toBe(1770);
+  it("totals: office 41:07, home 33:00 — holds plus transitions (YOGA-3)", () => {
+    expect(flowTotalSec(OFFICE)).toBe(2467);
+    expect(flowTotalSec(HOME)).toBe(1980);
+    const moving = (b: RecoveryFlowBlocks) => buildFlowTimeline(b).reduce((a, i) => a + i.transitionSec, 0);
+    expect([moving(OFFICE), moving(HOME)]).toEqual([157, 150]);
+    // Same numbers artemis wrote into the plan row.
+    expect([OFFICE.total_sec, HOME.total_sec]).toEqual([2467, 1980]);
     const t = buildFlowTimeline(OFFICE);
-    expect(t[0]).toMatchObject({ kind: "pre", name: "Stretch Trainer", duration_sec: 480,
+    expect(t[0]).toMatchObject({ kind: "pre", name: "Seated meditation", duration_sec: 60 });
+    expect(t[1]).toMatchObject({ kind: "pre", name: "Stretch Trainer", duration_sec: 480,
                                  cue: "Follow the 8 placard stretches" });
-    expect(t.at(-1)).toMatchObject({ kind: "close", name: "Easy pose breathing", duration_sec: 180 });
-    expect(buildFlowTimeline(HOME)[0].kind).toBe("pose");
+    expect(t.at(-1)).toMatchObject({ kind: "close", name: "Savasana", duration_sec: 180 });
+    expect(buildFlowTimeline(HOME)[0].name).toBe("Seated meditation");
     expect(t.filter((i) => i.kind === "pose")).toHaveLength(40);
+    // Seated breathing stays inside the rounds.
+    expect(t.filter((i) => i.name === "Easy pose")).toHaveLength(2);
   });
 
   it("marks a switch between every R/L pair, in both rounds", () => {
@@ -91,72 +101,163 @@ describe("timeline", () => {
       "1:8", "1:11b", "1:12b", "1:13b", "1:14b",
       "2:8", "2:11b", "2:12b", "2:13b", "2:14b",
     ]);
-    const lunge = t.find((i) => i.step === "8")!;
-    expect(lunge.sideLabel).toBe("Left leg forward");
-    expect(lunge.speech).toBe("High lunge, left leg forward");
-    expect(t.find((i) => i.step === "11a")!.speech).toBe("Supine twist, right side");
+    expect(t.find((i) => i.step === "8")!.sideLabel).toBe("Left leg forward");
     expect(t.filter((i) => i.roundStart).map((i) => i.step)).toEqual(["1"]);
     expect(t.find((i) => i.step === "3")!.easier).toBe("Dolphin — forearms down");
   });
 
   it("flattens to auto-advancing steps for the app's step count", () => {
-    expect(flattenBlocksToSteps(OFFICE).steps).toHaveLength(42);
+    expect(flattenBlocksToSteps(OFFICE).steps).toHaveLength(43);
   });
 });
+
+describe("spoken cues (YOGA-3)", () => {
+  const t = buildFlowTimeline(HOME);
+  const at = (step: string, round = 1) => t.find((i) => i.step === step && i.round === round)!;
+
+  it("lead-in: the full sentence, with the side and the hold", () => {
+    expect(at("3").leadIn).toBe("Next we'll move into downward facing dog for 60 seconds.");
+    expect(at("5").leadIn).toBe("Next we'll move into high lunge, right leg forward, for 30 seconds.");
+    expect(at("6").leadIn).toBe("Next we'll move into crescent lunge, right leg forward, for 30 seconds.");
+    // Switch sides: "Next, …, <side>, for …"
+    expect(at("11b").leadIn).toBe("Next, supine twist, left side, for 30 seconds.");
+    expect(at("8").leadIn).toBe("Next, high lunge, left leg forward, for 30 seconds.");
+    // Round 2 doubles the hold and names the round.
+    expect(at("1", 2).leadIn).toBe("Round 2. Next we'll move into child's pose for 30 seconds.");
+    expect(at("11b", 2).leadIn).toBe("Next, supine twist, left side, for 60 seconds.");
+    expect(t[0].leadIn).toBe("We'll begin with seated meditation for 60 seconds.");
+    expect(t.at(-1)!.leadIn).toBe("Next we'll move into savasana for 3 minutes.");
+  });
+
+  it("move cue: just the pose and side", () => {
+    expect(at("3").moveCue).toBe("Downward facing dog.");
+    expect(at("8").moveCue).toBe("High lunge, left leg forward.");
+    expect(at("13a").moveCue).toBe("Seated side bend, lean left.");
+    expect(at("12b").moveCue).toBe("Wind release, left knee.");
+    expect(t.at(-1)!.moveCue).toBe("Savasana.");
+  });
+});
+
+describe("transitions by body position (YOGA-3)", () => {
+  const posture = (name: string) => HOME.flow.find((s) => s.name === name)!.posture;
+  const pair = (a: string, b: string) => transitionSec(posture(a), posture(b));
+
+  it("3 s when the position holds or it's floor to floor; 5 s to get up or down", () => {
+    expect(pair("Supine twist", "Supine twist")).toBe(3);        // right → left
+    expect(pair("Seated twist", "Seated twist")).toBe(3);
+    expect(pair("Standing forward bend", "High lunge")).toBe(3);
+    expect(pair("High lunge", "Crescent lunge")).toBe(3);
+    expect(pair("Crescent lunge", "Extended puppy")).toBe(5);
+    expect(pair("Bridge", "Seated side bend")).toBe(5);
+    expect(pair("Child's pose", "Cobra")).toBe(3);
+    expect(pair("Cobra", "Downward dog")).toBe(3);
+    expect(pair("Downward dog", "Standing forward bend")).toBe(5);
+    expect(transitionSec("seated", "supine")).toBe(5);
+    expect(transitionSec(undefined, "seated")).toBe(5);          // unknown → long
+  });
+
+  it("every item in both flows resolves to 3 or 5 — no gaps", () => {
+    for (const b of [HOME, OFFICE]) {
+      const t = buildFlowTimeline(b);
+      expect(t.every((i) => i.posture), "an item has no posture").toBe(true);
+      expect(new Set(t.map((i) => i.transitionSec))).toEqual(new Set([3, 5]));
+    }
+    const o = buildFlowTimeline(OFFICE);
+    expect(o.slice(0, 3).map((i) => i.transitionSec)).toEqual([5, 5, 5]);  // start → sit, → trainer, → floor
+    expect(o.find((i) => i.roundStart)!.transitionSec).toBe(3);             // easy pose → child's
+    expect(o.at(-1)!.transitionSec).toBe(5);                                // easy pose → savasana
+    expect(buildFlowTimeline(HOME)[1].transitionSec).toBe(3);               // meditation → child's
+  });
+
+  it("the lengths are config values on the plan", () => {
+    const b = clone(HOME);
+    b.transition_short_sec = 2;
+    b.transition_long_sec = 8;
+    const t = buildFlowTimeline(b);
+    expect(new Set(t.map((i) => i.transitionSec))).toEqual(new Set([2, 8]));
+  });
+
+  it("an old plan row with no postures moves on the long transition", () => {
+    const b = clone(HOME);
+    for (const s of b.flow) delete s.posture;
+    expect(new Set(buildFlowTimeline(b).slice(1, 41).map((i) => i.transitionSec))).toEqual(new Set([5]));
+  });
+});
+
+function run(items: ReturnType<typeof buildFlowTimeline>, totalMs: number, dt = 250) {
+  let s = initialFlowState();
+  const events: { at: number; e: FlowEvent }[] = [];
+  for (let t = dt; t <= totalMs; t += dt) {
+    const r = tickFlow(items, s, dt);
+    s = r.state;
+    for (const e of r.events) events.push({ at: t, e });
+  }
+  return { state: s, events };
+}
 
 describe("engine — hands-free", () => {
   it("runs start to finish with no input", () => {
     const items = buildFlowTimeline(HOME);
-    let s = initialFlowState();
-    const events: FlowEvent[] = [];
-    for (let t = 0; t < 1770 * 1000 + 5000; t += 250) {
-      const r = tickFlow(items, s, 250);
-      s = r.state;
-      events.push(...r.events);
-    }
-    expect(s.done).toBe(true);
-    expect(s.elapsedMs).toBe(1770 * 1000);
-    expect(events.filter((e) => e.type === "enter")).toHaveLength(items.length - 1);
-    expect(events.at(-1)).toEqual({ type: "done" });
-    const previews = events.filter((e): e is Extract<FlowEvent, { type: "preview" }> => e.type === "preview");
-    expect(previews).toHaveLength(items.length - 1);
-    expect(previews.filter((p) => p.kind === "switch")).toHaveLength(10);
-    expect(previews.filter((p) => p.kind === "round")).toHaveLength(1);
+    const { state, events } = run(items, 1980 * 1000 + 5000);
+    expect(state.done).toBe(true);
+    expect(state.elapsedMs).toBe(1980 * 1000);
+    const of = (type: FlowEvent["type"]) => events.filter((x) => x.e.type === type).map((x) => x.e);
+    expect(of("transition")).toHaveLength(items.length - 1);   // the first one starts with Start
+    expect(of("hold")).toHaveLength(items.length);
+    const leads = of("leadin") as Extract<FlowEvent, { type: "leadin" }>[];
+    expect(leads).toHaveLength(items.length - 1);
+    expect(leads.filter((p) => p.kind === "switch")).toHaveLength(10);
+    expect(leads.filter((p) => p.kind === "round")).toHaveLength(1);
+    expect(events.at(-1)!.e).toEqual({ type: "done" });
   });
 
-  it("fires the preview 5 s before each change", () => {
-    const items = buildFlowTimeline(HOME);   // child's pose, 30 s
-    const a = tickFlow(items, initialFlowState(), 24_900);
-    expect(a.events).toEqual([]);
-    const b = tickFlow(items, a.state, 200);
-    expect(b.events).toEqual([{ type: "preview", index: 0, next: 1, kind: "next" }]);
-    const c = tickFlow(items, b.state, 5_000);
-    expect(c.events).toEqual([{ type: "enter", index: 1 }]);
+  it("lead-in once, 3 s (plus the chime) before the hold ends; move cue at 0; hold after the transition", () => {
+    const items = buildFlowTimeline(HOME);   // meditation: 5 s in, 60 s hold; child's pose: 3 s in
+    const { events } = run(items, 70_000);
+    const firstHold = events.find((x) => x.e.type === "hold")!;
+    expect(firstHold).toEqual({ at: 5_000, e: { type: "hold", index: 0 } });
+    const leads = events.filter((x) => x.e.type === "leadin");
+    expect(leads).toHaveLength(1);
+    // 5 s + 60 s − 3 s − 0.7 s chime = 61.3 s (next tick at 61.5 s)
+    expect(leads[0].at).toBe(61_500);
+    expect(leads[0].at).toBeGreaterThanOrEqual(65_000 - 3_000 - CHIME_LEAD_MS.next);
+    expect(events.find((x) => x.e.type === "transition")).toEqual({ at: 65_000, e: { type: "transition", index: 1 } });
+    expect(events.filter((x) => x.e.type === "hold")[1]).toEqual({ at: 68_000, e: { type: "hold", index: 1 } });
   });
 
-  it("pause keeps the remaining time", () => {
+  it("the hold clock doesn't run during the transition", () => {
     const items = buildFlowTimeline(HOME);
-    let s = tickFlow(items, initialFlowState(), 12_000).state;
-    expect(remainingInItemSec(items, s)).toBe(18);
-    s = { ...s, paused: true };
-    s = tickFlow(items, s, 60_000).state;
-    expect(remainingInItemSec(items, s)).toBe(18);
-    expect(s.elapsedMs).toBe(12_000);
-    s = tickFlow(items, { ...s, paused: false }, 3_000).state;
-    expect(remainingInItemSec(items, s)).toBe(15);
+    let s = tickFlow(items, initialFlowState(), 4_000).state;
+    expect(s.stage).toBe("transition");
+    expect(remainingInStageSec(items, s)).toBe(1);
+    expect(remainingTotalSec(items, s)).toBe(1980 - 4);
+    s = tickFlow(items, s, 1_000).state;
+    expect(s.stage).toBe("hold");
+    expect(remainingInStageSec(items, s)).toBe(60);
   });
 
-  it("swipe skips without counting the skipped time", () => {
+  it("pause keeps the remaining time — in a hold and in a transition", () => {
     const items = buildFlowTimeline(HOME);
-    const s = skipFlow(items, tickFlow(items, initialFlowState(), 5_000).state, 1);
-    expect(s.state.index).toBe(1);
-    expect(s.state.elapsedMs).toBe(5_000);
-    expect(s.events).toEqual([{ type: "enter", index: 1 }]);
+    let s = tickFlow(items, initialFlowState(), 2_000).state;       // transition, 3 s left
+    s = tickFlow(items, { ...s, paused: true }, 60_000).state;
+    expect([s.stage, remainingInStageSec(items, s)]).toEqual(["transition", 3]);
+    s = tickFlow(items, { ...s, paused: false }, 15_000).state;     // 12 s into the hold
+    expect(remainingInStageSec(items, s)).toBe(48);
+    s = tickFlow(items, { ...s, paused: true }, 60_000).state;
+    expect(remainingInStageSec(items, s)).toBe(48);
+    expect(s.elapsedMs).toBe(17_000);
+  });
+
+  it("swipe skips to the next pose's transition without counting the skipped time", () => {
+    const items = buildFlowTimeline(HOME);
+    const s = skipFlow(items, tickFlow(items, initialFlowState(), 10_000).state, 1);
+    expect([s.state.index, s.state.stage, s.state.elapsedMs]).toEqual([1, "transition", 10_000]);
+    expect(s.events).toEqual([{ type: "transition", index: 1 }]);
   });
 
   it("log notes", () => {
-    expect(flowLogNotes("complete", 1770_000, 1770)).toBe("recovery_flow: complete 29 min");
-    expect(flowLogNotes("partial", 885_000, 1770)).toBe("recovery_flow: partial 14 of 30 min");
+    expect(flowLogNotes("complete", 1980_000, 1980)).toBe("recovery_flow: complete 33 min");
+    expect(flowLogNotes("partial", 990_000, 1980)).toBe("recovery_flow: partial 16 of 33 min");
   });
 });
 

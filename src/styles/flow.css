@@ -84,12 +84,12 @@
 }
 .pose-figure svg { display: block; width: 100%; height: 100%; }
 
-/* Portrait: figure on top, about 40% of the screen. The bottom is kept clear
-   for the 5 s "Next" bar so it never covers the cue. */
+/* Portrait: figure on top, about 40% of the screen. The Next strip sits
+   below the body in the normal flow, so it never covers the cue. */
 .flow-body--figure {
   justify-content: flex-start;
   gap: 10px;
-  padding-bottom: calc(var(--next-bar-h) + 24px);
+  padding-bottom: 16px;
 }
 .flow-figure {
   height: calc(var(--vvh, 100dvh) * 0.4);
@@ -117,7 +117,6 @@
 }
 
 .pose-thumb { width: 64px; height: 48px; }
-.flow-next-thumb { width: 120px; height: 90px; margin: -12px 0; }
 .flow-switch-figure { width: 280px; height: 210px; }
 .flow-step { font-size: 18px; }
 .flow-name { font-size: 64px; font-weight: 800; line-height: 1.05; }
@@ -135,26 +134,38 @@
 .flow-cue { font-size: 24px; color: var(--fg-dim); max-width: 34ch; }
 .flow-easier { font-size: 20px; color: var(--fg-faint); }
 
-.flow-run { --next-bar-h: 110px; }
+/* YOGA-3: the Next strip is always on screen (fixed height, in the layout),
+   so nothing appears, disappears or moves during a hold. */
+.flow-run { --next-bar-h: 96px; }
 .flow-next {
-  min-height: var(--next-bar-h);
+  flex: none;
+  height: var(--next-bar-h);
   box-sizing: border-box;
-  position: absolute;
-  left: var(--gutter);
-  right: var(--gutter);
-  bottom: calc(var(--safe-bottom) + 24px);
-  padding: 18px 20px;
+  padding: 10px 20px;
   border-radius: 16px;
-  background: rgba(255, 209, 102, 0.16);
-  border: 2px solid var(--accent);
-  font-size: 30px;
+  background: rgba(255, 209, 102, 0.1);
+  border: 2px solid rgba(255, 209, 102, 0.45);
+  font-size: 28px;
   font-weight: 800;
   text-align: center;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 16px;
+  overflow: hidden;
 }
+.flow-next-thumb-slot { flex: none; width: 104px; height: 78px; }
+.flow-next-thumb { width: 104px; height: 78px; margin: 0; }
+
+/* Transition: "Move into position" and a seconds countdown. */
+.flow-move {
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+.flow-move--idle { visibility: hidden; }
+.flow-clock--moving { color: var(--accent); }
 
 .flow-switch {
   position: absolute;
@@ -164,7 +175,7 @@
   align-items: center;
   justify-content: center;
   gap: 18px;
-  background: rgba(10, 10, 10, 0.92);
+  background: rgba(10, 10, 10, 0.985);
   text-align: center;
 }
 .flow-switch-title {
