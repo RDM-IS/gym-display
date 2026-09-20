@@ -344,6 +344,11 @@ export default function FlowScreen({ plan, onRunningChange, onNavigate }: Props)
           {item.sideLabel && (
             <div className="flow-side" data-testid="flow-side">{item.sideLabel}</div>
           )}
+          {/* YOGA-5: the display spelling, smaller, under the English name and
+              side. The voice says the phonetic form, which is never shown. */}
+          {item.sanskrit && (
+            <div className="flow-sanskrit" data-testid="flow-sanskrit">{item.sanskrit}</div>
+          )}
           {/* Keeps its line during the hold (just hidden) so the name and
               figure don't jump when the transition ends. */}
           <div className={`flow-move${moving ? "" : " flow-move--idle"}`}

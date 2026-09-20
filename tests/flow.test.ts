@@ -149,12 +149,39 @@ describe("spoken cues", () => {
     expect(t.at(-1)!.leadIn).toBe("Next we'll move into savasana for 3 minutes.");
   });
 
-  it("move cue: just the pose and side", () => {
-    expect(at("3").moveCue).toBe("Downward facing dog.");
-    expect(at("8").moveCue).toBe("High lunge, left leg forward.");
-    expect(at("15").moveCue).toBe("Seated side bend, lean left.");
-    expect(at("14").moveCue).toBe("Wind release, left knee.");
-    expect(t.at(-1)!.moveCue).toBe("Savasana.");
+  it("move cue: Sanskrit, phonetic, no side (YOGA-5)", () => {
+    // The lead-in 7 s earlier already gave the side in English, and the screen
+    // shows it — repeating it here would be noise.
+    expect(at("3").moveCue).toBe("Move to AH-doh MOO-kah shvah-NAH-sah-nah.");
+    expect(at("8").moveCue).toBe("Move to oo-TEE-tah ASH-wah sahn-chah-lah-NAH-sah-nah.");
+    expect(at("7").moveCue).toBe("Move to AHSH-tah chahn-DRAH-sah-nah.");
+    expect(at("15").moveCue).toBe("Move to PARSH-vah soo-KAH-sah-nah.");
+    expect(t.at(-1)!.moveCue).toBe("Move to shah-VAH-sah-nah.");
+    // The blocks with no Sanskrit keep the English cue.
+    expect(t[0].moveCue).toBe("Seated meditation.");
+  });
+
+  it("every pose resolves to a Sanskrit entry, and the spoken form is phonetic", () => {
+    for (const b of [HOME, OFFICE]) {
+      for (const st of b.flow) {
+        expect(st.sanskrit, `${st.name} has no sanskrit`).toBeTruthy();
+        expect(st.sanskrit_spoken, `${st.name} has no sanskrit_spoken`).toBeTruthy();
+        // The phonetic form is a respelling, never the display spelling.
+        expect(st.sanskrit_spoken).not.toBe(st.sanskrit);
+      }
+      expect(b.close!.sanskrit).toBe("Shavasana");
+      expect(b.close!.sanskrit_spoken).toBe("shah-VAH-sah-nah");
+      // …and the pre blocks deliberately have none.
+      for (const pre of b.pre ?? []) expect(pre.sanskrit ?? null).toBeNull();
+    }
+  });
+
+  it("the display spelling is shown, never spoken", () => {
+    const tl = buildFlowTimeline(HOME);
+    const crescent = tl.find((i) => i.name === "Crescent lunge")!;
+    expect(crescent.sanskrit).toBe("Ashta Chandrasana");         // on screen
+    expect(crescent.moveCue).toBe("Move to AHSH-tah chahn-DRAH-sah-nah.");  // spoken
+    expect(crescent.moveCue).not.toContain("Ashta Chandrasana");
   });
 });
 

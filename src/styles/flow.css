@@ -206,3 +206,12 @@
   .flow-clock { font-size: 110px; }
   .flow-switch-title { font-size: 72px; }
 }
+
+/* YOGA-5: the Sanskrit name, smaller and quieter than the English one it
+   sits under. Display spelling only — the voice uses the phonetic form. */
+.flow-sanskrit {
+  font-size: clamp(0.9rem, 2.2vw, 1.4rem);
+  opacity: 0.55;
+  letter-spacing: 0.02em;
+  margin-top: 0.15em;
+}

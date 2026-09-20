@@ -153,11 +153,19 @@ export interface FlowStep {
   posture?: string | null;
   /** How the voice says it, when it differs ("Downward facing dog"). */
   spoken?: string | null;
+  /** YOGA-5: display spelling, shown small beneath the English name. */
+  sanskrit?: string | null;
+  /** YOGA-5: phonetic respelling, for speechSynthesis ONLY — the engine
+   * mispronounces the proper spelling. Never rendered. */
+  sanskrit_spoken?: string | null;
 }
 
 export interface FlowHold {
   name: string;
   side?: null;
+  /** Savasana has one; meditation and the Stretch Trainer do not. */
+  sanskrit?: string | null;
+  sanskrit_spoken?: string | null;
   duration_sec: number;
   /** Seconds to move into it (YOGA-4). */
   transition_sec: number;
