@@ -343,8 +343,8 @@ describe("mid-hold cues (YOGA-5)", () => {
   });
 
   it("fires once, 12 s into the hold, and then silence", () => {
-    // meditation: 5 s transition + 60 s hold. Its line is an at-start one, so
-    // run to the second pose, whose hold begins at 70 s.
+    // meditation: 5 s transition + 60 s hold (silent), then child's pose:
+    // 5 s transition, hold begins at 70 s.
     const { events } = run(items, 120_000, 250);
     const mids = events.filter((x) => x.e.type === "cuemid");
     const childIdx = items.indexOf(child);
@@ -354,13 +354,20 @@ describe("mid-hold cues (YOGA-5)", () => {
     expect(forChild[0].at).toBe(82_000);
   });
 
-  it("meditation and savasana speak at the start of the hold instead", () => {
-    const { events } = run(items, 20_000, 250);
-    const mids = events.filter((x) => x.e.type === "cuemid");
-    expect(mids).toHaveLength(1);
-    expect(mids[0].at).toBe(5_250);        // the first tick after the hold begins
-    expect(items[0].cueMidAtStart).toBe(true);
-    expect(items.at(-1)!.cueMidAtStart).toBe(true);
+  it("meditation and savasana are silent for the whole of their hold", () => {
+    // Ryan, 2026-09-20: nothing at all while those two timers run. The lead-in
+    // and the move cue still happen BEFORE the hold starts.
+    expect(items[0].cueMid).toBeNull();          // seated meditation
+    expect(items.at(-1)!.cueMid).toBeNull();     // savasana
+    const { events } = run(items, 66_000, 250);  // 5 s move + the full 60 s hold
+    expect(events.filter((x) => x.e.type === "cuemid")).toHaveLength(0);
+  });
+
+  it("nothing is said during savasana either, right to the end", () => {
+    const { events } = run(items, 1947 * 1000 + 5000);
+    const last = items.length - 1;
+    expect(events.filter((x) => x.e.type === "cuemid"
+      && (x.e as { index: number }).index === last)).toHaveLength(0);
   });
 
   it("exactly one per hold, for every hold in the flow", () => {

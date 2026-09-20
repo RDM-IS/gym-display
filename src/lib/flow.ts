@@ -48,10 +48,10 @@ export interface FlowItem {
   /** YOGA-5: the display spelling, shown small under the English name. Null
    * for the pre blocks, which have no meaningful Sanskrit. */
   sanskrit: string | null;
-  /** YOGA-5: the one line spoken partway into the hold. Null = say nothing. */
+  /** YOGA-5: the one line spoken partway into the hold. Null = say nothing,
+   * which is what meditation and savasana get — those two are silent for the
+   * whole of their timer (Ryan, 2026-09-20). */
   cueMid: string | null;
-  /** Meditation and savasana speak it at the start of the hold instead. */
-  cueMidAtStart: boolean;
   duration_sec: number;
   /** 1-based round for poses; null for pre / close. */
   round: number | null;
@@ -143,7 +143,7 @@ export function buildFlowTimeline(blocks: RecoveryFlowBlocks): FlowItem[] {
     items.push({
       kind, name: p.name, title: p.name, side: null, sideLabel: null,
       cue: p.cue ?? null, easier: null, sanskrit: p.sanskrit ?? null,
-      cueMid: p.cue_mid ?? null, cueMidAtStart: !!p.cue_mid_at_start,
+      cueMid: p.cue_mid ?? null,
       duration_sec: p.duration_sec, round: null,
       totalRounds: rounds, step: null, mirrorGroup: null, switchBefore: false,
       roundStart: false, posture: p.posture ?? null,
@@ -173,7 +173,7 @@ export function buildFlowTimeline(blocks: RecoveryFlowBlocks): FlowItem[] {
       items.push({
         kind: "pose", name: s.name, title: label ? `${s.name} · ${label}` : s.name,
         side: s.side, sideLabel: label, cue: s.cue ?? null, easier: s.easier ?? null,
-        sanskrit: s.sanskrit ?? null, cueMid: s.cue_mid ?? null, cueMidAtStart: false,
+        sanskrit: s.sanskrit ?? null, cueMid: s.cue_mid ?? null,
         duration_sec: s.duration_sec, round: r, totalRounds: rounds, step: s.step,
         mirrorGroup: s.mirror_group, switchBefore, roundStart: i === 0 && r > 1,
         posture: s.posture ?? null,
@@ -308,11 +308,9 @@ export function tickFlow(
     s.elapsedMs += step;
     left -= step;
     if (s.stage === "hold" && !s.cuedMid && items[s.index].cueMid) {
-      // At the start for meditation and savasana; `cueMidSec` in for a pose.
       // Never inside the lead-in window: a pose short enough for the two to
       // collide gets no mid cue at all rather than two voices at once.
-      const it = items[s.index];
-      const at = it.cueMidAtStart ? 0 : cueMidSec * 1000;
+      const at = cueMidSec * 1000;
       const latest = dur - leadinSec * 1000;
       if (at < latest && s.stageMs >= at) {
         s.cuedMid = true;

@@ -25,8 +25,7 @@
         "transition_sec": 5,
         "cue": "Sit tall and comfortable, eyes soft, slow breaths.",
         "posture": "seated",
-        "cue_mid": "Sit tall and comfortable, eyes soft, slow breaths.",
-        "cue_mid_at_start": true
+        "cue_mid": null
       }
     ],
     "flow": [
@@ -344,8 +343,7 @@
       "posture": "supine",
       "sanskrit": "Shavasana",
       "sanskrit_spoken": "shah-VAH-sah-nah",
-      "cue_mid": "Let everything go heavy",
-      "cue_mid_at_start": true
+      "cue_mid": null
     },
     "equipment": [
       "mat"

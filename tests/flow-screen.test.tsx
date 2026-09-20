@@ -149,11 +149,12 @@ describe("FlowScreen — hands-free", { timeout: 120_000 }, () => {
     expect(screen.queryByTestId("flow-move")).toBeNull();
     expect(screen.getByTestId("flow-clock").textContent).toBe("1:00");
     // YOGA-4: nothing sounds at the hold start, and nothing precedes the words.
-    // 12 s into the meditation its own line lands, then silence.
+    // The meditation is silent for its whole minute — nothing at 12 s, and
+    // nothing after (Ryan, 2026-09-20).
     await advance(12_000);
-    expect(speechLog.at(-1)).toBe("Sit tall and comfortable, eyes soft, slow breaths.");
+    expect(speechLog).toHaveLength(1);
     await advance(40_000);                             // 0:08 left
-    expect(speechLog).toHaveLength(2);                 // nothing more since
+    expect(speechLog).toHaveLength(1);                 // still only the lead-in
     await advance(1_000);                              // 0:07 left — the lead-in
     expect(speechLog.at(-1)).toBe("Next we'll move into child's pose for 40 seconds.");
     expect(speechLog.filter((x) => x.startsWith("Next we'll move into child's"))).toHaveLength(1);
@@ -263,7 +264,8 @@ describe("FlowScreen — hands-free", { timeout: 120_000 }, () => {
     try {
       start();
       await advance(20_000);
-      // The opening lead-in only — the meditation's own line is suppressed.
+      // Only the opening lead-in. (Meditation has no mid cue either way; this
+      // asserts the toggle, and the pose cues are covered by the engine tests.)
       expect(speechLog).toEqual(["We'll begin with seated meditation for 60 seconds."]);
     } finally {
       setMidCues(true);

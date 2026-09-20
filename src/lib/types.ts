@@ -169,10 +169,9 @@ export interface FlowHold {
   /** Savasana has one; meditation and the Stretch Trainer do not. */
   sanskrit?: string | null;
   sanskrit_spoken?: string | null;
+  /** Null for meditation and savasana: those two are silent for the whole of
+   * their timer. */
   cue_mid?: string | null;
-  /** Meditation and savasana speak their line at the START of the hold —
-   * there is no middle of a three-minute hold worth interrupting. */
-  cue_mid_at_start?: boolean | null;
   duration_sec: number;
   /** Seconds to move into it (YOGA-4). */
   transition_sec: number;
