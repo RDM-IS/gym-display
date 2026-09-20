@@ -1,5 +1,16 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
+  exercisePrompt,
+  fitsInRest,
+  lastSessionAverage,
+  promptTarget,
+  repsLeftHint,
+} from "../lib/strength-cues";
+import { speak } from "../lib/audio";
+import { storedRate } from "../lib/voice";
+import { weightStepFor } from "../lib/weight-step";
+import { fetchSessions } from "../lib/api";
+import {
   formatMMSS,
   initTimer,
   isFirstStepCursor,
@@ -37,7 +48,7 @@ import {
 } from "../lib/log-state";
 import { useMediaQuery } from "../lib/use-media";
 import { useSwipe } from "../lib/use-swipe";
-import type { LastLoggedEntry, Plan } from "../lib/types";
+import type { LastLoggedEntry, Plan, PlannedExercise, SessionDayRow } from "../lib/types";
 import JourneyMap from "../components/JourneyMap";
 import InlineExerciseLogger from "../components/InlineExerciseLogger";
 import { exerciseTags } from "../lib/adjustment";
@@ -93,6 +104,21 @@ export default function WorkoutScreen({
 }: Props) {
   const session: FlatSession = useMemo(() => flattenBlocksToSteps(plan.blocks), [plan]);
   const [state, dispatch] = useReducer(timerReducer, session, initTimer);
+
+  // GD-STRENGTH-CUES: prior sessions, for the spoken "your last sets averaged".
+  // /sessions already exists and already returns per-set rows, so this needs no
+  // API change — and /last_logged, the "Last:" hint and the stepper prefill are
+  // deliberately untouched: the top set is the right thing to prefill against.
+  const todayISO = plan.plan_date;
+  const [priorDays, setPriorDays] = useState<SessionDayRow[]>([]);
+  const spokenForRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    let live = true;
+    void fetchSessions(30).then((r) => {
+      if (live && r.status === "ok") setPriorDays(r.data.days ?? []);
+    });
+    return () => { live = false; };
+  }, []);
   const [now, setNow] = useState(() => performance.now());
   const [logPanelOpen, setLogPanelOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -160,6 +186,29 @@ export default function WorkoutScreen({
     suppressIndexAudioRef.current = false;
     lastIndexRef.current = state.cursor.stepIndex;
   }, [state.cursor.stepIndex, state.steps]);
+
+  // GD-STRENGTH-CUES: one spoken prompt per exercise, at the START of the rest
+  // period that precedes it. Not between sets of the same exercise, and not
+  // before the first — there is no rest to say it in. The beeps are untouched;
+  // this rides alongside them.
+  useEffect(() => {
+    const target = promptTarget(state.steps, state.cursor.stepIndex, spokenForRef.current);
+    if (!target) return;
+    const { exercise: ex, restSec } = target;
+    const average = lastSessionAverage(priorDays, ex.name, todayISO);
+    const text = exercisePrompt({
+      name: ex.name,
+      reps: ex.format === "reps" ? ex.target_reps ?? null : null,
+      cap: ex.rpe_cap ?? plan.blocks?.rpe_cap ?? plan.target_rpe ?? null,
+      bodyweight: isBodyweight(ex),
+      average,
+    });
+    // A rest too short to finish the sentence gets no prompt at all, rather
+    // than a voice still talking when the next set starts.
+    if (!fitsInRest(text, restSec, storedRate())) return;
+    spokenForRef.current.add(ex.name);
+    speak(text);
+  }, [state.cursor.stepIndex, state.steps, priorDays, todayISO, plan]);
 
   useEffect(() => {
     lastBeepSecRef.current = null;
@@ -453,6 +502,15 @@ function collectExerciseNames(plan: Plan): string[] {
   return out;
 }
 
+/** No load stepper at all → the spoken prompt leaves the weight out. */
+function isBodyweight(ex: PlannedExercise): boolean {
+  try {
+    return weightStepFor(ex).isBodyweight;
+  } catch {
+    return false;
+  }
+}
+
 function Glance({
   plan,
   step,
@@ -507,6 +565,8 @@ function Glance({
   const tags = ex ? exerciseTags(ex, plan.blocks?.rpe_cap ?? null) : [];
   const last = isPlanExercise ? lastLogged[name] ?? null : null;
   const openEnded = !!step.holdAtEnd;
+  const capForHint = ex?.rpe_cap ?? plan.blocks?.rpe_cap ?? plan.target_rpe ?? null;
+  const repsLeft = repsLeftHint(capForHint);
 
   return (
     <>
@@ -514,7 +574,18 @@ function Glance({
       <div className="glance-name">{name}</div>
       {/* Steady cardio carries the intensity as its step label. */}
       {step.label !== name && <div className="glance-target">{step.label}</div>}
-      {(reps || load) && <div className="glance-target">{[reps, load].filter(Boolean).join(" × ")}</div>}
+      {/* GD-STRENGTH-CUES: one target line — reps · load · RPE cap — and under
+          it the cap said in the units it actually means. This REPLACES the old
+          "12 reps × 170 lb" line rather than sitting beside it; two lines both
+          saying "12 reps" is noise. Compact on purpose: the logger has to stay
+          above the fold in both orientations. */}
+      {(reps || load || capForHint != null) && (
+        <div className="glance-target" data-testid="glance-target-block">
+          {[reps, load, capForHint != null ? `RPE ${capForHint}` : null]
+            .filter(Boolean).join("  ·  ")}
+        </div>
+      )}
+      {repsLeft && <div className="glance-repsleft dim" data-testid="glance-reps-left">{repsLeft}</div>}
       {tags.length > 0 && <div className="glance-target glance-adjusted">{tags.join(" · ")}</div>}
       <div className="glance-time mono" aria-label={openEnded ? "Set time" : "Time remaining"}>
         {formatMMSS(openEnded ? stepElapsed : remaining)}

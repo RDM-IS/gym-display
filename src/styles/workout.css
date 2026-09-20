@@ -385,3 +385,11 @@
   padding: 0 8px;
   margin-left: 6px;
 }
+
+/* GD-STRENGTH-CUES: the target block under the exercise name. Deliberately
+   tight — the logger has to stay above the fold in both orientations. */
+.glance-repsleft {
+  font-size: clamp(0.8rem, 1.6vw, 1.05rem);
+  opacity: 0.6;
+  margin-top: 0.05em;
+}
