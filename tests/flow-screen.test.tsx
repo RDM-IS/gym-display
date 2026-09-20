@@ -272,16 +272,45 @@ describe("FlowScreen — hands-free", { timeout: 120_000 }, () => {
     }
   });
 
-  it("the voice picker and rate slider persist what Ryan chooses", async () => {
+  it("the speed stepper persists what Ryan chooses, exactly", async () => {
     const { storedRate } = await import("../src/lib/voice");
     render(<FlowScreen plan={PLAN} />);
-    const picker = screen.getAllByTestId("voice-picker")[0] as HTMLSelectElement;
-    const slider = screen.getAllByTestId("voice-rate")[0] as HTMLInputElement;
-    fireEvent.change(slider, { target: { value: "1" } });
-    expect(storedRate()).toBe(1);
-    expect(picker).toBeDefined();
-    const toggle = screen.getAllByTestId("midcue-toggle")[0] as HTMLInputElement;
-    expect(toggle.checked).toBe(true);
+    // Shown as a whole percentage, so 0.85 reads as 85 — not a rounded "0.8".
+    expect(screen.getByLabelText("Speed 85 %, tap to enter")).toBeDefined();
+    fireEvent.click(screen.getByLabelText("Increase Speed"));
+    expect(storedRate()).toBe(0.9);
+    fireEvent.click(screen.getByLabelText("Decrease Speed"));
+    expect(storedRate()).toBe(0.85);                 // lands back on 0.85
+  });
+
+  it("the cues toggle persists, and is a button, not a checkbox", async () => {
+    const { readMidCues, setMidCues } = await import("../src/lib/voice");
+    render(<FlowScreen plan={PLAN} />);
+    const toggle = screen.getByTestId("midcue-toggle");
+    expect(toggle.tagName).toBe("BUTTON");
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(toggle);
+    expect(readMidCues()).toBe(false);
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    setMidCues(true);
+  });
+
+  it("the voice control cycles, and persists the choice", async () => {
+    const { storedVoiceURI } = await import("../src/lib/voice");
+    render(<FlowScreen plan={PLAN} />);
+    const picker = screen.getByTestId("voice-picker");
+    expect(picker.tagName).toBe("BUTTON");
+    expect(picker.textContent).toBe("Voice: Automatic");
+    // jsdom has no voices, so the cycle is Automatic → Automatic; the stored
+    // value stays "no preference" rather than something invented.
+    fireEvent.click(picker);
+    expect(storedVoiceURI() || null).toBeNull();
+  });
+
+  it("the settings raise no keyboard and no native picker", () => {
+    render(<FlowScreen plan={PLAN} />);
+    const panel = screen.getByTestId("flow-settings");
+    expect(panel.querySelectorAll("input, select, textarea, [contenteditable]")).toHaveLength(0);
   });
 
   it("an invalid flow refuses to start", () => {

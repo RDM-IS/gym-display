@@ -111,8 +111,8 @@ test("office flow runs hands-free: meditation, Stretch Trainer, spoken lead-in +
   // YOGA-5: the voice controls live on the ready screen and nowhere else —
   // nothing here should be reachable once Ryan's hands are on the mat.
   await expect(page.getByTestId("flow-settings")).toBeVisible();
-  await expect(page.getByTestId("voice-rate")).toHaveValue("0.85");
-  await expect(page.getByTestId("midcue-toggle")).toBeChecked();
+  await expect(page.getByLabel("Speed 85 %, tap to enter")).toBeVisible();
+  await expect(page.getByTestId("midcue-toggle")).toHaveAttribute("aria-pressed", "true");
   // …and reachable without scrolling past twenty poses, in both orientations.
   const setBox = await page.getByTestId("flow-settings").boundingBox();
   expect(setBox!.y + setBox!.height,

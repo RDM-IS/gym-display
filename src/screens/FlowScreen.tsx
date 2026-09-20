@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
+import Stepper from "../components/Stepper";
 import {
   RATE_MAX,
   RATE_MIN,
@@ -300,40 +301,41 @@ export default function FlowScreen({ plan, onRunningChange, onNavigate }: Props)
             get set once and then left alone, and nothing here should be
             reachable mid-flow when Ryan's hands are on the mat. */}
         <section className="flow-settings" data-testid="flow-settings" aria-label="Voice">
-          <label className="flow-setting">
-            <span>Voice</span>
-            <select
-              data-testid="voice-picker"
-              value={voiceURI ?? ""}
-              onChange={(e) => {
-                const v = e.target.value || null;
-                setVoiceURIState(v);
-                setVoiceURI(v);
-              }}
-            >
-              <option value="">Automatic</option>
-              {voices.map((v) => (
-                <option key={v.voiceURI} value={v.voiceURI}>{v.name}</option>
-              ))}
-            </select>
-          </label>
+          {/* Every control here is one of the app's own touch components —
+              no <select>, no range slider, no checkbox. This app is driven
+              with sweaty hands on an iPad, so it never raises the iOS
+              keyboard or picker and every target is >= 56 px. */}
+          <button
+            type="button" className="btn flow-setting-btn" data-testid="voice-picker"
+            onClick={() => {
+              // Tap to cycle: Automatic, then each English voice, preferred
+              // ones first. Set once and left alone, so cycling beats a modal.
+              const order: (string | null)[] = [null, ...voices.map((v) => v.voiceURI)];
+              const next = order[(order.indexOf(voiceURI) + 1) % order.length] ?? null;
+              setVoiceURIState(next);
+              setVoiceURI(next);
+            }}
+          >
+            Voice: {voices.find((v) => v.voiceURI === voiceURI)?.name ?? "Automatic"}
+          </button>
 
-          <label className="flow-setting">
-            <span>Speed <span className="mono dim">{rate.toFixed(2)}×</span></span>
-            <input
-              type="range" data-testid="voice-rate"
-              min={RATE_MIN} max={RATE_MAX} step={0.05} value={rate}
-              onChange={(e) => setRateState(setRate(Number(e.target.value)))}
-            />
-          </label>
+          {/* Speed as a whole percentage: the shared Stepper rounds to one
+              decimal (it is built for 2.5 lb weight steps), so a 0.85 rate
+              would show as "0.8" and ±0.05 could never land on 0.85 again.
+              85 % in steps of 5 is exact. */}
+          <Stepper
+            label="Speed" unit="%" value={Math.round(rate * 100)} step={5}
+            min={Math.round(RATE_MIN * 100)} max={Math.round(RATE_MAX * 100)}
+            onChange={(v) => { if (v != null) setRateState(setRate(v / 100)); }}
+          />
 
-          <label className="flow-setting flow-setting--toggle">
-            <span>Cues during holds</span>
-            <input
-              type="checkbox" data-testid="midcue-toggle" checked={midCues}
-              onChange={(e) => setMidCuesState(setMidCues(e.target.checked))}
-            />
-          </label>
+          <button
+            type="button" className="btn flow-setting-btn" data-testid="midcue-toggle"
+            aria-pressed={midCues}
+            onClick={() => setMidCuesState(setMidCues(!midCues))}
+          >
+            Cues during holds: {midCues ? "On" : "Off"}
+          </button>
         </section>
 
         <ol className="flow-list">

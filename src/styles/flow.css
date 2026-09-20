@@ -229,14 +229,10 @@
   border-radius: 0.6rem;
   max-width: 44rem;
 }
-.flow-setting {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.95rem;
-  opacity: 0.85;
+/* Big touch targets, like every other control in this app. */
+.flow-setting-btn {
+  min-height: 56px;
+  min-width: 56px;
+  padding: 0 1.1rem;
 }
-.flow-setting select,
-.flow-setting input[type="range"] { min-height: 2.25rem; }
-.flow-setting input[type="checkbox"] { width: 1.4rem; height: 1.4rem; }
-.flow-setting input[type="range"] { width: 9rem; }
+.flow-setting-btn[aria-pressed="false"] { opacity: 0.6; }
