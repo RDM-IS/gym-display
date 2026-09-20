@@ -143,7 +143,10 @@ test("office flow runs hands-free: meditation, Stretch Trainer, spoken lead-in +
   await expect(page.getByTestId("flow-name")).toHaveText("Crescent lunge");
   await expect(page.getByTestId("flow-next-title")).toHaveText("Next: Crescent lunge · Left leg forward");
   await runSeconds(page, 7); t += 7;                          // 0 → the move cue + switch screen
-  expect((await speech(page)).at(-1)).toBe("Crescent lunge, left leg forward.");
+  // YOGA-5: the move cue is the Sanskrit, phonetic, with no side — the side
+  // came 7 s ago in English and the screen still shows it.
+  expect((await speech(page)).at(-1)).toBe("Move to AHSH-tah chahn-DRAH-sah-nah.");
+  await expect(page.getByTestId("flow-sanskrit")).toHaveText("Ashta Chandrasana");
   const sw = page.getByTestId("flow-switch");
   await expect(sw).toBeVisible();
   await expect(sw).toContainText("Switch sides");
@@ -158,7 +161,7 @@ test("office flow runs hands-free: meditation, Stretch Trainer, spoken lead-in +
   await expect(page.getByText("Easier: Knee down")).toBeVisible();
   await expect(page.getByTestId("flow-clock")).toHaveText("0:39");
   await expect(page.getByTestId("flow-round")).toHaveText("Round 1/2");
-  await shot(page, "flow-3-left-lunge");
+  await shot(page, "flow-3-left-lunge");                 // English large, Sanskrit beneath
 
   const r2 = S.find((i) => i.roundStart);
   await runSeconds(page, r2.move + 1 - t); t = r2.move + 1;
@@ -171,7 +174,9 @@ test("office flow runs hands-free: meditation, Stretch Trainer, spoken lead-in +
   await expect(page.getByTestId("flow-name")).toHaveText("Savasana");
   await expect(page.getByTestId("flow-move")).toBeVisible();
   await expect(page.getByTestId("flow-next-title")).toHaveText("Last one — the flow ends after this");
-  expect((await speech(page)).slice(-2)).toEqual(["Next we'll move into savasana for 3 minutes.", "Savasana."]);
+  expect((await speech(page)).slice(-2)).toEqual(["Next we'll move into savasana for 3 minutes.",
+                                                  "Move to shah-VAH-sah-nah."]);
+  await expect(page.getByTestId("flow-sanskrit")).toHaveText("Shavasana");
   await shot(page, "flow-4b-savasana");
 
   await runSeconds(page, S.total - t + 3);

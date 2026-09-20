@@ -43,6 +43,9 @@ export interface FlowItem {
   sideLabel: string | null;
   cue: string | null;
   easier: string | null;
+  /** YOGA-5: the display spelling, shown small under the English name. Null
+   * for the pre blocks, which have no meaningful Sanskrit. */
+  sanskrit: string | null;
   duration_sec: number;
   /** 1-based round for poses; null for pre / close. */
   round: number | null;
@@ -92,10 +95,22 @@ function sideWords(s: FlowStep): string {
   return "";
 }
 
-interface Spoken { spoken: string; side: string | null; duration_sec: number }
+interface Spoken {
+  spoken: string;
+  side: string | null;
+  duration_sec: number;
+  /** Phonetic Sanskrit, for the move cue. Null → the cue stays English. */
+  sanskritSpoken?: string | null;
+}
 
-/** "High lunge, left leg forward." */
+/** The cue spoken as the transition begins.
+ *
+ * YOGA-5: Sanskrit, phonetically, with NO side — "Move to Ashta Chandrasana."
+ * The 7 s lead-in just gave the side in English and the screen shows it, so
+ * repeating it here is noise. Meditation and the Stretch Trainer have no
+ * Sanskrit and keep the English cue, with the side if they had one. */
 export function moveCueFor(p: Spoken): string {
+  if (p.sanskritSpoken) return `Move to ${p.sanskritSpoken}.`;
   return p.side ? `${p.spoken}, ${p.side.toLowerCase()}.` : `${p.spoken}.`;
 }
 
@@ -116,11 +131,13 @@ export function buildFlowTimeline(blocks: RecoveryFlowBlocks): FlowItem[] {
   const spokenOf = new Map<number, Spoken>();
   const transitions: number[] = [];
   const hold = (kind: "pre" | "close", p: FlowHold) => {
-    spokenOf.set(items.length, { spoken: p.name, side: null, duration_sec: p.duration_sec });
+    spokenOf.set(items.length, { spoken: p.name, side: null, duration_sec: p.duration_sec,
+                                 sanskritSpoken: p.sanskrit_spoken ?? null });
     transitions.push(p.transition_sec ?? FALLBACK_TRANSITION_SEC);
     items.push({
       kind, name: p.name, title: p.name, side: null, sideLabel: null,
-      cue: p.cue ?? null, easier: null, duration_sec: p.duration_sec, round: null,
+      cue: p.cue ?? null, easier: null, sanskrit: p.sanskrit ?? null,
+      duration_sec: p.duration_sec, round: null,
       totalRounds: rounds, step: null, mirrorGroup: null, switchBefore: false,
       roundStart: false, posture: p.posture ?? null,
     });
@@ -143,11 +160,13 @@ export function buildFlowTimeline(blocks: RecoveryFlowBlocks): FlowItem[] {
       }
       const label = s.side ? sideWords(s) : null;
       spokenOf.set(items.length, { spoken: s.spoken || s.name, side: label,
-                                   duration_sec: s.duration_sec });
+                                   duration_sec: s.duration_sec,
+                                   sanskritSpoken: s.sanskrit_spoken ?? null });
       transitions.push(s.transition_sec ?? FALLBACK_TRANSITION_SEC);
       items.push({
         kind: "pose", name: s.name, title: label ? `${s.name} · ${label}` : s.name,
         side: s.side, sideLabel: label, cue: s.cue ?? null, easier: s.easier ?? null,
+        sanskrit: s.sanskrit ?? null,
         duration_sec: s.duration_sec, round: r, totalRounds: rounds, step: s.step,
         mirrorGroup: s.mirror_group, switchBefore, roundStart: i === 0 && r > 1,
         posture: s.posture ?? null,
@@ -206,8 +225,8 @@ export function validateFlow(blocks: RecoveryFlowBlocks): string[] {
   // A missing transition_sec is a SEEDING bug, and artemis's validate_flow
   // refuses to write one. It is deliberately NOT an error here: a plan row
   // seeded before YOGA-4 has none, and refusing to run a session Ryan is
-  // standing on the mat for — over a 3 s default — would be the wrong trade
-  // every time. buildFlowTimeline falls back; see legacyTransitions().
+  // standing on the mat for — over a 3 s default — would be the wrong
+  // trade every time. buildFlowTimeline falls back; see legacyTransitions().
   return errors;
 }
 

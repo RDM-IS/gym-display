@@ -124,7 +124,7 @@ describe("FlowScreen — hands-free", { timeout: 120_000 }, () => {
     expect(speech.overlaps()).toBe(0);
     expect(speech.said).toContain("Next, supine twist, left side, for 40 seconds.");
     expect(speech.said).toContain("Next we'll move into downward facing dog for 40 seconds.");
-    expect(speech.said).toContain("High lunge, left leg forward.");
+    expect(speech.said).toContain("Move to oo-TEE-tah ASH-wah sahn-chah-lah-NAH-sah-nah.");
   });
 
   it("lead-in at 7 s, move cue at 0, hold timer only after the transition", async () => {
@@ -148,8 +148,8 @@ describe("FlowScreen — hands-free", { timeout: 120_000 }, () => {
     await advance(1_000);                              // 0:07 left — the lead-in
     expect(speechLog.at(-1)).toBe("Next we'll move into child's pose for 40 seconds.");
     expect(speechLog.filter((x) => x.startsWith("Next we'll move into child's"))).toHaveLength(1);
-    await advance(7_000);                              // 0 → the move cue
-    expect(speechLog.at(-1)).toBe("Child's pose.");
+    await advance(7_000);                              // 0 → the Sanskrit move cue
+    expect(speechLog.at(-1)).toBe("Move to bah-LAH-sah-nah.");
     expect(screen.getByTestId("flow-name").textContent).toBe("Child's pose");
     expect(screen.getByTestId("flow-move")).toBeDefined();
     expect(screen.getByTestId("flow-clock").textContent).toBe("5");   // from the table
@@ -167,7 +167,7 @@ describe("FlowScreen — hands-free", { timeout: 120_000 }, () => {
     expect(sw.textContent).toContain("Crescent lunge · Left leg forward");
     expect(sw.textContent).toContain("Move into position");
     expect(speechLog.slice(-2)).toEqual(["Next, crescent lunge, left leg forward, for 40 seconds.",
-                                         "Crescent lunge, left leg forward."]);
+                                         "Move to AHSH-tah chahn-DRAH-sah-nah."]);
     await advance(2_000);
     expect(screen.queryByTestId("flow-switch")).toBeNull();
     expect(screen.getByTestId("flow-name").textContent).toBe("Crescent lunge");

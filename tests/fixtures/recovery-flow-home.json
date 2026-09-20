@@ -37,7 +37,9 @@
         "mirror_group": null,
         "cue": "Knees wide, hips back toward your heels, arms long.",
         "easier": null,
-        "posture": "kneeling"
+        "posture": "kneeling",
+        "sanskrit": "Balasana",
+        "sanskrit_spoken": "bah-LAH-sah-nah"
       },
       {
         "step": "2",
@@ -49,7 +51,9 @@
         "mirror_group": null,
         "cue": "Hips stay down; press through the palms and lift the chest gently.",
         "easier": null,
-        "posture": "prone"
+        "posture": "prone",
+        "sanskrit": "Bhujangasana",
+        "sanskrit_spoken": "boo-jang-GAH-sah-nah"
       },
       {
         "step": "3",
@@ -62,7 +66,9 @@
         "cue": "Hips high, heels reaching down, long spine.",
         "easier": "Dolphin — forearms down",
         "posture": "quadruped",
-        "spoken": "Downward facing dog"
+        "spoken": "Downward facing dog",
+        "sanskrit": "Adho Mukha Svanasana",
+        "sanskrit_spoken": "AH-doh MOO-kah shvah-NAH-sah-nah"
       },
       {
         "step": "4",
@@ -74,7 +80,9 @@
         "mirror_group": null,
         "cue": "Soft knees, let your head hang heavy.",
         "easier": null,
-        "posture": "standing"
+        "posture": "standing",
+        "sanskrit": "Uttanasana",
+        "sanskrit_spoken": "oo-tah-NAH-sah-nah"
       },
       {
         "step": "5",
@@ -86,7 +94,9 @@
         "mirror_group": "lunge-unit",
         "cue": "Front knee over ankle, back heel lifted, arms up.",
         "easier": "Knee down",
-        "posture": "standing"
+        "posture": "standing",
+        "sanskrit": "Utthita Ashwa Sanchalanasana",
+        "sanskrit_spoken": "oo-TEE-tah ASH-wah sahn-chah-lah-NAH-sah-nah"
       },
       {
         "step": "6",
@@ -98,7 +108,9 @@
         "mirror_group": "lunge-unit",
         "cue": "Square the hips, sink a little deeper, reach up.",
         "easier": "Knee down",
-        "posture": "standing"
+        "posture": "standing",
+        "sanskrit": "Ashta Chandrasana",
+        "sanskrit_spoken": "AHSH-tah chahn-DRAH-sah-nah"
       },
       {
         "step": "7",
@@ -110,7 +122,9 @@
         "mirror_group": "lunge-unit",
         "cue": "Square the hips, sink a little deeper, reach up.",
         "easier": "Knee down",
-        "posture": "standing"
+        "posture": "standing",
+        "sanskrit": "Ashta Chandrasana",
+        "sanskrit_spoken": "AHSH-tah chahn-DRAH-sah-nah"
       },
       {
         "step": "8",
@@ -122,7 +136,9 @@
         "mirror_group": "lunge-unit",
         "cue": "Front knee over ankle, back heel lifted, arms up.",
         "easier": "Knee down",
-        "posture": "standing"
+        "posture": "standing",
+        "sanskrit": "Utthita Ashwa Sanchalanasana",
+        "sanskrit_spoken": "oo-TEE-tah ASH-wah sahn-chah-lah-NAH-sah-nah"
       },
       {
         "step": "9",
@@ -134,7 +150,9 @@
         "mirror_group": null,
         "cue": "From hands and knees, walk the hands forward, chest toward the mat.",
         "easier": null,
-        "posture": "kneeling"
+        "posture": "kneeling",
+        "sanskrit": "Uttana Shishosana",
+        "sanskrit_spoken": "oo-TAH-nah shih-SHOH-sah-nah"
       },
       {
         "step": "10",
@@ -146,7 +164,9 @@
         "mirror_group": null,
         "cue": "Feet hip-width, press through the heels, lift the hips.",
         "easier": null,
-        "posture": "supine"
+        "posture": "supine",
+        "sanskrit": "Setu Bandha Sarvangasana",
+        "sanskrit_spoken": "SEH-too BAHN-dah sar-vahn-GAH-sah-nah"
       },
       {
         "step": "11",
@@ -158,7 +178,9 @@
         "mirror_group": "twist-supine",
         "cue": "Knees drop to one side, both shoulders stay down.",
         "easier": null,
-        "posture": "supine"
+        "posture": "supine",
+        "sanskrit": "Supta Matsyendrasana",
+        "sanskrit_spoken": "SOOP-tah mahts-yen-DRAH-sah-nah"
       },
       {
         "step": "12",
@@ -170,7 +192,9 @@
         "mirror_group": "twist-supine",
         "cue": "Knees drop to one side, both shoulders stay down.",
         "easier": null,
-        "posture": "supine"
+        "posture": "supine",
+        "sanskrit": "Supta Matsyendrasana",
+        "sanskrit_spoken": "SOOP-tah mahts-yen-DRAH-sah-nah"
       },
       {
         "step": "13",
@@ -182,7 +206,9 @@
         "mirror_group": "wind",
         "cue": "Hug one knee to the chest, the other leg long.",
         "easier": null,
-        "posture": "supine"
+        "posture": "supine",
+        "sanskrit": "Pawanmuktasana",
+        "sanskrit_spoken": "pah-wahn-mook-TAH-sah-nah"
       },
       {
         "step": "14",
@@ -194,7 +220,9 @@
         "mirror_group": "wind",
         "cue": "Hug one knee to the chest, the other leg long.",
         "easier": null,
-        "posture": "supine"
+        "posture": "supine",
+        "sanskrit": "Pawanmuktasana",
+        "sanskrit_spoken": "pah-wahn-mook-TAH-sah-nah"
       },
       {
         "step": "15",
@@ -206,7 +234,9 @@
         "mirror_group": "side-bend",
         "cue": "Sit tall, reach the opposite arm overhead and lean.",
         "easier": null,
-        "posture": "seated"
+        "posture": "seated",
+        "sanskrit": "Parsva Sukhasana",
+        "sanskrit_spoken": "PARSH-vah soo-KAH-sah-nah"
       },
       {
         "step": "16",
@@ -218,7 +248,9 @@
         "mirror_group": "twist-seated",
         "cue": "Lengthen up first, then turn from the ribs.",
         "easier": null,
-        "posture": "seated"
+        "posture": "seated",
+        "sanskrit": "Parivrtta Sukhasana",
+        "sanskrit_spoken": "pah-ree-VRIT-tah soo-KAH-sah-nah"
       },
       {
         "step": "17",
@@ -230,7 +262,9 @@
         "mirror_group": "twist-seated",
         "cue": "Lengthen up first, then turn from the ribs.",
         "easier": null,
-        "posture": "seated"
+        "posture": "seated",
+        "sanskrit": "Parivrtta Sukhasana",
+        "sanskrit_spoken": "pah-ree-VRIT-tah soo-KAH-sah-nah"
       },
       {
         "step": "18",
@@ -242,7 +276,9 @@
         "mirror_group": "side-bend",
         "cue": "Sit tall, reach the opposite arm overhead and lean.",
         "easier": null,
-        "posture": "seated"
+        "posture": "seated",
+        "sanskrit": "Parsva Sukhasana",
+        "sanskrit_spoken": "PARSH-vah soo-KAH-sah-nah"
       },
       {
         "step": "19",
@@ -254,7 +290,9 @@
         "mirror_group": null,
         "cue": "Sit tall, arms overhead, slow breaths.",
         "easier": null,
-        "posture": "seated"
+        "posture": "seated",
+        "sanskrit": "Parvatasana",
+        "sanskrit_spoken": "par-vah-TAH-sah-nah"
       },
       {
         "step": "20",
@@ -269,7 +307,9 @@
         "posture": "seated",
         "rounds": [
           1
-        ]
+        ],
+        "sanskrit": "Sukhasana",
+        "sanskrit_spoken": "soo-KAH-sah-nah"
       }
     ],
     "close": {
@@ -278,7 +318,9 @@
       "duration_sec": 180,
       "transition_sec": 5,
       "cue": "Lie on your back, arms by your sides, let everything go.",
-      "posture": "supine"
+      "posture": "supine",
+      "sanskrit": "Shavasana",
+      "sanskrit_spoken": "shah-VAH-sah-nah"
     },
     "equipment": [
       "mat"
