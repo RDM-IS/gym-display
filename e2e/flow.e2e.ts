@@ -82,9 +82,6 @@ function schedule(blocks: unknown) {
 
 const speech = (page: Page) =>
   page.evaluate(() => [...(window as unknown as { __gymDisplaySpeech: string[] }).__gymDisplaySpeech]);
-const tones = (page: Page) =>
-  page.evaluate(() => [...(window as unknown as { __gymDisplayTones: string[] }).__gymDisplayTones]);
-
 /** Freeze the fake clock (install() lets it flow in real time) so every
  * second is test-driven, then tap Start. */
 async function pausedStart(page: Page, at: string) {
@@ -99,13 +96,13 @@ async function runSeconds(page: Page, seconds: number) {
 test("office flow runs hands-free: meditation, Stretch Trainer, spoken lead-in + move cue, switch sides, round 2, savasana, auto-log", async ({ page }) => {
   test.setTimeout(300_000);
   const S = schedule(office.blocks);
-  expect(S.total).toBe(2467);
+  expect(S.total).toBe(2432);
   await page.clock.install({ time: new Date("2026-09-17T10:59:00Z") });
   const posted = await mockApi(page, OFFICE_PLAN);
   await page.goto("/today");
   await expect(page.getByTestId("flow-ready")).toBeVisible();
   await expect(page).toHaveURL(/\/today$/);
-  await expect(page.getByText("41:07 · 2 rounds · office gym")).toBeVisible();
+  await expect(page.getByText("40:32 · 2 rounds · office gym")).toBeVisible();
   // Start is on screen without scrolling.
   const startBox = await page.getByRole("button", { name: "Start" }).boundingBox();
   const vh = page.viewportSize()!.height;
@@ -127,7 +124,6 @@ test("office flow runs hands-free: meditation, Stretch Trainer, spoken lead-in +
   await runSeconds(page, 5);
   await expect(page.getByTestId("flow-clock")).toHaveText("1:00");
   await expect(page.getByTestId("flow-move")).toHaveCount(0);
-  expect(await tones(page)).toEqual(["start"]);
 
   const st = S.find((i) => i.name === "Stretch Trainer");
   await runSeconds(page, st.hold + 1 - 5);
@@ -136,18 +132,18 @@ test("office flow runs hands-free: meditation, Stretch Trainer, spoken lead-in +
   await expect(page.getByTestId("flow-clock")).toHaveText("7:59");
   await shot(page, "flow-1b-stretch-trainer");
 
-  // The left-leg lunge: switch tone + lead-in 3 s out, move cue at 0.
-  const lunge = S.find((i) => i.step === "8" && i.round === 1);
+  // YOGA-4: the side switch is at the top of the crescent (step 7), the
+  // lead-in lands 7 s out with nothing in front of it, the move cue at 0.
+  const lunge = S.find((i) => i.step === "7" && i.round === 1);
   let t = st.hold + 1;
-  await runSeconds(page, lunge.move - 4 - t); t = lunge.move - 4;
+  await runSeconds(page, lunge.move - 8 - t); t = lunge.move - 8;
   expect((await speech(page)).at(-1)).not.toContain("left leg");
-  await runSeconds(page, 1); t += 1;                          // 3 s before the hold ends
-  expect((await speech(page)).at(-1)).toBe("Next, high lunge, left leg forward, for 30 seconds.");
-  expect((await tones(page)).at(-1)).toBe("switch");
-  await expect(page.getByTestId("flow-name")).toHaveText("Extended puppy");
-  await expect(page.getByTestId("flow-next-title")).toHaveText("Next: High lunge · Left leg forward");
-  await runSeconds(page, 3); t += 3;                          // 0 → the move cue + switch screen
-  expect((await speech(page)).at(-1)).toBe("High lunge, left leg forward.");
+  await runSeconds(page, 1); t += 1;                          // exactly 7 s before the hold ends
+  expect((await speech(page)).at(-1)).toBe("Next, crescent lunge, left leg forward, for 40 seconds.");
+  await expect(page.getByTestId("flow-name")).toHaveText("Crescent lunge");
+  await expect(page.getByTestId("flow-next-title")).toHaveText("Next: Crescent lunge · Left leg forward");
+  await runSeconds(page, 7); t += 7;                          // 0 → the move cue + switch screen
+  expect((await speech(page)).at(-1)).toBe("Crescent lunge, left leg forward.");
   const sw = page.getByTestId("flow-switch");
   await expect(sw).toBeVisible();
   await expect(sw).toContainText("Switch sides");
@@ -157,12 +153,11 @@ test("office flow runs hands-free: meditation, Stretch Trainer, spoken lead-in +
 
   await runSeconds(page, lunge.hold + 1 - t); t = lunge.hold + 1;
   await expect(sw).toHaveCount(0);
-  await expect(page.getByTestId("flow-name")).toHaveText("High lunge");
+  await expect(page.getByTestId("flow-name")).toHaveText("Crescent lunge");
   await expect(page.getByTestId("flow-side")).toHaveText("Left leg forward");
   await expect(page.getByText("Easier: Knee down")).toBeVisible();
-  await expect(page.getByTestId("flow-clock")).toHaveText("0:29");
+  await expect(page.getByTestId("flow-clock")).toHaveText("0:39");
   await expect(page.getByTestId("flow-round")).toHaveText("Round 1/2");
-  expect((await tones(page)).at(-1)).toBe("start");
   await shot(page, "flow-3-left-lunge");
 
   const r2 = S.find((i) => i.roundStart);
@@ -188,12 +183,12 @@ test("office flow runs hands-free: meditation, Stretch Trainer, spoken lead-in +
   const switches = cues.filter((c) => c.startsWith("Switch sides"));
   expect(switches).toEqual([
     // each round: lunge unit, supine twist, wind release, side bend, seated twist
-    "Switch sides|High lunge · Left leg forward", "Switch sides|Supine twist · Left side",
-    "Switch sides|Wind release · Left knee", "Switch sides|Seated side bend · Lean right",
-    "Switch sides|Seated twist · Twist right",
-    "Switch sides|High lunge · Left leg forward", "Switch sides|Supine twist · Left side",
-    "Switch sides|Wind release · Left knee", "Switch sides|Seated side bend · Lean right",
-    "Switch sides|Seated twist · Twist right",
+    "Switch sides|Crescent lunge · Left leg forward", "Switch sides|Supine twist · Left side",
+    "Switch sides|Wind release · Left knee", "Switch sides|Seated twist · Twist right",
+    "Switch sides|Seated side bend · Lean right",
+    "Switch sides|Crescent lunge · Left leg forward", "Switch sides|Supine twist · Left side",
+    "Switch sides|Wind release · Left knee", "Switch sides|Seated twist · Twist right",
+    "Switch sides|Seated side bend · Lean right",
   ]);
   expect(cues.filter((c) => c.startsWith("Round 2"))).toHaveLength(1);
 
@@ -202,12 +197,14 @@ test("office flow runs hands-free: meditation, Stretch Trainer, spoken lead-in +
   const expected = [S.items[0].leadIn];
   for (const it of S.items.slice(1)) expected.push(it.leadIn, it.moveCue);
   expect(said).toEqual([...expected, "Flow complete"]);
-  expect((await tones(page)).filter((x) => x === "start")).toHaveLength(S.items.length);
+  // YOGA-4: not one tone in the whole run — voice only.
+  expect(await page.evaluate(() =>
+    (window as unknown as { __gymDisplayTones?: string[] }).__gymDisplayTones ?? [])).toEqual([]);
 
   expect(posted).toHaveLength(1);
   expect(posted[0]).toMatchObject({
     plan_id: 104, log_type: "session_summary",
-    sets: [{ duration_sec: 2467, notes: "recovery_flow: complete 41 min" }],
+    sets: [{ duration_sec: 2432, notes: "recovery_flow: complete 40 min" }],
   });
 });
 
@@ -228,7 +225,7 @@ test("backgrounding at 50% logs a partial; coming back resumes without a tap", a
   await setVisibility("hidden");
   await expect.poll(() => posted.length).toBe(1);
   expect(posted[0].sets[0]).toMatchObject({
-    duration_sec: 990, notes: "recovery_flow: partial 16 of 33 min",
+    duration_sec: 990, notes: "recovery_flow: partial 16 of 32 min",
   });
   await page.clock.runFor(60_000);
   await setVisibility("visible");
@@ -365,8 +362,9 @@ test("active pose shows its figure, mirrored per side, with no layout shift", as
   expect(Math.abs(bar2.y - bar.y)).toBeLessThanOrEqual(0.5);
   await shot(page, "flow-8-next-strip");
 
-  // The switch screen before the left-leg lunge shows the mirrored figure.
-  const lungeL = S.find((i) => i.step === "8" && i.round === 1);
+  // The switch screen before the left side shows the mirrored figure. Since
+  // YOGA-4 that is the crescent lunge (step 7), not the high lunge.
+  const lungeL = S.find((i) => i.step === "7" && i.round === 1);
   await runSeconds(page, lungeL.move + 1 - (lungeR.end - 1));
   const sw = page.getByTestId("flow-switch");
   await expect(sw).toBeVisible();

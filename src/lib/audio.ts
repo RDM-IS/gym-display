@@ -142,50 +142,14 @@ export function beepEndOfWorkout(): void {
   playTone({ freq: 880, end_freq: 440, duration_ms: 1500 });
 }
 
-// ── Recovery Flow (YOGA-1) ──────────────────────────────────────────────────
-
-function logged(name: string, play: () => void): void {
-  toneLog.push(name);
-  play();
-}
-
-/** Soft chime: just before the "Next we'll move into …" lead-in. */
-export function chimeNext(): void {
-  logged("next", () => {
-    playTone({ freq: 988, duration_ms: 350, gain: 0.25 });
-    playTone({ freq: 1319, duration_ms: 450, start_offset_ms: 180, gain: 0.2 });
-  });
-}
-
-/** Distinct two-note swoop: switch sides. */
-export function toneSwitchSides(): void {
-  logged("switch", () => {
-    playTone({ freq: 392, end_freq: 784, duration_ms: 350 });
-    playTone({ freq: 784, end_freq: 392, duration_ms: 350, start_offset_ms: 420 });
-  });
-}
-
-/** Round change. */
-export function toneRound(): void {
-  logged("round", () => beepEndOfRound());
-}
-
-/** Distinct rising pair: the hold timer starts (after "Move into position"). */
-export function toneHoldStart(): void {
-  logged("start", () => {
-    playTone({ freq: 587, duration_ms: 140, gain: 0.4 });
-    playTone({ freq: 880, duration_ms: 260, start_offset_ms: 160, gain: 0.4 });
-  });
-}
-
-/** Marks the move point when speech is unavailable (no move cue to hear). */
-export function toneMove(): void {
-  logged("move", () => playTone({ freq: 523, duration_ms: 220, gain: 0.35 }));
-}
-
-export function toneFlowDone(): void {
-  logged("done", () => beepEndOfWorkout());
-}
+// ── Recovery Flow ───────────────────────────────────────────────────────────
+//
+// YOGA-4 (Ryan, 2026-09-20): the flow has NO tones at all — no lead-in chime,
+// no switch-sides swoop, no round change, no hold-start tone, no completion
+// sweep. Voice cues only. The tone helpers that used to live here are gone
+// rather than left unused, so nothing can quietly start calling them again;
+// tests/flow-audio.test.ts pins that. The beeps above belong to the workout
+// timer, which is untouched.
 
 // ── Voice cues: on-device speechSynthesis, no network ───────────────────────
 

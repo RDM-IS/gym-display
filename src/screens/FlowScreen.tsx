@@ -2,23 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import type { PointerEvent as ReactPointerEvent } from "react";
 import {
   audioStatus,
-  chimeNext,
   isMuted,
   speak,
-  speechSupported,
   stopSpeech,
   subscribeAudio,
   toggleMuted,
-  toneFlowDone,
-  toneHoldStart,
-  toneMove,
-  toneRound,
-  toneSwitchSides,
   unlockAudio,
   unlockSpeech,
 } from "../lib/audio";
 import {
-  CHIME_LEAD_MS,
   DEFAULT_LEADIN_SEC,
   buildFlowTimeline,
   flowLogNotes,
@@ -28,6 +20,7 @@ import {
   remainingInStageSec,
   remainingTotalSec,
   skipFlow,
+  stepsForRound,
   tickFlow,
   validateFlow,
   type FlowEvent,
@@ -60,17 +53,22 @@ function now(): number {
   return typeof performance !== "undefined" ? performance.now() : Date.now();
 }
 
-/** YOGA-1 Recovery Flow — one Start tap, then hands-free. YOGA-3 timing:
- * the next pose is always on screen; 3 s before a hold ends a chime and the
- * full lead-in ("Next we'll move into …"); at 0 a "Move into position"
- * transition (3 s or 5 s by the change in body position) with the short
- * cue; then a start tone and the hold. Switch sides and round changes keep
- * their own screens and tones. Logs complete / partial by itself. Tap to
- * pause (transitions too), swipe to skip — both optional. */
+/** YOGA-1 Recovery Flow — one Start tap, then hands-free. YOGA-4 timing:
+ * the next pose is always on screen; 7 s before a hold ends, the full lead-in
+ * ("Next we'll move into …"); at 0 a "Move into position" transition, its
+ * length read from the seeded table, with the short cue; then the hold.
+ * Switch sides and round changes keep their own screens. No tones anywhere —
+ * voice only. Logs complete / partial by itself. Tap to pause (transitions
+ * too), swipe to skip — both optional. */
 export default function FlowScreen({ plan, onRunningChange, onNavigate }: Props) {
   const blocks = plan.blocks as RecoveryFlowBlocks;
   const items = useMemo(() => buildFlowTimeline(blocks), [blocks]);
   const errors = useMemo(() => validateFlow(blocks), [blocks]);
+  // YOGA-4: nothing doubles; round 2 differs only by the poses it drops.
+  const droppedInRound2 = useMemo(() => {
+    const later = new Set(stepsForRound(blocks, 2).map((s) => s.step));
+    return stepsForRound(blocks, 1).filter((s) => !later.has(s.step)).map((s) => s.name);
+  }, [blocks]);
   const totalSec = useMemo(() => flowTotalSec(blocks), [blocks]);
   const leadinSec = blocks.leadin_sec ?? DEFAULT_LEADIN_SEC;
 
@@ -122,17 +120,10 @@ export default function FlowScreen({ plan, onRunningChange, onNavigate }: Props)
         if (e.type === "transition") {
           // Cancels anything still being said: the move cue is never talked over.
           speak(items[e.index].moveCue);
-          if (!speechSupported()) toneMove();
-        } else if (e.type === "hold") {
-          toneHoldStart();
         } else if (e.type === "leadin") {
-          if (e.kind === "switch") toneSwitchSides();
-          else if (e.kind === "round") toneRound();
-          else chimeNext();
-          // The words start once the tone is done — on the lead-in second.
-          speak(items[e.next].leadIn, Math.max(0, CHIME_LEAD_MS[e.kind] - e.lateMs));
+          // Straight in, nothing sounds in front of it — the words ARE the cue.
+          speak(items[e.next].leadIn);
         } else if (e.type === "done") {
-          toneFlowDone();
           speak("Flow complete");
           setPhase("done");
           void releaseWakeLock();
@@ -278,11 +269,14 @@ export default function FlowScreen({ plan, onRunningChange, onNavigate }: Props)
               <span className="mono dim">{formatClock(i.duration_sec)}</span>
             </li>
           ))}
-          <li className="dim">Round 2: same order, bridge → easy pose held 2×</li>
+          <li className="dim">
+            Round 2: same order
+            {droppedInRound2.length > 0 && <>, without {droppedInRound2.join(", ").toLowerCase()}</>}
+          </li>
         </ol>
         <div className="desc">
-          Hands-free after Start: it announces each pose, gives you 3–5 s to move into it,
-          switches sides and logs itself.
+          Hands-free after Start: it announces each pose, gives you time to move into it,
+          switches sides and logs itself. Voice only — no tones.
         </div>
         <BottomBar view="today" start={{ label: "Start", onStart: start }} onNavigate={onNavigate ?? (() => {})} />
       </div>

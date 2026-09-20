@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import FlowScreen from "../src/screens/FlowScreen";
-import { speechLog, toneLog } from "../src/lib/audio";
+import { speechLog } from "../src/lib/audio";
 import { buildFlowTimeline } from "../src/lib/flow";
 import { _resetQueueForTests } from "../src/lib/log-queue";
 import type { LogExerciseIn, Plan } from "../src/lib/types";
 import home from "./fixtures/recovery-flow-home.json";
 
 const PLAN = home as unknown as Plan;
-const TOTAL_MS = 1980 * 1000;
+const TOTAL_MS = 1947 * 1000;
 const ITEMS = buildFlowTimeline(PLAN.blocks as never);
 
 let posted: LogExerciseIn[] = [];
@@ -19,7 +19,6 @@ beforeEach(() => {
     toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date", "performance"],
   });
   posted = [];
-  toneLog.length = 0;
   speechLog.length = 0;
   visibility = "visible";
   Object.defineProperty(document, "visibilityState", { configurable: true, get: () => visibility });
@@ -109,15 +108,8 @@ describe("FlowScreen — hands-free", { timeout: 120_000 }, () => {
     expect(posted).toHaveLength(1);
     expect(posted[0]).toMatchObject({
       plan_id: 106, log_type: "session_summary", exercise: null,
-      sets: [{ duration_sec: 1980, notes: "recovery_flow: complete 33 min", is_skipped: false }],
+      sets: [{ duration_sec: 1947, notes: "recovery_flow: complete 32 min", is_skipped: false }],
     });
-    const n = (k: string) => toneLog.filter((t) => t === k).length;
-    expect(n("switch")).toBe(10);
-    expect(n("round")).toBe(1);
-    expect(n("next")).toBe(ITEMS.length - 1 - 10 - 1);
-    expect(n("start")).toBe(ITEMS.length);           // every hold starts on its tone
-    expect(n("move")).toBe(ITEMS.length - 1);        // no speech here → tones mark the move
-    expect(toneLog.at(-1)).toBe("done");
   });
 
   it("speaks the lead-in then the move cue for every pose, one utterance at a time", async () => {
@@ -130,13 +122,12 @@ describe("FlowScreen — hands-free", { timeout: 120_000 }, () => {
     expected.push("Flow complete");
     expect(speech.said).toEqual(expected);
     expect(speech.overlaps()).toBe(0);
-    expect(speech.said).toContain("Next, supine twist, left side, for 30 seconds.");
-    expect(speech.said).toContain("Next we'll move into downward facing dog for 60 seconds.");
+    expect(speech.said).toContain("Next, supine twist, left side, for 40 seconds.");
+    expect(speech.said).toContain("Next we'll move into downward facing dog for 40 seconds.");
     expect(speech.said).toContain("High lunge, left leg forward.");
-    expect(toneLog).not.toContain("move");           // speech carries the move point
   });
 
-  it("lead-in at 3 s, move cue at 0, hold timer only after the transition", async () => {
+  it("lead-in at 7 s, move cue at 0, hold timer only after the transition", async () => {
     fakeSpeech();
     start();
     // Start: the lead-in, then "Move into position" for 5 s with the seconds counting.
@@ -151,39 +142,37 @@ describe("FlowScreen — hands-free", { timeout: 120_000 }, () => {
     expect(screen.getByTestId("flow-run").dataset.stage).toBe("hold");
     expect(screen.queryByTestId("flow-move")).toBeNull();
     expect(screen.getByTestId("flow-clock").textContent).toBe("1:00");
-    expect(toneLog).toEqual(["start"]);
-    // 3 s before the hold ends: chime, then the words.
-    await advance(56_000);                             // 0:04 left
+    // YOGA-4: nothing sounds at the hold start, and nothing precedes the words.
+    await advance(52_000);                             // 0:08 left
     expect(speechLog).toHaveLength(1);
-    await advance(1_000);                              // 0:03 left
-    expect(toneLog.at(-1)).toBe("next");
-    expect(speechLog.at(-1)).toBe("Next we'll move into child's pose for 30 seconds.");
+    await advance(1_000);                              // 0:07 left — the lead-in
+    expect(speechLog.at(-1)).toBe("Next we'll move into child's pose for 40 seconds.");
     expect(speechLog.filter((x) => x.startsWith("Next we'll move into child's"))).toHaveLength(1);
-    await advance(3_000);                              // 0 → the move cue
+    await advance(7_000);                              // 0 → the move cue
     expect(speechLog.at(-1)).toBe("Child's pose.");
     expect(screen.getByTestId("flow-name").textContent).toBe("Child's pose");
     expect(screen.getByTestId("flow-move")).toBeDefined();
-    expect(screen.getByTestId("flow-clock").textContent).toBe("3");   // seated → kneeling: short
+    expect(screen.getByTestId("flow-clock").textContent).toBe("5");   // from the table
     expect(screen.getByTestId("flow-next-title").textContent).toBe("Next: Cobra");
   });
 
   it("shows the switch-sides screen with the side and the move countdown", async () => {
     start();
-    // meditation 65 · child's 33 · cobra 33 · dog 63 · fold 35 · lunge R 33 ·
-    // crescent R 33 · puppy 35 → the left-leg lunge's 5 s transition at 330 s.
-    await advance(331_000);
+    // YOGA-4: the switch is now at the top of the crescent. meditation 5+60,
+    // child's 5+40, cobra 3+40, dog 3+40, fold 3+40, high lunge R 5+40,
+    // crescent R 3+40 → crescent L's 3 s transition runs 327–330 s.
+    await advance(328_000);
     const sw = screen.getByTestId("flow-switch");
     expect(sw.textContent).toContain("Switch sides");
-    expect(sw.textContent).toContain("High lunge · Left leg forward");
+    expect(sw.textContent).toContain("Crescent lunge · Left leg forward");
     expect(sw.textContent).toContain("Move into position");
-    expect(speechLog.slice(-2)).toEqual(["Next, high lunge, left leg forward, for 30 seconds.",
-                                         "High lunge, left leg forward."]);
-    expect(toneLog.filter((t) => t === "switch")).toHaveLength(1);
-    await advance(5_000);
+    expect(speechLog.slice(-2)).toEqual(["Next, crescent lunge, left leg forward, for 40 seconds.",
+                                         "Crescent lunge, left leg forward."]);
+    await advance(2_000);
     expect(screen.queryByTestId("flow-switch")).toBeNull();
-    expect(screen.getByTestId("flow-name").textContent).toBe("High lunge");
+    expect(screen.getByTestId("flow-name").textContent).toBe("Crescent lunge");
     expect(screen.getByTestId("flow-side").textContent).toBe("Left leg forward");
-    expect(screen.getByTestId("flow-clock").textContent).toBe("0:29");
+    expect(screen.getByTestId("flow-clock").textContent).toBe("0:40");
   });
 
   it("backgrounding at 50% logs a partial with minutes done", async () => {
@@ -196,7 +185,7 @@ describe("FlowScreen — hands-free", { timeout: 120_000 }, () => {
     });
     expect(posted).toHaveLength(1);
     expect(posted[0].sets[0]).toMatchObject({
-      duration_sec: 990, notes: "recovery_flow: partial 16 of 33 min",
+      duration_sec: 974, notes: "recovery_flow: partial 16 of 32 min",
     });
     expect(screen.getByTestId("flow-paused")).toBeDefined();
     // Hidden time never counts; coming back resumes by itself.
@@ -240,16 +229,16 @@ describe("FlowScreen — hands-free", { timeout: 120_000 }, () => {
     await advance(30_000);
     expect(screen.getByTestId("flow-clock").textContent).toBe("3");
     expect(screen.getByTestId("flow-run").dataset.stage).toBe("transition");
-    expect(toneLog).not.toContain("start");
+    expect(speechLog.at(-1)).not.toContain("Next");
     tap(2);
     await advance(3_000);
     expect(screen.getByTestId("flow-run").dataset.stage).toBe("hold");
-    expect(toneLog).toEqual(["start"]);
+
   });
 
   it("an invalid flow refuses to start", () => {
     const bad = JSON.parse(JSON.stringify(PLAN)) as Plan & { blocks: { flow: { step: string }[] } };
-    bad.blocks.flow = bad.blocks.flow.filter((s) => s.step !== "14b");
+    bad.blocks.flow = bad.blocks.flow.filter((s) => s.step !== "17");   // seated twist R
     render(<FlowScreen plan={bad} />);
     expect(screen.getByTestId("flow-invalid").textContent).toContain("twist-seated: missing side R");
     expect(screen.queryByRole("button", { name: "Start" })).toBeNull();

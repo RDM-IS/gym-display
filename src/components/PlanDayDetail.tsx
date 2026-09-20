@@ -5,7 +5,7 @@ import type {
   RecoveryFlowBlocks,
 } from "../lib/types";
 import { exerciseSets } from "../lib/adjustment";
-import { buildFlowTimeline, flowTotalSec, formatClock } from "../lib/flow";
+import { buildFlowTimeline, flowTotalSec, formatClock, stepsForRound } from "../lib/flow";
 import { formatEstimate } from "../lib/format";
 import { dayLabel, statusIcon } from "../lib/week";
 
@@ -170,6 +170,9 @@ function CircuitPlan({ b, sessionRpe }: { b: CircuitBlocks; sessionRpe: number |
 function FlowPlan({ b }: { b: RecoveryFlowBlocks }) {
   const items = buildFlowTimeline(b);
   const firstRound = items.filter((i) => i.kind !== "pose" || i.round === 1);
+  // YOGA-4: nothing doubles any more; round 2 differs only by what it drops.
+  const laterSteps = new Set(stepsForRound(b, 2).map((s) => s.step));
+  const dropped = stepsForRound(b, 1).filter((s) => !laterSteps.has(s.step)).map((s) => s.name);
   return (
     <>
       <div>{formatClock(flowTotalSec(b))} total · {b.rounds} rounds</div>
@@ -181,7 +184,10 @@ function FlowPlan({ b }: { b: RecoveryFlowBlocks }) {
         ))}
       </ol>
       {b.rounds > 1 && (
-        <div className="dim">Round 2: same order, steps {b.double_steps?.[0] ?? 10}–{b.double_steps?.[1] ?? 16} held 2×.</div>
+        <div className="dim">
+          Round 2: same order
+          {dropped.length > 0 && <>, without {dropped.join(", ").toLowerCase()}</>}.
+        </div>
       )}
     </>
   );
