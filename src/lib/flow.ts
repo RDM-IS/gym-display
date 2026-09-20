@@ -5,13 +5,15 @@ import type { FlowHold, FlowStep, RecoveryFlowBlocks } from "./types";
 //
 //   pre (seated meditation; office: + Stretch Trainer 8 min)
 //   round 1: every flow step
-//   round 2: every flow step, holds doubled on steps 10–16
+//   round 2: every flow step except the ones marked round 1 only (easy pose)
 //   close: savasana
 //
-// Every item is a TRANSITION ("Move into position", 3 s or 5 s by the change
-// in body position) followed by its HOLD. The next item is announced
-// `leadin_sec` before a hold ends. Everything here is pure so the engine can
-// be driven by fake timers.
+// Every item is a TRANSITION ("Move into position") followed by its HOLD.
+// YOGA-4: the transition length is read from the step (`transition_sec`) —
+// the seeded table is the only source and the posture-derived 3 s / 5 s rule
+// is gone — every hold is the same in both rounds, and the next item is
+// announced `leadin_sec` before a hold ends, with no chime in front of it.
+// Everything here is pure so the engine can be driven by fake timers.
 // ---------------------------------------------------------------------------
 
 export type FlowItemKind = "pre" | "pose" | "close";
@@ -19,9 +21,10 @@ export type FlowItemKind = "pre" | "pose" | "close";
 export const POSTURES = ["standing", "kneeling", "quadruped", "prone", "supine", "seated"] as const;
 export type Posture = (typeof POSTURES)[number];
 
-export const DEFAULT_TRANSITION_SHORT_SEC = 3;
-export const DEFAULT_TRANSITION_LONG_SEC = 5;
-export const DEFAULT_LEADIN_SEC = 3;
+/** Only used when a step somehow arrives without one; validateFlow flags it. */
+export const FALLBACK_TRANSITION_SEC = 3;
+/** YOGA-4: the lead-in words start 7 s before the hold ends. */
+export const DEFAULT_LEADIN_SEC = 7;
 export const DEFAULT_START_POSTURE: Posture = "standing";
 
 export interface FlowItem {
@@ -47,8 +50,8 @@ export interface FlowItem {
   /** First pose of a round > 1 → its transition announces the round. */
   roundStart: boolean;
   posture: string | null;
-  /** Seconds to move into this item from the one before (the first: from
-   * standing at the iPad). */
+  /** Seconds to move into this item from the one before, straight from the
+   * seeded transition table. */
   transitionSec: number;
   /** Spoken `leadin_sec` before the previous hold ends (or at Start). */
   leadIn: string;
@@ -56,37 +59,16 @@ export interface FlowItem {
   moveCue: string;
 }
 
-export function stepNumber(step: string): number {
-  return parseInt(step.replace(/\D/g, ""), 10);
+/** The steps played in `round` — mirrors health_office.flow_steps_for_round.
+ * A step may name its rounds (easy pose is round 1 only); most don't. */
+export function stepsForRound(blocks: RecoveryFlowBlocks, round: number): FlowStep[] {
+  return blocks.flow.filter((s) => !s.rounds?.length || s.rounds.includes(round));
 }
 
-/** Hold seconds for every flow step in a round (1-based). */
+/** Hold seconds for every step played in `round`. Since YOGA-4 nothing
+ * doubles, so this is just each step's own hold. */
 export function holdsForRound(blocks: RecoveryFlowBlocks, round: number): number[] {
-  const [lo, hi] = blocks.double_steps ?? [10, 16];
-  const dbl = blocks.double_round ?? 2;
-  return blocks.flow.map((s) => {
-    const n = stepNumber(s.step);
-    return round === dbl && n >= lo && n <= hi ? s.duration_sec * 2 : s.duration_sec;
-  });
-}
-
-/** Seconds to move between two body positions — mirrors
- * artemis.health_office.transition_sec. Short when nothing changes or it's
- * floor to floor; long when getting up or down (into/out of standing, or
- * supine ↔ seated). An unknown posture gets the long one. */
-export function transitionSec(
-  prev: string | null | undefined,
-  next: string | null | undefined,
-  short = DEFAULT_TRANSITION_SHORT_SEC,
-  long = DEFAULT_TRANSITION_LONG_SEC,
-): number {
-  const known = (p: string | null | undefined): p is Posture =>
-    !!p && (POSTURES as readonly string[]).includes(p);
-  if (!known(prev) || !known(next)) return long;
-  if (prev === next) return short;
-  if (prev === "standing" || next === "standing") return long;
-  if ((prev === "supine" && next === "seated") || (prev === "seated" && next === "supine")) return long;
-  return short;
+  return stepsForRound(blocks, round).map((s) => s.duration_sec);
 }
 
 /** "60 seconds", "3 minutes", "2 minutes 30 seconds". */
@@ -126,8 +108,10 @@ export function buildFlowTimeline(blocks: RecoveryFlowBlocks): FlowItem[] {
   const rounds = Math.max(1, blocks.rounds || 1);
   const items: Omit<FlowItem, "transitionSec" | "leadIn" | "moveCue">[] = [];
   const spokenOf = new Map<number, Spoken>();
+  const transitions: number[] = [];
   const hold = (kind: "pre" | "close", p: FlowHold) => {
     spokenOf.set(items.length, { spoken: p.name, side: null, duration_sec: p.duration_sec });
+    transitions.push(p.transition_sec ?? FALLBACK_TRANSITION_SEC);
     items.push({
       kind, name: p.name, title: p.name, side: null, sideLabel: null,
       cue: p.cue ?? null, easier: null, duration_sec: p.duration_sec, round: null,
@@ -137,11 +121,11 @@ export function buildFlowTimeline(blocks: RecoveryFlowBlocks): FlowItem[] {
   };
   for (const p of blocks.pre ?? []) hold("pre", p);
   for (let r = 1; r <= rounds; r++) {
-    const holds = holdsForRound(blocks, r);
+    const steps = stepsForRound(blocks, r);
     // For each mirror group: the side seen first, and whether we've switched.
     const firstSide = new Map<string, "R" | "L">();
     const switched = new Set<string>();
-    blocks.flow.forEach((s, i) => {
+    steps.forEach((s, i) => {
       let switchBefore = false;
       if (s.mirror_group && s.side) {
         const first = firstSide.get(s.mirror_group);
@@ -152,11 +136,13 @@ export function buildFlowTimeline(blocks: RecoveryFlowBlocks): FlowItem[] {
         }
       }
       const label = s.side ? sideWords(s) : null;
-      spokenOf.set(items.length, { spoken: s.spoken || s.name, side: label, duration_sec: holds[i] });
+      spokenOf.set(items.length, { spoken: s.spoken || s.name, side: label,
+                                   duration_sec: s.duration_sec });
+      transitions.push(s.transition_sec ?? FALLBACK_TRANSITION_SEC);
       items.push({
         kind: "pose", name: s.name, title: label ? `${s.name} · ${label}` : s.name,
         side: s.side, sideLabel: label, cue: s.cue ?? null, easier: s.easier ?? null,
-        duration_sec: holds[i], round: r, totalRounds: rounds, step: s.step,
+        duration_sec: s.duration_sec, round: r, totalRounds: rounds, step: s.step,
         mirrorGroup: s.mirror_group, switchBefore, roundStart: i === 0 && r > 1,
         posture: s.posture ?? null,
       });
@@ -164,20 +150,15 @@ export function buildFlowTimeline(blocks: RecoveryFlowBlocks): FlowItem[] {
   }
   if (blocks.close) hold("close", blocks.close);
 
-  const short = blocks.transition_short_sec ?? DEFAULT_TRANSITION_SHORT_SEC;
-  const long = blocks.transition_long_sec ?? DEFAULT_TRANSITION_LONG_SEC;
-  let prev: string | null = blocks.start_posture ?? DEFAULT_START_POSTURE;
   return items.map((it, i) => {
     const sp = spokenOf.get(i)!;
     const how = i === 0 ? "first" : it.switchBefore ? "switch" : it.roundStart ? "round" : "next";
-    const out: FlowItem = {
+    return {
       ...it,
-      transitionSec: transitionSec(prev, it.posture, short, long),
+      transitionSec: transitions[i],
       leadIn: leadInFor(sp, how, it.round),
       moveCue: moveCueFor(sp),
     };
-    prev = it.posture;
-    return out;
   });
 }
 
@@ -191,35 +172,32 @@ export function flowTotalSec(blocks: RecoveryFlowBlocks): number {
 export function validateFlow(blocks: RecoveryFlowBlocks): string[] {
   const errors: string[] = [];
   if (!blocks.flow?.length) return ["flow has no steps"];
-  const groups = new Map<string, number[]>();
-  blocks.flow.forEach((s, i) => {
-    if (!s.mirror_group) {
-      if (s.side) errors.push(`step ${s.step} has a side but no mirror_group`);
-      return;
-    }
-    if (s.side !== "R" && s.side !== "L") {
-      errors.push(`step ${s.step} in ${s.mirror_group} needs side R or L`);
-      return;
-    }
-    groups.set(s.mirror_group, [...(groups.get(s.mirror_group) ?? []), i]);
-  });
   const rounds = Math.max(1, blocks.rounds || 1);
   for (let r = 1; r <= rounds; r++) {
-    const holds = holdsForRound(blocks, r);
-    for (const [g, idx] of groups) {
-      const sum = { R: 0, L: 0 };
-      const seen = new Set<string>();
-      for (const i of idx) {
-        const side = blocks.flow[i].side as "R" | "L";
-        sum[side] += holds[i];
-        seen.add(side);
+    const groups = new Map<string, { R: number; L: number }>();
+    for (const s of stepsForRound(blocks, r)) {
+      if (!s.mirror_group) {
+        if (s.side && r === 1) errors.push(`step ${s.step} has a side but no mirror_group`);
+        continue;
       }
-      if (seen.size < 2) {
-        const missing = seen.has("R") ? "L" : "R";
-        if (r === 1) errors.push(`${g}: missing side ${missing}`);
-      } else if (sum.R !== sum.L) {
-        errors.push(`${g}: R ${sum.R}s ≠ L ${sum.L}s (round ${r})`);
+      if (s.side !== "R" && s.side !== "L") {
+        if (r === 1) errors.push(`step ${s.step} in ${s.mirror_group} needs side R or L`);
+        continue;
       }
+      const sum = groups.get(s.mirror_group) ?? { R: 0, L: 0 };
+      sum[s.side] += s.duration_sec;
+      groups.set(s.mirror_group, sum);
+    }
+    for (const [g, sum] of groups) {
+      if (!sum.R || !sum.L) errors.push(`${g}: missing side ${sum.R ? "L" : "R"} (round ${r})`);
+      else if (sum.R !== sum.L) errors.push(`${g}: R ${sum.R}s ≠ L ${sum.L}s (round ${r})`);
+    }
+  }
+  // YOGA-4: the seeded table is the only source of transition lengths, so a
+  // step without one is a seeding bug, not something to paper over silently.
+  for (const it of [...(blocks.pre ?? []), ...blocks.flow, ...(blocks.close ? [blocks.close] : [])]) {
+    if (typeof it.transition_sec !== "number" || it.transition_sec <= 0) {
+      errors.push(`${"step" in it ? it.step : it.name}: transition_sec is missing`);
     }
   }
   return errors;
@@ -235,13 +213,11 @@ export type LeadKind = "next" | "switch" | "round";
 export type FlowEvent =
   /** Moving into item `index`: speak its move cue, show "Move into position". */
   | { type: "transition"; index: number }
-  /** The hold of item `index` starts: start tone, the timer runs. */
+  /** The hold of item `index` starts and the timer runs (YOGA-4: silently). */
   | { type: "hold"; index: number }
-  /** `leadin_sec` before the hold ends: announce the next item. */
-  | { type: "leadin"; index: number; next: number; kind: LeadKind;
-      /** How far past the lead-in point this tick landed — the words wait
-       * that much less, so they still start exactly `leadin_sec` out. */
-      lateMs: number }
+  /** `leadin_sec` before the hold ends: announce the next item. YOGA-4 —
+   * nothing plays in front of it, so the words start at that instant. */
+  | { type: "leadin"; index: number; next: number; kind: LeadKind }
   | { type: "done" };
 
 export interface FlowState {
@@ -261,10 +237,6 @@ export function initialFlowState(): FlowState {
   return { index: 0, stage: "transition", stageMs: 0, elapsedMs: 0, paused: false, done: false,
            ledIn: false };
 }
-
-/** How long each lead-in tone plays before the words start, so the chime
- * never overlaps the speech and the words begin exactly at `leadin_sec`. */
-export const CHIME_LEAD_MS: Record<LeadKind, number> = { next: 700, switch: 850, round: 1100 };
 
 export function leadKind(items: FlowItem[], index: number): LeadKind {
   const next = items[index + 1];
@@ -298,11 +270,10 @@ export function tickFlow(
     left -= step;
     if (s.stage === "hold" && !s.ledIn && s.index + 1 < items.length) {
       const kind = leadKind(items, s.index);
-      const at = Math.max(0, dur - leadinSec * 1000 - CHIME_LEAD_MS[kind]);
+      const at = Math.max(0, dur - leadinSec * 1000);
       if (s.stageMs >= at) {
         s.ledIn = true;
-        events.push({ type: "leadin", index: s.index, next: s.index + 1, kind,
-                      lateMs: s.stageMs - at });
+        events.push({ type: "leadin", index: s.index, next: s.index + 1, kind });
       }
     }
     if (s.stageMs < dur) break;
