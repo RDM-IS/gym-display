@@ -117,8 +117,14 @@ describe("FlowScreen — hands-free", { timeout: 120_000 }, () => {
     start();
     for (let t = 0; t < TOTAL_MS + 1000; t += 1000) await advance(1000);
     expect(screen.getByTestId("flow-done")).toBeDefined();
-    const expected = [ITEMS[0].leadIn];
-    for (const it of ITEMS.slice(1)) expected.push(it.leadIn, it.moveCue);
+    // YOGA-5: each hold also carries its one mid-hold line — at the start for
+    // meditation and savasana, 12 s in for a pose.
+    const expected: string[] = [ITEMS[0].leadIn];
+    if (ITEMS[0].cueMid) expected.push(ITEMS[0].cueMid);
+    for (const it of ITEMS.slice(1)) {
+      expected.push(it.leadIn, it.moveCue);
+      if (it.cueMid) expected.push(it.cueMid);
+    }
     expected.push("Flow complete");
     expect(speech.said).toEqual(expected);
     expect(speech.overlaps()).toBe(0);
@@ -143,8 +149,11 @@ describe("FlowScreen — hands-free", { timeout: 120_000 }, () => {
     expect(screen.queryByTestId("flow-move")).toBeNull();
     expect(screen.getByTestId("flow-clock").textContent).toBe("1:00");
     // YOGA-4: nothing sounds at the hold start, and nothing precedes the words.
-    await advance(52_000);                             // 0:08 left
-    expect(speechLog).toHaveLength(1);
+    // 12 s into the meditation its own line lands, then silence.
+    await advance(12_000);
+    expect(speechLog.at(-1)).toBe("Sit tall and comfortable, eyes soft, slow breaths.");
+    await advance(40_000);                             // 0:08 left
+    expect(speechLog).toHaveLength(2);                 // nothing more since
     await advance(1_000);                              // 0:07 left — the lead-in
     expect(speechLog.at(-1)).toBe("Next we'll move into child's pose for 40 seconds.");
     expect(speechLog.filter((x) => x.startsWith("Next we'll move into child's"))).toHaveLength(1);
@@ -234,6 +243,43 @@ describe("FlowScreen — hands-free", { timeout: 120_000 }, () => {
     await advance(3_000);
     expect(screen.getByTestId("flow-run").dataset.stage).toBe("hold");
 
+  });
+
+  it("rate, pitch and the chosen voice are applied to every utterance", async () => {
+    const { utteranceLog } = await import("../src/lib/audio");
+    utteranceLog.length = 0;
+    start();
+    await advance(20_000);
+    expect(utteranceLog.length).toBeGreaterThan(0);
+    for (const u of utteranceLog) {
+      expect(u.rate).toBe(0.85);
+      expect(u.pitch).toBe(0.95);
+    }
+  });
+
+  it("the mid-hold cues can be switched off, and then nothing is said in a hold", async () => {
+    const { setMidCues } = await import("../src/lib/voice");
+    setMidCues(false);
+    try {
+      start();
+      await advance(20_000);
+      // The opening lead-in only — the meditation's own line is suppressed.
+      expect(speechLog).toEqual(["We'll begin with seated meditation for 60 seconds."]);
+    } finally {
+      setMidCues(true);
+    }
+  });
+
+  it("the voice picker and rate slider persist what Ryan chooses", async () => {
+    const { storedRate } = await import("../src/lib/voice");
+    render(<FlowScreen plan={PLAN} />);
+    const picker = screen.getAllByTestId("voice-picker")[0] as HTMLSelectElement;
+    const slider = screen.getAllByTestId("voice-rate")[0] as HTMLInputElement;
+    fireEvent.change(slider, { target: { value: "1" } });
+    expect(storedRate()).toBe(1);
+    expect(picker).toBeDefined();
+    const toggle = screen.getAllByTestId("midcue-toggle")[0] as HTMLInputElement;
+    expect(toggle.checked).toBe(true);
   });
 
   it("an invalid flow refuses to start", () => {

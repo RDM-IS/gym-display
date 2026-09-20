@@ -215,3 +215,28 @@
   letter-spacing: 0.02em;
   margin-top: 0.15em;
 }
+
+/* YOGA-5 voice settings — ready screen only, never mid-flow. */
+.flow-settings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+  align-items: center;
+  justify-content: center;
+  margin: 0.75rem auto 0;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 0.6rem;
+  max-width: 44rem;
+}
+.flow-setting {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  opacity: 0.85;
+}
+.flow-setting select,
+.flow-setting input[type="range"] { min-height: 2.25rem; }
+.flow-setting input[type="checkbox"] { width: 1.4rem; height: 1.4rem; }
+.flow-setting input[type="range"] { width: 9rem; }

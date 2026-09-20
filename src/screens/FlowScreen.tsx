@@ -1,6 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import {
+  RATE_MAX,
+  RATE_MIN,
+  englishVoices,
+  readMidCues,
+  setMidCues,
+  setRate,
+  setVoiceURI,
+  storedRate,
+  storedVoiceURI,
+  voicesNow,
+  voicesReady,
+  watchVoices,
+} from "../lib/voice";
+import {
   audioStatus,
   isMuted,
   speak,
@@ -11,6 +25,7 @@ import {
   unlockSpeech,
 } from "../lib/audio";
 import {
+  DEFAULT_CUE_MID_SEC,
   DEFAULT_LEADIN_SEC,
   buildFlowTimeline,
   flowLogNotes,
@@ -71,6 +86,23 @@ export default function FlowScreen({ plan, onRunningChange, onNavigate }: Props)
   }, [blocks]);
   const totalSec = useMemo(() => flowTotalSec(blocks), [blocks]);
   const leadinSec = blocks.leadin_sec ?? DEFAULT_LEADIN_SEC;
+  const cueMidSec = blocks.cue_mid_sec ?? DEFAULT_CUE_MID_SEC;
+  const [midCues, setMidCuesState] = useState<boolean>(readMidCues);
+  const midCuesRef = useRef(midCues);
+  useEffect(() => { midCuesRef.current = midCues; }, [midCues]);
+
+  // The voice list is usually empty on the first call (iOS resolves it
+  // asynchronously), so wait for `voiceschanged` rather than accepting the
+  // platform default and never retrying.
+  const [voices, setVoices] = useState(() => englishVoices(voicesNow()));
+  const [voiceURI, setVoiceURIState] = useState<string | null>(storedVoiceURI);
+  const [rate, setRateState] = useState<number>(storedRate);
+  useEffect(() => {
+    let live = true;
+    watchVoices(() => { if (live) setVoices(englishVoices(voicesNow())); });
+    void voicesReady().then((v) => { if (live) setVoices(englishVoices(v)); });
+    return () => { live = false; };
+  }, []);
 
   const [phase, setPhase] = useState<Phase>("ready");
   const [state, setState] = useState<FlowState>(initialFlowState);
@@ -120,6 +152,11 @@ export default function FlowScreen({ plan, onRunningChange, onNavigate }: Props)
         if (e.type === "transition") {
           // Cancels anything still being said: the move cue is never talked over.
           speak(items[e.index].moveCue);
+        } else if (e.type === "cuemid") {
+          // One line, then silence for the rest of the hold. Off → nothing at
+          // all: "helpful in week one, noise by week six" is Ryan's call, not
+          // something to soften by saying it more quietly.
+          if (midCuesRef.current) speak(items[e.index].cueMid ?? "");
         } else if (e.type === "leadin") {
           // Straight in, nothing sounds in front of it — the words ARE the cue.
           speak(items[e.next].leadIn);
@@ -145,12 +182,12 @@ export default function FlowScreen({ plan, onRunningChange, onNavigate }: Props)
       const t = now();
       const dt = t - lastRef.current;
       lastRef.current = t;
-      const { state: next, events } = tickFlow(items, stateRef.current, dt, leadinSec);
+      const { state: next, events } = tickFlow(items, stateRef.current, dt, leadinSec, cueMidSec);
       if (next !== stateRef.current) commit(next);
       if (events.length) handleEvents(events);
     }, TICK_MS);
     return () => window.clearInterval(id);
-  }, [phase, items, leadinSec, commit, handleEvents]);
+  }, [phase, items, leadinSec, cueMidSec, commit, handleEvents]);
 
   // Closing or backgrounding mid-flow logs a partial and pauses; coming back
   // resumes on its own.
@@ -259,6 +296,46 @@ export default function FlowScreen({ plan, onRunningChange, onNavigate }: Props)
           {formatClock(totalSec)} · {blocks.rounds} rounds
           {blocks.location ? ` · ${blocks.location}` : ""}
         </div>
+        {/* YOGA-5. Deliberately on the ready screen and nowhere else: these
+            get set once and then left alone, and nothing here should be
+            reachable mid-flow when Ryan's hands are on the mat. */}
+        <section className="flow-settings" data-testid="flow-settings" aria-label="Voice">
+          <label className="flow-setting">
+            <span>Voice</span>
+            <select
+              data-testid="voice-picker"
+              value={voiceURI ?? ""}
+              onChange={(e) => {
+                const v = e.target.value || null;
+                setVoiceURIState(v);
+                setVoiceURI(v);
+              }}
+            >
+              <option value="">Automatic</option>
+              {voices.map((v) => (
+                <option key={v.voiceURI} value={v.voiceURI}>{v.name}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="flow-setting">
+            <span>Speed <span className="mono dim">{rate.toFixed(2)}×</span></span>
+            <input
+              type="range" data-testid="voice-rate"
+              min={RATE_MIN} max={RATE_MAX} step={0.05} value={rate}
+              onChange={(e) => setRateState(setRate(Number(e.target.value)))}
+            />
+          </label>
+
+          <label className="flow-setting flow-setting--toggle">
+            <span>Cues during holds</span>
+            <input
+              type="checkbox" data-testid="midcue-toggle" checked={midCues}
+              onChange={(e) => setMidCuesState(setMidCues(e.target.checked))}
+            />
+          </label>
+        </section>
+
         <ol className="flow-list">
           {items.filter((i) => i.kind !== "pose" || i.round === 1).map((i, n) => (
             <li key={n}>
@@ -278,6 +355,7 @@ export default function FlowScreen({ plan, onRunningChange, onNavigate }: Props)
           Hands-free after Start: it announces each pose, gives you time to move into it,
           switches sides and logs itself. Voice only — no tones.
         </div>
+
         <BottomBar view="today" start={{ label: "Start", onStart: start }} onNavigate={onNavigate ?? (() => {})} />
       </div>
     );

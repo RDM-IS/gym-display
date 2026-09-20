@@ -31,6 +31,8 @@ export function legacyTransitions(blocks: RecoveryFlowBlocks): boolean {
 }
 /** YOGA-4: the lead-in words start 7 s before the hold ends. */
 export const DEFAULT_LEADIN_SEC = 7;
+/** YOGA-5: the one mid-hold line, this many seconds into the hold. */
+export const DEFAULT_CUE_MID_SEC = 12;
 export const DEFAULT_START_POSTURE: Posture = "standing";
 
 export interface FlowItem {
@@ -46,6 +48,10 @@ export interface FlowItem {
   /** YOGA-5: the display spelling, shown small under the English name. Null
    * for the pre blocks, which have no meaningful Sanskrit. */
   sanskrit: string | null;
+  /** YOGA-5: the one line spoken partway into the hold. Null = say nothing. */
+  cueMid: string | null;
+  /** Meditation and savasana speak it at the start of the hold instead. */
+  cueMidAtStart: boolean;
   duration_sec: number;
   /** 1-based round for poses; null for pre / close. */
   round: number | null;
@@ -137,6 +143,7 @@ export function buildFlowTimeline(blocks: RecoveryFlowBlocks): FlowItem[] {
     items.push({
       kind, name: p.name, title: p.name, side: null, sideLabel: null,
       cue: p.cue ?? null, easier: null, sanskrit: p.sanskrit ?? null,
+      cueMid: p.cue_mid ?? null, cueMidAtStart: !!p.cue_mid_at_start,
       duration_sec: p.duration_sec, round: null,
       totalRounds: rounds, step: null, mirrorGroup: null, switchBefore: false,
       roundStart: false, posture: p.posture ?? null,
@@ -166,7 +173,7 @@ export function buildFlowTimeline(blocks: RecoveryFlowBlocks): FlowItem[] {
       items.push({
         kind: "pose", name: s.name, title: label ? `${s.name} · ${label}` : s.name,
         side: s.side, sideLabel: label, cue: s.cue ?? null, easier: s.easier ?? null,
-        sanskrit: s.sanskrit ?? null,
+        sanskrit: s.sanskrit ?? null, cueMid: s.cue_mid ?? null, cueMidAtStart: false,
         duration_sec: s.duration_sec, round: r, totalRounds: rounds, step: s.step,
         mirrorGroup: s.mirror_group, switchBefore, roundStart: i === 0 && r > 1,
         posture: s.posture ?? null,
@@ -245,6 +252,8 @@ export type FlowEvent =
   /** `leadin_sec` before the hold ends: announce the next item. YOGA-4 —
    * nothing plays in front of it, so the words start at that instant. */
   | { type: "leadin"; index: number; next: number; kind: LeadKind }
+  /** YOGA-5: the one mid-hold line. Once per hold, then silence. */
+  | { type: "cuemid"; index: number }
   | { type: "done" };
 
 export interface FlowState {
@@ -258,11 +267,13 @@ export interface FlowState {
   done: boolean;
   /** The current hold's lead-in has fired. */
   ledIn: boolean;
+  /** The current hold's mid-hold line has been said. Once, then silence. */
+  cuedMid: boolean;
 }
 
 export function initialFlowState(): FlowState {
   return { index: 0, stage: "transition", stageMs: 0, elapsedMs: 0, paused: false, done: false,
-           ledIn: false };
+           ledIn: false, cuedMid: false };
 }
 
 export function leadKind(items: FlowItem[], index: number): LeadKind {
@@ -284,6 +295,7 @@ export function tickFlow(
   state: FlowState,
   dtMs: number,
   leadinSec = DEFAULT_LEADIN_SEC,
+  cueMidSec = DEFAULT_CUE_MID_SEC,
 ): { state: FlowState; events: FlowEvent[] } {
   if (state.paused || state.done || dtMs <= 0) return { state, events: [] };
   const s = { ...state };
@@ -295,6 +307,18 @@ export function tickFlow(
     s.stageMs += step;
     s.elapsedMs += step;
     left -= step;
+    if (s.stage === "hold" && !s.cuedMid && items[s.index].cueMid) {
+      // At the start for meditation and savasana; `cueMidSec` in for a pose.
+      // Never inside the lead-in window: a pose short enough for the two to
+      // collide gets no mid cue at all rather than two voices at once.
+      const it = items[s.index];
+      const at = it.cueMidAtStart ? 0 : cueMidSec * 1000;
+      const latest = dur - leadinSec * 1000;
+      if (at < latest && s.stageMs >= at) {
+        s.cuedMid = true;
+        events.push({ type: "cuemid", index: s.index });
+      }
+    }
     if (s.stage === "hold" && !s.ledIn && s.index + 1 < items.length) {
       const kind = leadKind(items, s.index);
       const at = Math.max(0, dur - leadinSec * 1000);
@@ -307,6 +331,7 @@ export function tickFlow(
     if (s.stage === "transition") {
       s.stage = "hold";
       s.stageMs = 0;
+      s.cuedMid = false;
       events.push({ type: "hold", index: s.index });
     } else if (s.index + 1 >= items.length) {
       s.done = true;
@@ -329,7 +354,8 @@ export function skipFlow(items: FlowItem[], state: FlowState, dir: 1 | -1): { st
   if (state.done) return { state, events: [] };
   const target = Math.max(0, state.index + dir);
   if (target >= items.length) return { state: { ...state, done: true }, events: [{ type: "done" }] };
-  return { state: { ...state, index: target, stage: "transition", stageMs: 0, ledIn: false },
+  return { state: { ...state, index: target, stage: "transition", stageMs: 0, ledIn: false,
+                    cuedMid: false },
            events: [{ type: "transition", index: target }] };
 }
 
