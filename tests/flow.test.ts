@@ -10,6 +10,7 @@ import {
   remainingInStageSec,
   remainingTotalSec,
   skipFlow,
+  legacyTransitions,
   stepsForRound,
   tickFlow,
   validateFlow,
@@ -201,10 +202,24 @@ describe("transitions come from the table (YOGA-4)", () => {
     expect(labelled(b)).toEqual(labelled(HOME));
   });
 
-  it("a step with no transition is a seeding bug, and is reported", () => {
+  it("a plan row seeded before YOGA-4 still runs, on the fallback", () => {
+    // 2026-09-20's row has no transition table. Refusing to run a session Ryan
+    // is standing on the mat for, over a 3 s default, would be the wrong trade.
+    // artemis's validate_flow is what refuses to WRITE one.
     const b = clone(HOME);
-    delete (b.flow[4] as { transition_sec?: number }).transition_sec;
-    expect(validateFlow(b)).toContain("5: transition_sec is missing");
+    for (const st of [...b.flow, ...(b.pre ?? []), b.close!]) {
+      delete (st as { transition_sec?: number }).transition_sec;
+    }
+    expect(legacyTransitions(b)).toBe(true);
+    expect(validateFlow(b)).toEqual([]);          // nothing blocks the session
+    const t = buildFlowTimeline(b);
+    expect(new Set(t.map((i) => i.transitionSec))).toEqual(new Set([3]));
+    expect(t.filter((i) => i.kind === "pose")).toHaveLength(39);
+  });
+
+  it("a real row is not flagged as legacy", () => {
+    expect(legacyTransitions(HOME)).toBe(false);
+    expect(legacyTransitions(OFFICE)).toBe(false);
   });
 });
 

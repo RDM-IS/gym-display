@@ -21,8 +21,14 @@ export type FlowItemKind = "pre" | "pose" | "close";
 export const POSTURES = ["standing", "kneeling", "quadruped", "prone", "supine", "seated"] as const;
 export type Posture = (typeof POSTURES)[number];
 
-/** Only used when a step somehow arrives without one; validateFlow flags it. */
+/** Used for a plan row seeded before YOGA-4, which has no transition table.
+ * Such a row still plays; it just moves on the old short transition. */
 export const FALLBACK_TRANSITION_SEC = 3;
+
+/** True when this row predates the YOGA-4 transition table. */
+export function legacyTransitions(blocks: RecoveryFlowBlocks): boolean {
+  return blocks.flow.some((s) => typeof s.transition_sec !== "number");
+}
 /** YOGA-4: the lead-in words start 7 s before the hold ends. */
 export const DEFAULT_LEADIN_SEC = 7;
 export const DEFAULT_START_POSTURE: Posture = "standing";
@@ -168,7 +174,11 @@ export function flowTotalSec(blocks: RecoveryFlowBlocks): number {
 
 /** Side validator — mirrors artemis.health_office.validate_flow. Every mirror
  * group needs R and L entries with equal total hold in every round; a lunge
- * unit compares as a whole group, not pose by pose. [] = valid. */
+ * unit compares as a whole group, not pose by pose. [] = valid.
+ *
+ * Only side errors block the session: they mean the plan would work one side
+ * harder than the other, which is worth stopping for. Everything else degrades.
+ */
 export function validateFlow(blocks: RecoveryFlowBlocks): string[] {
   const errors: string[] = [];
   if (!blocks.flow?.length) return ["flow has no steps"];
@@ -193,13 +203,11 @@ export function validateFlow(blocks: RecoveryFlowBlocks): string[] {
       else if (sum.R !== sum.L) errors.push(`${g}: R ${sum.R}s ≠ L ${sum.L}s (round ${r})`);
     }
   }
-  // YOGA-4: the seeded table is the only source of transition lengths, so a
-  // step without one is a seeding bug, not something to paper over silently.
-  for (const it of [...(blocks.pre ?? []), ...blocks.flow, ...(blocks.close ? [blocks.close] : [])]) {
-    if (typeof it.transition_sec !== "number" || it.transition_sec <= 0) {
-      errors.push(`${"step" in it ? it.step : it.name}: transition_sec is missing`);
-    }
-  }
+  // A missing transition_sec is a SEEDING bug, and artemis's validate_flow
+  // refuses to write one. It is deliberately NOT an error here: a plan row
+  // seeded before YOGA-4 has none, and refusing to run a session Ryan is
+  // standing on the mat for — over a 3 s default — would be the wrong trade
+  // every time. buildFlowTimeline falls back; see legacyTransitions().
   return errors;
 }
 
