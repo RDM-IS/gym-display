@@ -7,6 +7,7 @@ import {
   repsLeftHint,
 } from "../lib/strength-cues";
 import { speak } from "../lib/audio";
+import StrengthTiles from "../components/StrengthTiles";
 import { storedRate } from "../lib/voice";
 import { weightStepFor } from "../lib/weight-step";
 import { fetchSessions } from "../lib/api";
@@ -536,7 +537,7 @@ function Glance({
     return (
       <>
         <div className="glance-set">{step.kind === "warmup" ? "Warmup" : "Cool down"}</div>
-        <div className="glance-time mono">{formatMMSS(remaining)}</div>
+        <div className="glance-time mono" data-testid="glance-time" data-mode="rest">{formatMMSS(remaining)}</div>
         {step.label && <div className="glance-desc">{step.label}</div>}
       </>
     );
@@ -545,7 +546,7 @@ function Glance({
     return (
       <>
         <div className="glance-set">{step.isRoundBreak ? "Between rounds" : "Rest"}</div>
-        <div className="glance-time mono">{formatMMSS(remaining)}</div>
+        <div className="glance-time mono" data-testid="glance-time" data-mode="rest">{formatMMSS(remaining)}</div>
         {step.label && step.label !== "Rest" && <div className="glance-desc">{step.label}</div>}
       </>
     );
@@ -568,17 +569,33 @@ function Glance({
   const capForHint = ex?.rpe_cap ?? plan.blocks?.rpe_cap ?? plan.target_rpe ?? null;
   const repsLeft = repsLeftHint(capForHint);
 
+  // GD-DISTANCE: a strength (reps) set gets the distance layout — three tiles
+  // across the top, then SET x OF y and the name, then a half-size timer.
+  // The old "Last:" line and the "2×10-12" notes line are gone from this
+  // screen: reps, sets and the last set now live in the tiles.
+  if (ex?.format === "reps") {
+    return (
+      <div className="glance-strength" data-mode="set" data-testid="glance-strength">
+        <StrengthTiles reps={ex.target_reps ?? null} cap={capForHint} last={last} />
+        {setLabel && <div className="glance-set">{setLabel}</div>}
+        <div className="glance-name">{name}</div>
+        {tags.length > 0 && <div className="glance-target glance-adjusted">{tags.join(" · ")}</div>}
+        <div className="glance-time glance-time--set mono" data-testid="glance-time"
+             aria-label={openEnded ? "Set time" : "Time remaining"}>
+          {formatMMSS(openEnded ? stepElapsed : remaining)}
+        </div>
+      </div>
+    );
+  }
+
+  // Timed exercises (planks, holds, steady cardio) keep the existing layout:
+  // there are no reps to put in a tile.
   return (
     <>
       {setLabel && <div className="glance-set">{setLabel}</div>}
       <div className="glance-name">{name}</div>
       {/* Steady cardio carries the intensity as its step label. */}
       {step.label !== name && <div className="glance-target">{step.label}</div>}
-      {/* GD-STRENGTH-CUES: one target line — reps · load · RPE cap — and under
-          it the cap said in the units it actually means. This REPLACES the old
-          "12 reps × 170 lb" line rather than sitting beside it; two lines both
-          saying "12 reps" is noise. Compact on purpose: the logger has to stay
-          above the fold in both orientations. */}
       {(reps || load || capForHint != null) && (
         <div className="glance-target" data-testid="glance-target-block">
           {[reps, load, capForHint != null ? `RPE ${capForHint}` : null]
@@ -587,17 +604,10 @@ function Glance({
       )}
       {repsLeft && <div className="glance-repsleft dim" data-testid="glance-reps-left">{repsLeft}</div>}
       {tags.length > 0 && <div className="glance-target glance-adjusted">{tags.join(" · ")}</div>}
-      <div className="glance-time mono" aria-label={openEnded ? "Set time" : "Time remaining"}>
+      <div className="glance-time mono" data-testid="glance-time"
+           aria-label={openEnded ? "Set time" : "Time remaining"}>
         {formatMMSS(openEnded ? stepElapsed : remaining)}
       </div>
-      {last && (last.weight_lbs != null || last.reps_done != null) && (
-        <div className="glance-prev mono">
-          Last:
-          {last.weight_lbs != null && ` ${fmt(last.weight_lbs)} lb`}
-          {last.reps_done != null && ` × ${last.reps_done}`}
-          {last.rpe_actual != null && ` @ RPE ${fmt(last.rpe_actual)}`}
-        </div>
-      )}
       {!isPaused && ex?.notes && <div className="glance-desc">{ex.notes}</div>}
     </>
   );
