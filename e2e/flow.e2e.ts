@@ -108,6 +108,16 @@ test("office flow runs hands-free: meditation, Stretch Trainer, spoken lead-in +
   const vh = page.viewportSize()!.height;
   expect(startBox!.y + startBox!.height).toBeLessThanOrEqual(vh);
   expect(startBox!.height).toBeGreaterThanOrEqual(56);
+  // YOGA-5: the voice controls live on the ready screen and nowhere else —
+  // nothing here should be reachable once Ryan's hands are on the mat.
+  await expect(page.getByTestId("flow-settings")).toBeVisible();
+  await expect(page.getByLabel("Speed 85 %, tap to enter")).toBeVisible();
+  await expect(page.getByTestId("midcue-toggle")).toHaveAttribute("aria-pressed", "true");
+  // …and reachable without scrolling past twenty poses, in both orientations.
+  const setBox = await page.getByTestId("flow-settings").boundingBox();
+  expect(setBox!.y + setBox!.height,
+         "voice settings must be on screen without scrolling").toBeLessThanOrEqual(
+    page.viewportSize()!.height);
   await shot(page, "flow-0-ready");
 
   await pausedStart(page, "2026-09-17T11:00:00Z");
@@ -199,9 +209,21 @@ test("office flow runs hands-free: meditation, Stretch Trainer, spoken lead-in +
 
   // Every pose: lead-in, then move cue — each exactly once, in order.
   const said = await speech(page);
-  const expected = [S.items[0].leadIn];
-  for (const it of S.items.slice(1)) expected.push(it.leadIn, it.moveCue);
+  // YOGA-5: each hold also carries its one mid-hold line — at the start for
+  // meditation and savasana, 12 s in for a pose, then silence.
+  const expected: string[] = [S.items[0].leadIn];
+  if (S.items[0].cueMid) expected.push(S.items[0].cueMid);
+  for (const it of S.items.slice(1)) {
+    expected.push(it.leadIn, it.moveCue);
+    if (it.cueMid) expected.push(it.cueMid);
+  }
   expect(said).toEqual([...expected, "Flow complete"]);
+  // Exactly one mid-hold line per hold that has one — never two, never zero.
+  const midLines = S.items.filter((i) => i.cueMid).map((i) => i.cueMid!);
+  for (const line of new Set(midLines)) {
+    expect(said.filter((x) => x === line)).toHaveLength(
+      midLines.filter((x) => x === line).length);
+  }
   // YOGA-4: not one tone in the whole run — voice only.
   expect(await page.evaluate(() =>
     (window as unknown as { __gymDisplayTones?: string[] }).__gymDisplayTones ?? [])).toEqual([]);

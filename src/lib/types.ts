@@ -158,6 +158,9 @@ export interface FlowStep {
   /** YOGA-5: phonetic respelling, for speechSynthesis ONLY — the engine
    * mispronounces the proper spelling. Never rendered. */
   sanskrit_spoken?: string | null;
+  /** YOGA-5: one short line spoken partway into the hold, then silence.
+   * Present on every pose, null when a pose deliberately has none. */
+  cue_mid?: string | null;
 }
 
 export interface FlowHold {
@@ -166,6 +169,9 @@ export interface FlowHold {
   /** Savasana has one; meditation and the Stretch Trainer do not. */
   sanskrit?: string | null;
   sanskrit_spoken?: string | null;
+  /** Null for meditation and savasana: those two are silent for the whole of
+   * their timer. */
+  cue_mid?: string | null;
   duration_sec: number;
   /** Seconds to move into it (YOGA-4). */
   transition_sec: number;
@@ -180,6 +186,8 @@ export interface RecoveryFlowBlocks extends BlocksBase {
   rounds: number;
   /** Every hold, every round (YOGA-4). Nothing doubles any more. */
   hold_sec?: number | null;
+  /** YOGA-5: seconds into a hold at which its one mid-hold line is spoken. */
+  cue_mid_sec?: number | null;
   /** Legacy (YOGA-1): the old 5 s preview. Ignored since YOGA-3. */
   preview_sec?: number | null;
   /** Seconds before a hold ends that the next pose is announced. */

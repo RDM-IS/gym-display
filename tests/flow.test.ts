@@ -328,6 +328,88 @@ describe("engine — hands-free", () => {
   });
 });
 
+describe("mid-hold cues (YOGA-5)", () => {
+  const items = buildFlowTimeline(HOME);
+  const child = items.find((i) => i.name === "Child's pose")!;
+
+  it("every pose carries a line, or explicitly none", () => {
+    for (const b of [HOME, OFFICE]) {
+      for (const st of b.flow) {
+        expect(st, `${st.name} has no cue_mid key`).toHaveProperty("cue_mid");
+        expect(st.cue_mid, `${st.name}`).toBeTruthy();
+      }
+    }
+    expect(child.cueMid).toBe("Let your forehead rest, widen your knees");
+  });
+
+  it("fires once, 12 s into the hold, and then silence", () => {
+    // meditation: 5 s transition + 60 s hold (silent), then child's pose:
+    // 5 s transition, hold begins at 70 s.
+    const { events } = run(items, 120_000, 250);
+    const mids = events.filter((x) => x.e.type === "cuemid");
+    const childIdx = items.indexOf(child);
+    const forChild = mids.filter((x) => (x.e as { index: number }).index === childIdx);
+    expect(forChild).toHaveLength(1);
+    // hold starts at 70 s → the line lands at 82 s.
+    expect(forChild[0].at).toBe(82_000);
+  });
+
+  it("meditation and savasana are silent for the whole of their hold", () => {
+    // Ryan, 2026-09-20: nothing at all while those two timers run. The lead-in
+    // and the move cue still happen BEFORE the hold starts.
+    expect(items[0].cueMid).toBeNull();          // seated meditation
+    expect(items.at(-1)!.cueMid).toBeNull();     // savasana
+    const { events } = run(items, 66_000, 250);  // 5 s move + the full 60 s hold
+    expect(events.filter((x) => x.e.type === "cuemid")).toHaveLength(0);
+  });
+
+  it("nothing is said during savasana either, right to the end", () => {
+    const { events } = run(items, 1947 * 1000 + 5000);
+    const last = items.length - 1;
+    expect(events.filter((x) => x.e.type === "cuemid"
+      && (x.e as { index: number }).index === last)).toHaveLength(0);
+  });
+
+  it("exactly one per hold, for every hold in the flow", () => {
+    const { events } = run(items, 1947 * 1000 + 5000);
+    const mids = events.filter((x) => x.e.type === "cuemid");
+    expect(mids).toHaveLength(items.filter((i) => i.cueMid).length);
+    const byIndex = new Map<number, number>();
+    for (const m of mids) {
+      const i = (m.e as { index: number }).index;
+      byIndex.set(i, (byIndex.get(i) ?? 0) + 1);
+    }
+    expect([...byIndex.values()].every((n) => n === 1)).toBe(true);
+  });
+
+  it("never overlaps the lead-in: the mid cue always lands first", () => {
+    const { events } = run(items, 1947 * 1000 + 5000);
+    const at = new Map<number, number>();
+    for (const x of events) {
+      if (x.e.type === "cuemid") at.set((x.e as { index: number }).index, x.at);
+    }
+    for (const x of events) {
+      if (x.e.type !== "leadin") continue;
+      const i = (x.e as { index: number }).index;
+      if (at.has(i)) expect(at.get(i)!, `item ${i}`).toBeLessThan(x.at);
+    }
+  });
+
+  it("a hold too short for both gets the lead-in and no mid cue", () => {
+    // 15 s hold: 12 s in is inside the 7 s lead-in window, so the line is
+    // dropped rather than spoken over the announcement of the next pose.
+    const b = clone(HOME);
+    for (const st of b.flow) st.duration_sec = 15;
+    const short = buildFlowTimeline(b);
+    const { events } = run(short, 200_000, 250);
+    const poseMids = events.filter(
+      (x) => x.e.type === "cuemid" && short[(x.e as { index: number }).index].kind === "pose",
+    );
+    expect(poseMids).toHaveLength(0);
+    expect(events.some((x) => x.e.type === "leadin")).toBe(true);
+  });
+});
+
 describe("routing", () => {
   const base = { exists: true, is_skipped: false, is_logged: false };
   it("a flow day stays on Today until it is logged — even on a rest_mobility row", () => {

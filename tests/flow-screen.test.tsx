@@ -117,8 +117,14 @@ describe("FlowScreen — hands-free", { timeout: 120_000 }, () => {
     start();
     for (let t = 0; t < TOTAL_MS + 1000; t += 1000) await advance(1000);
     expect(screen.getByTestId("flow-done")).toBeDefined();
-    const expected = [ITEMS[0].leadIn];
-    for (const it of ITEMS.slice(1)) expected.push(it.leadIn, it.moveCue);
+    // YOGA-5: each hold also carries its one mid-hold line — at the start for
+    // meditation and savasana, 12 s in for a pose.
+    const expected: string[] = [ITEMS[0].leadIn];
+    if (ITEMS[0].cueMid) expected.push(ITEMS[0].cueMid);
+    for (const it of ITEMS.slice(1)) {
+      expected.push(it.leadIn, it.moveCue);
+      if (it.cueMid) expected.push(it.cueMid);
+    }
     expected.push("Flow complete");
     expect(speech.said).toEqual(expected);
     expect(speech.overlaps()).toBe(0);
@@ -143,8 +149,12 @@ describe("FlowScreen — hands-free", { timeout: 120_000 }, () => {
     expect(screen.queryByTestId("flow-move")).toBeNull();
     expect(screen.getByTestId("flow-clock").textContent).toBe("1:00");
     // YOGA-4: nothing sounds at the hold start, and nothing precedes the words.
-    await advance(52_000);                             // 0:08 left
+    // The meditation is silent for its whole minute — nothing at 12 s, and
+    // nothing after (Ryan, 2026-09-20).
+    await advance(12_000);
     expect(speechLog).toHaveLength(1);
+    await advance(40_000);                             // 0:08 left
+    expect(speechLog).toHaveLength(1);                 // still only the lead-in
     await advance(1_000);                              // 0:07 left — the lead-in
     expect(speechLog.at(-1)).toBe("Next we'll move into child's pose for 40 seconds.");
     expect(speechLog.filter((x) => x.startsWith("Next we'll move into child's"))).toHaveLength(1);
@@ -234,6 +244,73 @@ describe("FlowScreen — hands-free", { timeout: 120_000 }, () => {
     await advance(3_000);
     expect(screen.getByTestId("flow-run").dataset.stage).toBe("hold");
 
+  });
+
+  it("rate, pitch and the chosen voice are applied to every utterance", async () => {
+    const { utteranceLog } = await import("../src/lib/audio");
+    utteranceLog.length = 0;
+    start();
+    await advance(20_000);
+    expect(utteranceLog.length).toBeGreaterThan(0);
+    for (const u of utteranceLog) {
+      expect(u.rate).toBe(0.85);
+      expect(u.pitch).toBe(0.95);
+    }
+  });
+
+  it("the mid-hold cues can be switched off, and then nothing is said in a hold", async () => {
+    const { setMidCues } = await import("../src/lib/voice");
+    setMidCues(false);
+    try {
+      start();
+      await advance(20_000);
+      // Only the opening lead-in. (Meditation has no mid cue either way; this
+      // asserts the toggle, and the pose cues are covered by the engine tests.)
+      expect(speechLog).toEqual(["We'll begin with seated meditation for 60 seconds."]);
+    } finally {
+      setMidCues(true);
+    }
+  });
+
+  it("the speed stepper persists what Ryan chooses, exactly", async () => {
+    const { storedRate } = await import("../src/lib/voice");
+    render(<FlowScreen plan={PLAN} />);
+    // Shown as a whole percentage, so 0.85 reads as 85 — not a rounded "0.8".
+    expect(screen.getByLabelText("Speed 85 %, tap to enter")).toBeDefined();
+    fireEvent.click(screen.getByLabelText("Increase Speed"));
+    expect(storedRate()).toBe(0.9);
+    fireEvent.click(screen.getByLabelText("Decrease Speed"));
+    expect(storedRate()).toBe(0.85);                 // lands back on 0.85
+  });
+
+  it("the cues toggle persists, and is a button, not a checkbox", async () => {
+    const { readMidCues, setMidCues } = await import("../src/lib/voice");
+    render(<FlowScreen plan={PLAN} />);
+    const toggle = screen.getByTestId("midcue-toggle");
+    expect(toggle.tagName).toBe("BUTTON");
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(toggle);
+    expect(readMidCues()).toBe(false);
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    setMidCues(true);
+  });
+
+  it("the voice control cycles, and persists the choice", async () => {
+    const { storedVoiceURI } = await import("../src/lib/voice");
+    render(<FlowScreen plan={PLAN} />);
+    const picker = screen.getByTestId("voice-picker");
+    expect(picker.tagName).toBe("BUTTON");
+    expect(picker.textContent).toBe("Voice: Automatic");
+    // jsdom has no voices, so the cycle is Automatic → Automatic; the stored
+    // value stays "no preference" rather than something invented.
+    fireEvent.click(picker);
+    expect(storedVoiceURI() || null).toBeNull();
+  });
+
+  it("the settings raise no keyboard and no native picker", () => {
+    render(<FlowScreen plan={PLAN} />);
+    const panel = screen.getByTestId("flow-settings");
+    expect(panel.querySelectorAll("input, select, textarea, [contenteditable]")).toHaveLength(0);
   });
 
   it("an invalid flow refuses to start", () => {

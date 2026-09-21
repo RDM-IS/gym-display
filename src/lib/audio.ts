@@ -1,3 +1,5 @@
+import { currentSettings, voicesNow, watchVoices } from "./voice";
+
 let ctx: AudioContext | null = null;
 let muted = false;
 const listeners = new Set<() => void>();
@@ -172,10 +174,16 @@ function clearPending(): void {
   }
 }
 
+/** Every utterance the app configured, newest last (observable in tests). */
+export const utteranceLog: Array<{ text: string; rate: number; pitch: number; voice: string | null }> = [];
+
 /** Say `text` unless muted — one utterance at a time: anything in flight (or
  * still waiting for its delay) is cancelled first, so a long lead-in never
- * talks over the move cue. `delayMs` lets a chime finish before the words.
- * Never throws; without speech the tones still play. */
+ * talks over the move cue. `delayMs` defers the words.
+ *
+ * YOGA-5: voice, rate and pitch come from lib/voice — Ryan's preferred voice
+ * at a calmer rate. A voice that isn't installed leaves `u.voice` unset, which
+ * means "let the platform choose", not a failure. Never throws. */
 export function speak(text: string, delayMs = 0): void {
   clearPending();
   if (muted || !text) return;
@@ -187,21 +195,29 @@ export function speak(text: string, delayMs = 0): void {
     return;
   }
   speechLog.push(text);
+  const { voiceURI, rate, pitch } = currentSettings();
+  utteranceLog.push({ text, rate, pitch, voice: voiceURI });
   if (!speechSupported()) return;
   try {
     const synth = window.speechSynthesis;
     synth.cancel();
     const u = new SpeechSynthesisUtterance(text);
-    u.rate = 0.95;
+    u.rate = rate;
+    u.pitch = pitch;
+    const chosen = voicesNow().find((v) => v.voiceURI === voiceURI);
+    if (chosen) u.voice = chosen as SpeechSynthesisVoice;
     synth.speak(u);
   } catch {
-    /* speech unavailable — tones still play */
+    /* speech unavailable — the session still runs, silently */
   }
 }
 
-/** Unlock speech from a user gesture (iOS needs one utterance inside a tap). */
+/** Unlock speech from a user gesture (iOS needs one utterance inside a tap).
+ * Also the moment to start watching for `voiceschanged` — by the time Ryan has
+ * tapped Start, the list is usually still empty. */
 export function unlockSpeech(): void {
   if (!speechSupported()) return;
+  watchVoices();
   try {
     const u = new SpeechSynthesisUtterance(" ");
     u.volume = 0;

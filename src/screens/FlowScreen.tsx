@@ -1,5 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
+import Stepper from "../components/Stepper";
+import {
+  RATE_MAX,
+  RATE_MIN,
+  englishVoices,
+  readMidCues,
+  setMidCues,
+  setRate,
+  setVoiceURI,
+  storedRate,
+  storedVoiceURI,
+  voicesNow,
+  voicesReady,
+  watchVoices,
+} from "../lib/voice";
 import {
   audioStatus,
   isMuted,
@@ -11,6 +26,7 @@ import {
   unlockSpeech,
 } from "../lib/audio";
 import {
+  DEFAULT_CUE_MID_SEC,
   DEFAULT_LEADIN_SEC,
   buildFlowTimeline,
   flowLogNotes,
@@ -71,6 +87,23 @@ export default function FlowScreen({ plan, onRunningChange, onNavigate }: Props)
   }, [blocks]);
   const totalSec = useMemo(() => flowTotalSec(blocks), [blocks]);
   const leadinSec = blocks.leadin_sec ?? DEFAULT_LEADIN_SEC;
+  const cueMidSec = blocks.cue_mid_sec ?? DEFAULT_CUE_MID_SEC;
+  const [midCues, setMidCuesState] = useState<boolean>(readMidCues);
+  const midCuesRef = useRef(midCues);
+  useEffect(() => { midCuesRef.current = midCues; }, [midCues]);
+
+  // The voice list is usually empty on the first call (iOS resolves it
+  // asynchronously), so wait for `voiceschanged` rather than accepting the
+  // platform default and never retrying.
+  const [voices, setVoices] = useState(() => englishVoices(voicesNow()));
+  const [voiceURI, setVoiceURIState] = useState<string | null>(storedVoiceURI);
+  const [rate, setRateState] = useState<number>(storedRate);
+  useEffect(() => {
+    let live = true;
+    watchVoices(() => { if (live) setVoices(englishVoices(voicesNow())); });
+    void voicesReady().then((v) => { if (live) setVoices(englishVoices(v)); });
+    return () => { live = false; };
+  }, []);
 
   const [phase, setPhase] = useState<Phase>("ready");
   const [state, setState] = useState<FlowState>(initialFlowState);
@@ -120,6 +153,11 @@ export default function FlowScreen({ plan, onRunningChange, onNavigate }: Props)
         if (e.type === "transition") {
           // Cancels anything still being said: the move cue is never talked over.
           speak(items[e.index].moveCue);
+        } else if (e.type === "cuemid") {
+          // One line, then silence for the rest of the hold. Off → nothing at
+          // all: "helpful in week one, noise by week six" is Ryan's call, not
+          // something to soften by saying it more quietly.
+          if (midCuesRef.current) speak(items[e.index].cueMid ?? "");
         } else if (e.type === "leadin") {
           // Straight in, nothing sounds in front of it — the words ARE the cue.
           speak(items[e.next].leadIn);
@@ -145,12 +183,12 @@ export default function FlowScreen({ plan, onRunningChange, onNavigate }: Props)
       const t = now();
       const dt = t - lastRef.current;
       lastRef.current = t;
-      const { state: next, events } = tickFlow(items, stateRef.current, dt, leadinSec);
+      const { state: next, events } = tickFlow(items, stateRef.current, dt, leadinSec, cueMidSec);
       if (next !== stateRef.current) commit(next);
       if (events.length) handleEvents(events);
     }, TICK_MS);
     return () => window.clearInterval(id);
-  }, [phase, items, leadinSec, commit, handleEvents]);
+  }, [phase, items, leadinSec, cueMidSec, commit, handleEvents]);
 
   // Closing or backgrounding mid-flow logs a partial and pauses; coming back
   // resumes on its own.
@@ -259,6 +297,47 @@ export default function FlowScreen({ plan, onRunningChange, onNavigate }: Props)
           {formatClock(totalSec)} · {blocks.rounds} rounds
           {blocks.location ? ` · ${blocks.location}` : ""}
         </div>
+        {/* YOGA-5. Deliberately on the ready screen and nowhere else: these
+            get set once and then left alone, and nothing here should be
+            reachable mid-flow when Ryan's hands are on the mat. */}
+        <section className="flow-settings" data-testid="flow-settings" aria-label="Voice">
+          {/* Every control here is one of the app's own touch components —
+              no <select>, no range slider, no checkbox. This app is driven
+              with sweaty hands on an iPad, so it never raises the iOS
+              keyboard or picker and every target is >= 56 px. */}
+          <button
+            type="button" className="btn flow-setting-btn" data-testid="voice-picker"
+            onClick={() => {
+              // Tap to cycle: Automatic, then each English voice, preferred
+              // ones first. Set once and left alone, so cycling beats a modal.
+              const order: (string | null)[] = [null, ...voices.map((v) => v.voiceURI)];
+              const next = order[(order.indexOf(voiceURI) + 1) % order.length] ?? null;
+              setVoiceURIState(next);
+              setVoiceURI(next);
+            }}
+          >
+            Voice: {voices.find((v) => v.voiceURI === voiceURI)?.name ?? "Automatic"}
+          </button>
+
+          {/* Speed as a whole percentage: the shared Stepper rounds to one
+              decimal (it is built for 2.5 lb weight steps), so a 0.85 rate
+              would show as "0.8" and ±0.05 could never land on 0.85 again.
+              85 % in steps of 5 is exact. */}
+          <Stepper
+            label="Speed" unit="%" value={Math.round(rate * 100)} step={5}
+            min={Math.round(RATE_MIN * 100)} max={Math.round(RATE_MAX * 100)}
+            onChange={(v) => { if (v != null) setRateState(setRate(v / 100)); }}
+          />
+
+          <button
+            type="button" className="btn flow-setting-btn" data-testid="midcue-toggle"
+            aria-pressed={midCues}
+            onClick={() => setMidCuesState(setMidCues(!midCues))}
+          >
+            Cues during holds: {midCues ? "On" : "Off"}
+          </button>
+        </section>
+
         <ol className="flow-list">
           {items.filter((i) => i.kind !== "pose" || i.round === 1).map((i, n) => (
             <li key={n}>
@@ -278,6 +357,7 @@ export default function FlowScreen({ plan, onRunningChange, onNavigate }: Props)
           Hands-free after Start: it announces each pose, gives you time to move into it,
           switches sides and logs itself. Voice only — no tones.
         </div>
+
         <BottomBar view="today" start={{ label: "Start", onStart: start }} onNavigate={onNavigate ?? (() => {})} />
       </div>
     );
