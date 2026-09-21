@@ -225,11 +225,13 @@ test.describe("strength day", () => {
     await page.getByRole("button", { name: "Skip to next" }).tap();   // past warmup
     await expect(page.locator(".glance-name")).toHaveText("Leg press");
     await expect(page.locator(".glance-set")).toHaveText("Set 1 of 2");
-    // GD-STRENGTH-CUES: the target block, and the cap said in reps-in-reserve.
-    await expect(page.getByTestId("glance-target-block")).toHaveText("12 reps  ·  RPE 6");
-    // …and only once — the old reps line is replaced, not duplicated.
-    expect(await page.locator(".glance-target").count()).toBe(1);
-    await expect(page.getByTestId("glance-reps-left")).toHaveText("stop with ~4 reps left");
+    // GD-DISTANCE: the target now lives in three tiles (it replaced
+    // GD-STRENGTH-CUES's one-line target block). LAST is /last_logged's set.
+    await expect(page.getByTestId("tile-reps").locator(".stile-num")).toHaveText("12");
+    await expect(page.getByTestId("tile-rpe").locator(".stile-num")).toHaveText("6");
+    await expect(page.getByTestId("tile-rpe-sub")).toHaveText("stop with ~4 reps left");
+    await expect(page.getByTestId("tile-last").locator(".stile-num")).toHaveText("170lb");
+    await expect(page.getByTestId("glance-target-block")).toHaveCount(0);
     await expectSaneLayout(page);
     await expectTouchTargets(page);
     await expectNoKeyboardTriggers(page);

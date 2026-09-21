@@ -7,6 +7,7 @@ import {
   repsLeftHint,
 } from "../lib/strength-cues";
 import { speak } from "../lib/audio";
+import StrengthTiles from "../components/StrengthTiles";
 import { storedRate } from "../lib/voice";
 import { weightStepFor } from "../lib/weight-step";
 import { fetchSessions } from "../lib/api";
@@ -312,10 +313,18 @@ export default function WorkoutScreen({
     ? `Round ${state.cursor.currentRound} of ${current.totalRounds}`
     : current.kind.toUpperCase();
 
+  // GD-DISTANCE: during an active set the journey map steps aside (landscape
+  // only — see workout.css) and the pane takes the full width, so the tiles,
+  // sized from the pane width, grow. It comes back for rest, warmup and
+  // cooldown. "Active set" is exactly an exercise step in glance density —
+  // the logging rest is its own density.
+  const activeSet = density === "glance" && current.kind === "exercise";
+
   const containerClass =
     `workout ${flashCountdown ? "tint--countdown" : TINT_CLASS[current.kind]}` +
     (isPaused ? " workout--paused" : "") +
-    (stacked ? " workout--stacked" : "");
+    (stacked ? " workout--stacked" : "") +
+    (activeSet ? " workout--set" : "");
 
   return (
     <div className={containerClass}>
@@ -371,59 +380,66 @@ export default function WorkoutScreen({
               />
             )}
           </div>
-
-          <div className="workout-actions">
-            {density === "glance" &&
-              (strengthSet ? (
-                <button type="button" className="btn btn--primary btn--block" onClick={nextStep} aria-label="Set done">
-                  Set done ✓
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="btn btn--primary btn--block"
-                  onClick={togglePause}
-                  aria-label={isPaused ? "Resume" : "Pause"}
-                >
-                  {isPaused ? "▶ Resume" : "⏸ Pause"}
-                </button>
-              ))}
-            {density === "glance" && canDeferCurrent === "last" && current?.exerciseRef
-              && state.deferred.includes(current.exerciseRef.name) && (
-              <div className="defer-hint" data-testid="defer-hint">
-                Last one this round — Skip if it stays busy
-              </div>
-            )}
-            <div className="workout-controls">
-              <button type="button" className="btn" onClick={prevStep} disabled={isFirstStepCursor(state)} aria-label="Previous step">
-                ◀ Prev
-              </button>
-              {(density === "log" || strengthSet) && (
-                <button type="button" className="btn" onClick={togglePause} aria-label={isPaused ? "Resume" : "Pause"}>
-                  {isPaused ? "▶ Resume" : "⏸ Pause"}
-                </button>
-              )}
-              <button type="button" className="btn" onClick={nextStep} aria-label="Skip to next">
-                {density === "log" ? "Skip rest ▶" : "Skip ▶"}
-              </button>
-              {density === "glance" && canDeferCurrent === "yes" && (
-                <button type="button" className="btn btn--defer" onClick={deferCurrent}
-                        data-testid="defer-current" aria-label="Machine busy — do the next exercise first">
-                  Busy — later
-                </button>
-              )}
-              <button
-                type="button"
-                className="btn"
-                onClick={() => setMoreOpen(true)}
-                aria-label="More controls"
-                aria-expanded={moreOpen}
-              >
-                ⋯ More
-              </button>
-            </div>
-          </div>
         </main>
+      </div>
+
+      {/* GD-DISTANCE: outside the pane, spanning the full width in every
+          mode. Inside the pane it followed the pane's width, so hiding the
+          journey map for a set moved every button — Pause jumped from
+          x 251–474 to 627–802 at the set/rest boundary, under the thumb.
+          The row is also FIVE FIXED SLOTS (Prev · Pause · Skip · Busy · More):
+          a control that doesn't apply leaves its slot empty rather than
+          letting its neighbours slide over. */}
+      <div className="workout-actions" data-testid="workout-actions">
+        {density === "glance" &&
+          (strengthSet ? (
+            <button type="button" className="btn btn--primary btn--block" onClick={nextStep} aria-label="Set done">
+              Set done ✓
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn btn--primary btn--block"
+              onClick={togglePause}
+              aria-label={isPaused ? "Resume" : "Pause"}
+            >
+              {isPaused ? "▶ Resume" : "⏸ Pause"}
+            </button>
+          ))}
+        {density === "glance" && canDeferCurrent === "last" && current?.exerciseRef
+          && state.deferred.includes(current.exerciseRef.name) && (
+          <div className="defer-hint" data-testid="defer-hint">
+            Last one this round — Skip if it stays busy
+          </div>
+        )}
+        <div className="workout-controls">
+          <button type="button" className="btn" onClick={prevStep} disabled={isFirstStepCursor(state)} aria-label="Previous step">
+            ◀ Prev
+          </button>
+          {density === "log" || strengthSet ? (
+            <button type="button" className="btn" onClick={togglePause} aria-label={isPaused ? "Resume" : "Pause"}>
+              {isPaused ? "▶ Resume" : "⏸ Pause"}
+            </button>
+          ) : <span className="workout-slot" aria-hidden="true" />}
+          <button type="button" className="btn" onClick={nextStep} aria-label="Skip to next">
+            {density === "log" ? "Skip rest ▶" : "Skip ▶"}
+          </button>
+          {density === "glance" && canDeferCurrent === "yes" ? (
+            <button type="button" className="btn btn--defer" onClick={deferCurrent}
+                    data-testid="defer-current" aria-label="Machine busy — do the next exercise first">
+              Busy — later
+            </button>
+          ) : <span className="workout-slot" aria-hidden="true" />}
+          <button
+            type="button"
+            className="btn"
+            onClick={() => setMoreOpen(true)}
+            aria-label="More controls"
+            aria-expanded={moreOpen}
+          >
+            ⋯ More
+          </button>
+        </div>
       </div>
 
       {wakeHint && (
@@ -536,7 +552,7 @@ function Glance({
     return (
       <>
         <div className="glance-set">{step.kind === "warmup" ? "Warmup" : "Cool down"}</div>
-        <div className="glance-time mono">{formatMMSS(remaining)}</div>
+        <div className="glance-time mono" data-testid="glance-time" data-mode="rest">{formatMMSS(remaining)}</div>
         {step.label && <div className="glance-desc">{step.label}</div>}
       </>
     );
@@ -545,7 +561,7 @@ function Glance({
     return (
       <>
         <div className="glance-set">{step.isRoundBreak ? "Between rounds" : "Rest"}</div>
-        <div className="glance-time mono">{formatMMSS(remaining)}</div>
+        <div className="glance-time mono" data-testid="glance-time" data-mode="rest">{formatMMSS(remaining)}</div>
         {step.label && step.label !== "Rest" && <div className="glance-desc">{step.label}</div>}
       </>
     );
@@ -568,17 +584,33 @@ function Glance({
   const capForHint = ex?.rpe_cap ?? plan.blocks?.rpe_cap ?? plan.target_rpe ?? null;
   const repsLeft = repsLeftHint(capForHint);
 
+  // GD-DISTANCE: a strength (reps) set gets the distance layout — three tiles
+  // across the top, then SET x OF y and the name, then a half-size timer.
+  // The old "Last:" line and the "2×10-12" notes line are gone from this
+  // screen: reps, sets and the last set now live in the tiles.
+  if (ex?.format === "reps") {
+    return (
+      <div className="glance-strength" data-mode="set" data-testid="glance-strength">
+        <StrengthTiles reps={ex.target_reps ?? null} cap={capForHint} last={last} />
+        {setLabel && <div className="glance-set">{setLabel}</div>}
+        <div className="glance-name">{name}</div>
+        {tags.length > 0 && <div className="glance-target glance-adjusted">{tags.join(" · ")}</div>}
+        <div className="glance-time glance-time--set mono" data-testid="glance-time"
+             aria-label={openEnded ? "Set time" : "Time remaining"}>
+          {formatMMSS(openEnded ? stepElapsed : remaining)}
+        </div>
+      </div>
+    );
+  }
+
+  // Timed exercises (planks, holds, steady cardio) keep the existing layout:
+  // there are no reps to put in a tile.
   return (
     <>
       {setLabel && <div className="glance-set">{setLabel}</div>}
       <div className="glance-name">{name}</div>
       {/* Steady cardio carries the intensity as its step label. */}
       {step.label !== name && <div className="glance-target">{step.label}</div>}
-      {/* GD-STRENGTH-CUES: one target line — reps · load · RPE cap — and under
-          it the cap said in the units it actually means. This REPLACES the old
-          "12 reps × 170 lb" line rather than sitting beside it; two lines both
-          saying "12 reps" is noise. Compact on purpose: the logger has to stay
-          above the fold in both orientations. */}
       {(reps || load || capForHint != null) && (
         <div className="glance-target" data-testid="glance-target-block">
           {[reps, load, capForHint != null ? `RPE ${capForHint}` : null]
@@ -587,17 +619,10 @@ function Glance({
       )}
       {repsLeft && <div className="glance-repsleft dim" data-testid="glance-reps-left">{repsLeft}</div>}
       {tags.length > 0 && <div className="glance-target glance-adjusted">{tags.join(" · ")}</div>}
-      <div className="glance-time mono" aria-label={openEnded ? "Set time" : "Time remaining"}>
+      <div className="glance-time mono" data-testid="glance-time"
+           aria-label={openEnded ? "Set time" : "Time remaining"}>
         {formatMMSS(openEnded ? stepElapsed : remaining)}
       </div>
-      {last && (last.weight_lbs != null || last.reps_done != null) && (
-        <div className="glance-prev mono">
-          Last:
-          {last.weight_lbs != null && ` ${fmt(last.weight_lbs)} lb`}
-          {last.reps_done != null && ` × ${last.reps_done}`}
-          {last.rpe_actual != null && ` @ RPE ${fmt(last.rpe_actual)}`}
-        </div>
-      )}
       {!isPaused && ex?.notes && <div className="glance-desc">{ex.notes}</div>}
     </>
   );
@@ -652,6 +677,11 @@ function RestLog({
           </button>
         )}
       </div>
+      {/* GD-DISTANCE: exercise notes moved here from the active set. This is
+          where "log seat + pin setting" is useful — you're entering them. */}
+      {exercise?.notes && (
+        <div className="restlog-note" data-testid="restlog-note">{exercise.notes}</div>
+      )}
       {thisSetLogged || setNum > total || !exercise ? (
         <div className="restlog-done">
           <div>
