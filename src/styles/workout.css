@@ -212,11 +212,15 @@
   gap: var(--gap);
 }
 
+/* Five fixed slots, always: Prev · Pause · Skip · Busy · More. auto-fit let
+   the column count follow the button count, so every set/rest boundary
+   (3, 4 or 5 buttons) reflowed the whole row. */
 .workout-controls {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--gap);
 }
+.workout-slot { min-height: var(--tap); }
 
 .workout-controls .btn { width: 100%; }
 
@@ -356,7 +360,10 @@
 }
 
 @media (max-width: 700px) {
+  /* Narrow Split View: two columns, and empty slots collapse — five fixed
+     slots would leave holes. The row can reflow here; it is not the gym. */
   .workout-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .workout-slot { display: none; }
   .workout-bar { font-size: 13px; letter-spacing: 0.08em; }
 }
 
@@ -516,8 +523,44 @@
   max-width: 100%;
 }
 
-/* Mode-dependent timer. Full size at rest (.glance-time); about half during
-   an active set, so the tiles dominate while lifting. */
+/* Mode-dependent timer. Full size at rest; HALF during an active set, so the
+   tiles dominate while lifting. The rest timer is clamp(72px, 18cqi, 180px)
+   of the pane — but in landscape the pane is wider during a set, because the
+   journey map steps aside. Halving 18cqi of the SET pane gave 90 px against
+   a 133 px rest timer (0.68, not half). So "half" is computed from what the
+   rest timer is at the REST pane width. */
+
+/* Portrait / stacked: the pane is full width in both modes. */
 .glance-time--set {
-  font-size: clamp(40px, 9cqi, 90px);
+  font-size: calc(clamp(72px, 18cqi, 180px) / 2);
+}
+
+/* Landscape: the rest pane was the set pane less the grid gap (16px) and the
+   map column, minmax(220px, 35%). 100cqi here is the full-width set pane. */
+.workout--set:not(.workout--stacked) .glance-time--set {
+  font-size: calc(clamp(72px, (100cqi - 16px - max(220px, 35cqi)) * 0.18, 180px) / 2);
+}
+
+/* GD-DISTANCE: the journey map steps aside during an active set — in
+   LANDSCAPE only. There it frees ~420 px of width, which the tiles (sized
+   from the pane width) turn into 1.25 in digits instead of 0.77 in. Portrait
+   is deliberately left alone: its pane is already full width, so hiding the
+   collapsed strip would buy no size at all — only a vertical jump of every
+   tile at each set/rest boundary, and no way to open the map mid-set.
+
+   display:none rather than unmounting, so the map keeps its state and
+   re-scrolls to the current step when it returns at rest. One reflow, no
+   animation: the pane width changes in a single frame. */
+.workout--set:not(.workout--stacked) .workout-grid {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+.workout--set:not(.workout--stacked) .jmap { display: none; }
+
+.restlog-note {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--fg-dim);
+  text-align: center;
+  padding: 2px 8px;
 }

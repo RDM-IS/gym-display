@@ -82,6 +82,15 @@ async function mockApi(page: Page, { lastLoggedDelayMs = 0 } = {}) {
 }
 
 async function shot(page: Page, name: string) {
+  // .workout fades its background over 200 ms between tints (warmup blue →
+  // work green → rest brown). A shot taken mid-fade shows a blend — teal —
+  // that isn't in the colour scheme, so wait for the fade to finish.
+  await page.waitForFunction(() => {
+    const el = document.querySelector(".workout");
+    if (!el) return true;
+    const anims = el.getAnimations ? el.getAnimations() : [];
+    return anims.every((a) => a.playState !== "running");
+  });
   await page.screenshot({ path: `e2e/screenshots/${test.info().project.name}-${name}.png` });
 }
 
@@ -232,8 +241,152 @@ test("physical size at 20 ft: the numbers, measured", async ({ page }) => {
   // REPS and RPE render at the same size.
   expect(Math.abs(r.reps.fontSize - r.rpe.fontSize)).toBeLessThan(1);
   if (proj === "ipad-landscape") {
-    // A floor, so a regression shows: the most three-across-the-right-pane
-    // allows is ~0.77 in (see the PR for why 1.5 in is not reachable here).
-    expect(r.reps.inches).toBeGreaterThan(0.72);
+    // Floors, so a regression shows. With the journey map hidden during a
+    // set the tiles span the full width: measured 1.25 in and 0.98 in
+    // (three-across-the-right-pane, before the map moved, was 0.77 / 0.61).
+    expect(r.reps.inches).toBeGreaterThan(1.2);
+    expect(r.last.inches).toBeGreaterThan(0.93);
   }
+});
+
+
+// ── The set/rest boundary ─────────────────────────────────────────────────
+// Hiding the journey map during a set makes the pane change width at every
+// set/rest transition, so that boundary is now a layout transition in its own
+// right. These check what must NOT move across it, and that the part which
+// does move settles in a single frame.
+
+/** Every slot of the bottom row, as "label@x0-x1" (empty slot = "·"). */
+async function row(page: Page) {
+  return page.evaluate(() => [...document.querySelectorAll(".workout-controls > *")].map((e) => {
+    const b = e.getBoundingClientRect();
+    return { label: (e.textContent || "").trim() || "·", x0: Math.round(b.x), x1: Math.round(b.x + b.width),
+             y: Math.round(b.y) };
+  }));
+}
+
+/** Tile and pane boxes on each of the next `n` animation frames. */
+async function framesAfter(page: Page, n: number) {
+  return page.evaluate(async (count) => {
+    const snap = () => [".workout-pane", "[data-testid=strength-tiles]", ".glance-name",
+      "[data-testid=workout-actions]"].map((sel) => {
+      const e = document.querySelector(sel);
+      if (!e) return `${sel}:absent`;
+      const b = e.getBoundingClientRect();
+      return `${sel}:${Math.round(b.x)},${Math.round(b.y)},${Math.round(b.width)},${Math.round(b.height)}`;
+    }).join(" ");
+    const out: string[] = [];
+    for (let i = 0; i < count; i++) {
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+      out.push(snap());
+    }
+    return out;
+  }, n);
+}
+
+test("the journey map steps aside for a set and returns at rest", async ({ page }) => {
+  const landscape = test.info().project.name === "ipad-landscape";
+  await mockApi(page);
+  await toFirstSet(page);                                    // warmup: rest mode
+  await expect(page.locator(".jmap")).toBeVisible();
+  await skipToSet(page);                                     // active set
+  if (landscape) {
+    await expect(page.locator(".jmap")).toBeHidden();
+  } else {
+    // Portrait keeps its collapsed strip: the pane is already full width, so
+    // hiding it would gain no size — only a vertical jump at each boundary.
+    await expect(page.locator(".jmap")).toBeVisible();
+  }
+  const pane = (await page.locator(".workout-pane").boundingBox())!;
+  const bar = (await page.locator(".workout-bar").boundingBox())!;
+  expect(Math.round(pane.width)).toBe(Math.round(bar.width));  // full width during the set
+  await shot(page, "distance-2-set-full-width");
+  // After the fade, the set is on the work green — no new colours.
+  expect(await page.locator(".workout").evaluate((e) => getComputedStyle(e).backgroundColor))
+    .toBe("rgb(26, 95, 58)");
+  await page.getByRole("button", { name: "Set done" }).tap();  // rest logger
+  await expect(page.getByTestId("inline-logger")).toBeVisible();
+  await expect(page.locator(".jmap")).toBeVisible();
+  await shot(page, "distance-3-rest-logger");
+});
+
+test("the bottom row holds its place across warmup, set and rest", async ({ page }) => {
+  await mockApi(page);
+  await toFirstSet(page);
+  const warm = await row(page);
+  await skipToSet(page);
+  const set = await row(page);
+  await page.getByRole("button", { name: "Set done" }).tap();
+  await expect(page.getByTestId("inline-logger")).toBeVisible();
+  const rest = await row(page);
+
+  // Five fixed slots in every mode, at identical x-ranges and height.
+  for (const r of [warm, set, rest]) expect(r).toHaveLength(5);
+  const geom = (r: Awaited<ReturnType<typeof row>>) => r.map(({ x0, x1, y }) => [x0, x1, y]);
+  expect(geom(set)).toEqual(geom(warm));
+  expect(geom(rest)).toEqual(geom(warm));
+  // A control keeps its slot whenever it is present.
+  const at = (r: typeof set, prefix: string) => r.findIndex((s) => s.label.startsWith(prefix));
+  expect(at(set, "◀ Prev")).toBe(0);
+  expect(at(set, "⏸ Pause")).toBe(1);
+  expect(at(rest, "⏸ Pause")).toBe(1);
+  expect(at(set, "Skip")).toBe(2);
+  expect(at(rest, "Skip")).toBe(2);
+  expect(at(set, "⋯ More")).toBe(4);
+  expect(at(warm, "⋯ More")).toBe(4);
+});
+
+test("the top bar does not move across the boundary", async ({ page }) => {
+  await mockApi(page);
+  await toFirstSet(page);
+  const a = await page.locator(".workout-bar").boundingBox();
+  await skipToSet(page);
+  const b = await page.locator(".workout-bar").boundingBox();
+  await page.getByRole("button", { name: "Set done" }).tap();
+  await expect(page.getByTestId("inline-logger")).toBeVisible();
+  const c = await page.locator(".workout-bar").boundingBox();
+  expect(b).toEqual(a);
+  expect(c).toEqual(a);
+});
+
+test("the switch into a set lands in one frame — no animation, no second reflow", async ({ page }) => {
+  await mockApi(page);
+  await toFirstSet(page);
+  await page.getByRole("button", { name: "Skip to next" }).tap();
+  const frames = await framesAfter(page, 20);
+  // Every frame after the switch is the same layout: the tiles appear at
+  // their final size on their first frame and never resize.
+  expect(new Set(frames).size, frames.join("\n")).toBe(1);
+  expect(frames[0]).not.toContain("strength-tiles]:absent");
+});
+
+test("the switch back to rest lands in one frame too", async ({ page }) => {
+  await mockApi(page);
+  await toFirstSet(page);
+  await skipToSet(page);
+  await page.getByRole("button", { name: "Set done" }).tap();
+  const frames = await framesAfter(page, 20);
+  expect(new Set(frames).size, frames.join("\n")).toBe(1);
+});
+
+test("a machine exercise's note shows during rest, in the logger, and not during the set", async ({ page }) => {
+  await mockApi(page);
+  await toFirstSet(page);
+  await skipToSet(page);
+  // Not on the active-set screen any more…
+  await expect(page.getByText("2×10-12; log seat + pin setting")).toHaveCount(0);
+  await page.getByRole("button", { name: "Set done" }).tap();
+  // …but here, where the seat and pin are being entered.
+  await expect(page.getByTestId("inline-logger")).toBeVisible();
+  await expect(page.getByTestId("restlog-note")).toHaveText("2×10-12; log seat + pin setting");
+  await shot(page, "distance-4-note-at-rest");
+});
+
+test("portrait: the tiles and name don't move between rest and set at all", async ({ page }) => {
+  test.skip(test.info().project.name !== "ipad-portrait", "portrait-only: landscape widens the pane by design");
+  await mockApi(page);
+  await toFirstSet(page);
+  const pane = await page.locator(".workout-pane").boundingBox();
+  await skipToSet(page);
+  expect(await page.locator(".workout-pane").boundingBox()).toEqual(pane);
 });

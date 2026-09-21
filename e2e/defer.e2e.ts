@@ -99,10 +99,16 @@ test("the journey map tags a deferred exercise 'later'", async ({ page }) => {
   await expect(glance(page)).toHaveText("Pec fly");
   await page.getByTestId("defer-current").tap();
   await expect(glance(page)).toHaveText("Single-arm cable row");
+  // GD-DISTANCE: in landscape the map steps aside during a set, so read the
+  // tag at the next rest, where the map is back. (This test used to pass in
+  // landscape with the map hidden: toHaveCount counts hidden nodes too. It
+  // now asserts the tag is actually VISIBLE.)
+  await page.getByRole("button", { name: "Skip to next" }).tap();
+  await expect(page.locator(".jmap")).toBeVisible();
   // Portrait collapses the map to a strip; open it first.
   const toggle = page.locator(".jmap-toggle");
   if (await toggle.count() && !(await page.locator(".jmap-list").isVisible())) await toggle.first().tap();
-  await expect(page.getByTestId("jmap-later")).toHaveCount(1);
+  await expect(page.getByTestId("jmap-later")).toBeVisible();
   await expect(page.locator(".jmap-item", { has: page.getByTestId("jmap-later") })).toContainText("Pec fly");
   await shot(page, "defer-4-map");
 });
