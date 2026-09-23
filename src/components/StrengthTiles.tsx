@@ -48,11 +48,15 @@ interface Props {
   reps: number | null;
   /** The RPE cap in force: exercise, then session. Null → "—". */
   cap: number | null;
-  /** The most recent logged set of this exercise (/last_logged). */
+  /** The most recent logged set of this exercise — today's if there is one. */
   last: LastLoggedEntry | null;
+  /** Which round of TODAY that set was, or null when it is an earlier day's.
+   * GD-LAST-ROUND: the label says so, so a number that just changed mid-session
+   * can't be mistaken for last week's. */
+  lastRound?: number | null;
 }
 
-export default function StrengthTiles({ reps, cap, last }: Props) {
+export default function StrengthTiles({ reps, cap, last, lastRound = null }: Props) {
   const repsText = reps != null ? String(reps) : "—";
   const capText = cap != null ? fmt(cap) : "—";
   const repsLeft = repsLeftHint(cap);
@@ -80,8 +84,11 @@ export default function StrengthTiles({ reps, cap, last }: Props) {
       </section>
 
       <section className="stile stile--last" data-testid="tile-last"
-               aria-label={`Last set ${hasWeight ? `${lastText} pounds` : lastText}`}>
-        <div className="stile-label">Last</div>
+               aria-label={`Last set${lastRound != null ? `, round ${lastRound} today` : ""} `
+                           + `${hasWeight ? `${lastText} pounds` : lastText}`}>
+        <div className="stile-label" data-testid="tile-last-label">
+          {lastRound != null ? `Last — round ${lastRound}` : "Last"}
+        </div>
         <div className="stile-num"
              style={numStyle(charCount(lastText, hasWeight ? UNIT_CHARS : 0))}>
           {lastText}

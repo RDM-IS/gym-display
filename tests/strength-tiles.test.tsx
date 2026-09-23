@@ -34,6 +34,18 @@ describe("the three tiles", () => {
     expect(labels).toEqual(["Reps", "RPE", "Last"]);
   });
 
+  it("says which round of today the LAST value came from", () => {
+    render(<StrengthTiles reps={12} cap={6} last={LAST} lastRound={1} />);
+    expect(text("tile-last-label")).toBe("Last — round 1");
+    expect(screen.getByTestId("tile-last").getAttribute("aria-label"))
+      .toContain("round 1 today");
+  });
+
+  it("stays plain 'Last' when the value is an earlier day's", () => {
+    render(<StrengthTiles reps={12} cap={6} last={LAST} />);
+    expect(text("tile-last-label")).toBe("Last");
+  });
+
   it("the reps-left line follows the cap", () => {
     render(<StrengthTiles reps={10} cap={7.5} last={LAST} />);
     expect(text("tile-rpe-sub")).toBe("~2–3 reps left");
