@@ -9,6 +9,7 @@ import {
 import { speak } from "../lib/audio";
 import StrengthTiles from "../components/StrengthTiles";
 import UpNextTiles from "../components/UpNextTiles";
+import { setupReminder } from "../lib/set-notes";
 import { storedRate } from "../lib/voice";
 import { weightStepFor } from "../lib/weight-step";
 import { fetchSessions } from "../lib/api";
@@ -721,8 +722,12 @@ function RestLog({
       </div>
       {/* GD-DISTANCE: exercise notes moved here from the active set. This is
           where "log seat + pin setting" is useful — you're entering them. */}
-      {exercise?.notes && (
-        <div className="restlog-note" data-testid="restlog-note">{exercise.notes}</div>
+      {/* GD-REST-TILES: the prescription is in the tiles and on the logger
+          card; what is worth repeating here is the setup reminder. */}
+      {setupReminder(exercise?.notes) && (
+        <div className="restlog-note" data-testid="restlog-note">
+          {setupReminder(exercise?.notes)}
+        </div>
       )}
       {thisSetLogged || setNum > total || !exercise ? (
         <div className="restlog-done">

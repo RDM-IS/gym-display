@@ -109,3 +109,21 @@ export function parsePain(notes: string | null | undefined): PainEntry[] {
   }
   return out;
 }
+
+// ---------------------------------------------------------------------------
+// GD-REST-TILES follow-up (Ryan, 2026-09-23): the rest screen's note repeated
+// the prescription the tiles and the logger card already carry ("2×10-12; log
+// seat + pin setting"). Keep the part that is actually a reminder.
+// ---------------------------------------------------------------------------
+
+/** A leading prescription — "2×10-12", "3x8-12", "2 × 12" — and whatever
+ * separator follows it. Anchored, so "10 each side" is left alone. */
+const PRESCRIPTION = /^\s*\d+\s*[×x]\s*\d+(?:\s*-\s*\d+)?\s*[;,.·|-]?\s*/i;
+
+/** The exercise note with its prescription prefix removed, or null when
+ * nothing else was there. */
+export function setupReminder(notes: string | null | undefined): string | null {
+  if (!notes) return null;
+  const rest = notes.replace(PRESCRIPTION, "").trim();
+  return rest || null;
+}
