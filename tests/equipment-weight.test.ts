@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import type { LoadConfigByClass } from "../src/lib/types";
 import {
   equipmentClassFor,
   inferEquipmentClass,
@@ -145,10 +146,74 @@ describe("where the equipment class comes from", () => {
   });
 
   it("a class this build does not know falls back instead of throwing", () => {
-    // `bands` / `trx` arrive with LOCATION-1; an older client must not break
+    // A class newer than this build falls back to the name rules rather than
+    // breaking. `bands` used to stand in here; LOCATION-1 makes it a KNOWN
+    // class, so the example has to be one that is still unknown.
     const ex = { name: "Leg press", format: "reps" as const,
-                 equipment_class: "bands" as unknown as EquipmentClass };
+                 equipment_class: "kettlebell" as unknown as EquipmentClass };
     expect(equipmentClassFor(ex)).toBe("machine");
     expect(() => weightStepFor(ex)).not.toThrow();
+  });
+});
+
+// ── LOCATION-1 (Ryan, 2026-09-23): the load config travels on the row ───────
+describe("what a load means where the session happens", () => {
+  /** Richfield, exactly as artemis seeds it into blocks.load_config. */
+  const RICHFIELD = {
+    dumbbell: { mode: "numeric", step: 5, min: 5, max: 80 },
+    barbell: { mode: "numeric", step: 10, min: 0, max: 70, bar: 0, plates: [10, 10, 5, 5, 2.5] },
+    bands: { mode: "none" },
+    trx: { mode: "none" },
+    bodyweight: { mode: "none" },
+    cardio: { mode: "none" },
+  } as LoadConfigByClass;
+
+  const db = { name: "DB bench press", format: "reps", equipment_class: "dumbbell" } as const;
+
+  it("the row's config wins over the office defaults", () => {
+    expect(weightStepFor(db).max).toBe(45);                    // the office rack
+    expect(weightStepFor(db, RICHFIELD).max).toBe(80);         // PowerBlocks
+    expect(weightStepFor(db, RICHFIELD).step).toBe(5);
+    expect(weightStepFor(db, RICHFIELD).loadMode).toBe("numeric");
+  });
+
+  it("no config means the office — every row seeded before LOCATION-1", () => {
+    const office = weightStepFor(db);
+    expect([office.min, office.max, office.step]).toEqual([5, 45, 5]);
+    expect(office.loadMode).toBe("numeric");
+  });
+
+  it("bands, trx and cardio have no stepper at all", () => {
+    for (const cls of ["bands", "trx", "cardio", "bodyweight"] as const) {
+      const w = weightStepFor({ name: "Band pulldown", format: "reps" as const,
+                                equipment_class: cls }, RICHFIELD);
+      expect(w.loadMode, cls).toBe("none");
+      expect(w.isBodyweight, cls).toBe(true);
+      expect(w.step, cls).toBe(0);
+    }
+  });
+
+  it("a class the gym does not have gets no stepper either", () => {
+    // Richfield has no machines: a machine exercise there cannot be loaded
+    const w = weightStepFor({ name: "Leg press", format: "reps", equipment_class: "machine" },
+                            RICHFIELD);
+    expect(w.loadMode).toBe("none");
+  });
+
+  it("plate math comes from the row's own plates", () => {
+    const bar = { name: "Curl bar row", format: "reps", equipment_class: "barbell" } as const;
+    const w = weightStepFor(bar, RICHFIELD);
+    expect(w.showPlateMath).toBe(true);
+    expect(w.barLbs).toBe(0);
+    // the curl bar's set: 10+10+5+5+2.5 per side = 32.5, so 65 lb is the top
+    expect(w.values?.[w.values.length - 1]).toBe(65);
+    expect(w.values).toContain(20);          // a 10 per side
+    expect(w.values).not.toContain(90);      // the office's plates are not here
+  });
+
+  it("the office still gets the office bar and plates", () => {
+    const w = weightStepFor({ name: "Barbell squat", format: "reps", equipment_class: "barbell" });
+    expect(w.barLbs).toBe(45);
+    expect(w.values?.[0]).toBe(45);
   });
 });

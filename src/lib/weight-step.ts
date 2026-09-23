@@ -1,7 +1,8 @@
-import type { PlannedExercise } from "./types";
+import type { LoadConfigByClass, PlannedExercise } from "./types";
 import {
   equipmentClassFor,
   LOAD_CONFIG,
+  NO_LOAD_CLASSES,
   plateBreakdown,
   reachableTotals,
   STEP_OVERRIDES,
@@ -18,6 +19,9 @@ import {
 export interface WeightStep {
   cls: EquipmentClass;
   step: number;
+  /** LOCATION-1: "none" = no load stepper at all (bodyweight, bands, trx,
+   * cardio). `isBodyweight` is kept as the derived flag the screens read. */
+  loadMode: "numeric" | "none";
   isBodyweight: boolean;
   min: number;
   max: number;
@@ -29,12 +33,23 @@ export interface WeightStep {
 
 export function weightStepFor(
   ex: Pick<PlannedExercise, "name" | "format" | "equipment_class">,
+  /** LOCATION-1: the row's own `blocks.load_config`. Omitted → the office,
+   * which is what every row seeded before LOCATION-1 means. */
+  config?: LoadConfigByClass | null,
 ): WeightStep {
   const cls = equipmentClassFor(ex);
-  if (cls === "bodyweight") {
-    return { cls, step: 0, isBodyweight: true, min: 0, max: 0, showPlateMath: false, barLbs: 0, values: null };
-  }
-  const cfg = LOAD_CONFIG[cls];
+  const fromRow = config?.[cls];
+  const none = { cls, step: 0, loadMode: "none" as const, isBodyweight: true, min: 0, max: 0,
+                 showPlateMath: false, barLbs: 0, values: null };
+  if (fromRow?.mode === "none" || NO_LOAD_CLASSES.includes(cls)) return none;
+  // A class the row's gym doesn't have at all: nothing to load it with.
+  if (config && !fromRow) return none;
+
+  const cfg = fromRow ?? LOAD_CONFIG[cls];
+  if (!cfg) return none;
+  const plates = ("plates" in cfg && cfg.plates?.length) ? cfg.plates : undefined;
+  const bar = ("bar" in cfg ? cfg.bar : undefined) ?? ("barLbs" in cfg ? cfg.barLbs : undefined) ?? 0;
+  const plateMath = plates !== undefined || cls === "smith" || cls === "barbell";
   const override =
     cls === "machine" || cls === "cable"
       ? STEP_OVERRIDES[(ex.name ?? "").toLowerCase().trim()]
@@ -42,12 +57,13 @@ export function weightStepFor(
   return {
     cls,
     step: override ?? cfg.step,
+    loadMode: "numeric",
     isBodyweight: false,
     min: cfg.min,
     max: cfg.max,
-    showPlateMath: cls === "smith" || cls === "barbell",
-    barLbs: cfg.barLbs ?? 0,
-    values: cls === "smith" || cls === "barbell" ? reachableTotals(cfg.barLbs ?? 0) : null,
+    showPlateMath: plateMath,
+    barLbs: bar,
+    values: plateMath ? reachableTotals(bar, plates) : null,
   };
 }
 

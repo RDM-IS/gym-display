@@ -8,11 +8,15 @@ import { composeSetNotes, formatSetup, SETUP_FIELDS, SETUP_LABELS, supportsSetti
          type MachineSetup, type PainEntry, type QuickFlag, type SetupField } from "../lib/set-notes";
 import { plateLabel, weightStepFor } from "../lib/weight-step";
 import type { Prefill, SetEntry } from "../lib/log-state";
-import type { LastLoggedEntry, LogExerciseIn, PlannedExercise } from "../lib/types";
+import type { LoadConfigByClass, LastLoggedEntry, LogExerciseIn, PlannedExercise } from "../lib/types";
 
 interface Props {
   exercise: PlannedExercise;
   plan_id: number;
+  /** LOCATION-1: the row's blocks.load_config — what a load means at this
+   * gym. Omitted → the office defaults, which is what pre-LOCATION-1 rows
+   * mean. */
+  loadConfig?: LoadConfigByClass | null;
   set_num: number;
   total_sets: number;
   /** Values to pre-fill with — see computePrefill(). */
@@ -95,6 +99,7 @@ function reducer(state: State, action: Action): State {
 export default function InlineExerciseLogger({
   exercise,
   plan_id,
+  loadConfig,
   set_num,
   total_sets,
   prefill,
@@ -104,7 +109,7 @@ export default function InlineExerciseLogger({
   week_num,
   onLoggedSet,
 }: Props) {
-  const w = weightStepFor(exercise);
+  const w = weightStepFor(exercise, loadConfig);
   const useReps = exercise.format === "reps";
   const showSetting = useReps && supportsSetting(w.cls);
   const [setupPad, setSetupPad] = useState<SetupField | null>(null);

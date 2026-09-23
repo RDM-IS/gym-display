@@ -332,7 +332,7 @@ describe("the exercise a rest leads into", () => {
 
   it("the last rest of a body leads into the next body (a finisher)", () => {
     const withFinisher = {
-      ...BLOCKS,
+      ...(BLOCKS as unknown as Record<string, unknown>),
       finisher: { rounds: 1, exercises: [{ name: "Plank", format: "hold", duration_sec: 45 }] },
     } as never;
     const s2 = flattenBlocksToSteps(withFinisher).steps;

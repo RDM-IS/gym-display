@@ -14,10 +14,24 @@ export type EquipmentClass =
   | "cable"
   | "smith"
   | "barbell"
-  | "bodyweight";
+  | "bodyweight"
+  // LOCATION-1 (Ryan, 2026-09-23): the farm's classes. All three carry NO
+  // numeric load — see NO_LOAD_CLASSES — but they are not `bodyweight`: the
+  // resolver matches a TRX row to a pull and a band pulldown to a vertical
+  // pull, and the box's lighter_load() returns nothing for them rather than
+  // inventing a number.
+  | "bands"
+  | "trx"
+  | "cardio";
 
 export const EQUIPMENT_CLASSES: readonly EquipmentClass[] = [
   "dumbbell", "machine", "cable", "smith", "barbell", "bodyweight",
+  "bands", "trx", "cardio",
+];
+
+/** Classes with no numeric load: no stepper, reps (or time) only. */
+export const NO_LOAD_CLASSES: readonly EquipmentClass[] = [
+  "bodyweight", "bands", "trx", "cardio",
 ];
 
 export interface LoadConfig {
@@ -41,7 +55,10 @@ export const OLYMPIC_BAR_LBS = 45;
  * counterbalanced. Until measured, loads are plates only (0). */
 export const SMITH_BAR_LBS = 0;
 
-export const LOAD_CONFIG: Record<Exclude<EquipmentClass, "bodyweight">, LoadConfig> = {
+/** The OFFICE's loading rules — the fallback for a row that carries none,
+ * which is every row seeded before LOCATION-1. A row's own `load_config`
+ * wins; see weightStepFor. */
+export const LOAD_CONFIG: Record<string, LoadConfig> = {
   // Hex dumbbell rack: 5–45 lb in 5s.
   dumbbell: { step: 5, min: 5, max: 45 },
   // TODO(office): confirm the pin-stack increment on each Precor machine;
