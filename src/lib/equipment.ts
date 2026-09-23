@@ -133,8 +133,14 @@ export function inferEquipmentClass(name: string): EquipmentClass | null {
   return null;
 }
 
-/** blocks.exercises[].equipment_class wins; otherwise duration work is
- * bodyweight and reps work is inferred from the name (unknown → dumbbell). */
+/** blocks.exercises[].equipment_class wins.
+ *
+ * EXERCISE-CLASS (Ryan, 2026-09-23): every exercise seeded from 2026-09-23 on
+ * carries its class, so the name rules below are a FALLBACK for older rows
+ * only. They were written for the office and misread anything else — "TRX row"
+ * and "Band pulldown" both read as `machine`, which would offer a 10 lb stack
+ * step for a strap and a rubber band. A class the client doesn't know (a newer
+ * one than this build) falls back the same way rather than throwing. */
 export function equipmentClassFor(
   ex: Pick<PlannedExercise, "name" | "format" | "equipment_class">,
 ): EquipmentClass {
