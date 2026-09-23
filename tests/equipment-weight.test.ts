@@ -126,3 +126,29 @@ describe("platesPerSide", () => {
     expect(platesPerSide(40, 45)).toBeNull();
   });
 });
+
+// ── EXERCISE-CLASS (Ryan, 2026-09-23): the row's class is authoritative ─────
+describe("where the equipment class comes from", () => {
+  it("the row's class beats the name rules", () => {
+    // the office rules read both of these as `machine`
+    expect(inferEquipmentClass("TRX row")).toBe("machine");
+    expect(equipmentClassFor({ name: "TRX row", format: "reps", equipment_class: "machine" }))
+      .toBe("machine");
+    expect(equipmentClassFor({ name: "Leg press", format: "reps", equipment_class: "dumbbell" }))
+      .toBe("dumbbell");
+  });
+
+  it("falls back to the name only when the row carries no class", () => {
+    expect(equipmentClassFor({ name: "Leg press", format: "reps", equipment_class: null }))
+      .toBe("machine");
+    expect(equipmentClassFor({ name: "Leg press", format: "reps" })).toBe("machine");
+  });
+
+  it("a class this build does not know falls back instead of throwing", () => {
+    // `bands` / `trx` arrive with LOCATION-1; an older client must not break
+    const ex = { name: "Leg press", format: "reps",
+                 equipment_class: "bands" as unknown as EquipmentClass };
+    expect(equipmentClassFor(ex)).toBe("machine");
+    expect(() => weightStepFor(ex)).not.toThrow();
+  });
+});
