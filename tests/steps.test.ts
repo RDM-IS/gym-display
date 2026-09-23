@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  nextExerciseFor,
   flattenBlocksToSteps,
   INITIAL_CURSOR,
   nextCursor,
@@ -294,5 +295,48 @@ describe("timerReducer — walks 3 full rounds end-to-end", () => {
     expect(selectCurrentStep(s)?.label).toBe("5 min bike easy");
     expect(selectNextStep(s)?.label).toBe("Goblet squat");
     expect(selectStepAfterNext(s)?.label).toBe("Rest");
+  });
+});
+
+// ── GD-REST-TILES: what a rest leads into (Ryan, 2026-09-23) ───────────────
+describe("the exercise a rest leads into", () => {
+  const BLOCKS = {
+    type: "circuit", rounds: 2, rest_between_rounds_sec: 90,
+    exercises: [
+      { name: "Leg press", format: "reps", target_reps: 12, rest_after_sec: 60 },
+      { name: "DB bench press", format: "reps", target_reps: 12, rest_after_sec: 60 },
+    ],
+  } as never;
+  const steps = flattenBlocksToSteps(BLOCKS).steps;
+  const restAfter = (name: string) =>
+    steps.findIndex((s) => s.kind === "rest" && s.precedingExerciseRef?.name === name);
+  const roundBreak = steps.findIndex((s) => s.isRoundBreak);
+
+  it("a plain rest leads to the exercise that follows it", () => {
+    expect(nextExerciseFor(steps, restAfter("Leg press"), 1)?.name).toBe("DB bench press");
+  });
+
+  it("a round break leads to the circuit's first exercise, next round", () => {
+    expect(nextExerciseFor(steps, roundBreak, 1)?.name).toBe("Leg press");
+  });
+
+  it("the FINAL rest leads nowhere — the tiles hide rather than go stale", () => {
+    expect(nextExerciseFor(steps, roundBreak, 2)).toBeNull();
+  });
+
+  it("is null for a step that is not a rest", () => {
+    const ex = steps.findIndex((s) => s.kind === "exercise");
+    expect(nextExerciseFor(steps, ex, 1)).toBeNull();
+    expect(nextExerciseFor(steps, 999, 1)).toBeNull();
+  });
+
+  it("the last rest of a body leads into the next body (a finisher)", () => {
+    const withFinisher = {
+      ...BLOCKS,
+      finisher: { rounds: 1, exercises: [{ name: "Plank", format: "hold", duration_sec: 45 }] },
+    } as never;
+    const s2 = flattenBlocksToSteps(withFinisher).steps;
+    const rb = s2.findIndex((s) => s.isRoundBreak);
+    expect(nextExerciseFor(s2, rb, 2)?.name).toBe("Plank");
   });
 });

@@ -378,7 +378,9 @@ test("a machine exercise's note shows during rest, in the logger, and not during
   await page.getByRole("button", { name: "Set done" }).tap();
   // …but here, where the seat and pin are being entered.
   await expect(page.getByTestId("inline-logger")).toBeVisible();
-  await expect(page.getByTestId("restlog-note")).toHaveText("2×10-12; log seat + pin setting");
+  // GD-REST-TILES: the prescription lives in the tiles and on the logger card;
+  // the note keeps only the setup reminder.
+  await expect(page.getByTestId("restlog-note")).toHaveText("log seat + pin setting");
   await shot(page, "distance-4-note-at-rest");
 });
 

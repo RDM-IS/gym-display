@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { composeSetNotes, formatSetup, parseSetup, QUICK_FLAGS, supportsSetting } from "../src/lib/set-notes";
+import { composeSetNotes, formatSetup, parseSetup, QUICK_FLAGS, supportsSetting, setupReminder } from "../src/lib/set-notes";
 
 describe("composeSetNotes", () => {
   it("returns null when there is nothing to record", () => {
@@ -57,5 +57,35 @@ describe("supportsSetting", () => {
     expect(supportsSetting("smith")).toBe(true);
     expect(supportsSetting("dumbbell")).toBe(false);
     expect(supportsSetting("bodyweight")).toBe(false);
+  });
+});
+
+// ── GD-REST-TILES follow-up: the note keeps the reminder, not the prescription
+describe("the setup reminder in an exercise note", () => {
+  it("drops the prescription and keeps the reminder", () => {
+    expect(setupReminder("2×10-12; log seat + pin setting")).toBe("log seat + pin setting");
+  });
+
+  it("is null when the note was only a prescription", () => {
+    for (const n of ["3×10-12", "2×8-12", "2 × 12", "3x8-12"]) {
+      expect(setupReminder(n), n).toBeNull();
+    }
+  });
+
+  it("leaves a note that is not a prescription alone", () => {
+    expect(setupReminder("10 each side")).toBe("10 each side");
+    expect(setupReminder("keep the elbows tucked")).toBe("keep the elbows tucked");
+  });
+
+  it("handles the separators the plans actually use", () => {
+    expect(setupReminder("2×10-12 · log seat")).toBe("log seat");
+    expect(setupReminder("2×10-12, log seat")).toBe("log seat");
+    expect(setupReminder("2x10-12 - log seat")).toBe("log seat");
+  });
+
+  it("is null for nothing at all", () => {
+    expect(setupReminder(null)).toBeNull();
+    expect(setupReminder(undefined)).toBeNull();
+    expect(setupReminder("   ")).toBeNull();
   });
 });

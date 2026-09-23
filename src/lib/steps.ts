@@ -47,6 +47,52 @@ export interface Step {
   holdAtEnd?: boolean;
 }
 
+/** GD-REST-TILES (Ryan, 2026-09-23): the exercise a REST step leads into, for
+ * the tiles in the rest screen's upper right.
+ *
+ * Steps are not unrolled, so this is not simply steps[index + 1]:
+ *   - a plain rest is followed by its exercise;
+ *   - a round break wraps back to the circuit's FIRST exercise, in the next
+ *     round — unless this was the last round, when the cooldown follows;
+ *   - the rest before another body (the finisher) leads to that body's first
+ *     exercise, which is further down the list;
+ *   - the final rest leads to nothing. Returning null is how the tiles know to
+ *     hide rather than show a stale exercise.
+ */
+export function nextExerciseFor(
+  steps: Step[],
+  index: number,
+  round = 1,
+): PlannedExercise | null {
+  const step = steps[index];
+  if (!step || step.kind !== "rest") return null;
+  if (step.isRoundBreak) {
+    if (step.totalRounds != null && round >= step.totalRounds) {
+      // the round is done: whatever body comes after this one, if any
+      return firstExerciseAfter(steps, index, step.circuitId);
+    }
+    return steps.find((s) => s.kind === "exercise" && s.circuitId === step.circuitId)
+      ?.exerciseRef ?? null;
+  }
+  const next = steps[index + 1];
+  if (next?.kind === "exercise") return next.exerciseRef ?? null;
+  return firstExerciseAfter(steps, index, step.circuitId);
+}
+
+/** The first exercise after `index` that belongs to a different body. */
+function firstExerciseAfter(
+  steps: Step[],
+  index: number,
+  circuitId: string | undefined,
+): PlannedExercise | null {
+  for (let i = index + 1; i < steps.length; i++) {
+    const s = steps[i];
+    if (s.kind === "exercise" && s.circuitId !== circuitId) return s.exerciseRef ?? null;
+  }
+  return null;
+}
+
+
 export type SectionKind =
   | "warmup"
   | "circuit"

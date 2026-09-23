@@ -64,13 +64,14 @@ test("Monday C: defer a busy pec fly from the rest, then a busy cable row", asyn
   await expect(glance(page)).toHaveText("DB Romanian deadlift");
   await page.getByRole("button", { name: "Set done" }).tap();              // RDL's logging rest
 
-  // The rest says pec fly is next; its machine is taken.
-  await expect(page.locator(".restlog-next")).toHaveText("Next: Pec fly");
+  // The rest's up-next tiles say pec fly is next (GD-REST-TILES folded the
+  // old "Next: …" label into them); its machine is taken.
+  await expect(page.getByTestId("upnext-name")).toHaveText("Next: Pec fly");
   await expect(page.getByTestId("defer-next")).toBeVisible();
   await expectTouchTargets(page);
   await shot(page, "defer-1-rest-before");
   await page.getByTestId("defer-next").tap();
-  await expect(page.locator(".restlog-next")).toHaveText("Next: Single-arm cable row");
+  await expect(page.getByTestId("upnext-name")).toHaveText("Next: Single-arm cable row");
   await shot(page, "defer-2-rest-after");
 
   // On to the cable row — and that station is busy too: pec fly comes up now.
@@ -86,7 +87,7 @@ test("Monday C: defer a busy pec fly from the rest, then a busy cable row", asyn
 
   // Pec fly done → its own logging rest → the cable row is next.
   await page.getByRole("button", { name: "Set done" }).tap();
-  await expect(page.locator(".restlog-next")).toHaveText("Next: Single-arm cable row");
+  await expect(page.getByTestId("upnext-name")).toHaveText("Next: Single-arm cable row");
 });
 
 test("the journey map tags a deferred exercise 'later'", async ({ page }) => {
