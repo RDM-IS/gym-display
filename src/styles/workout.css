@@ -564,3 +564,76 @@
   text-align: center;
   padding: 2px 8px;
 }
+
+/* ── GD-REST-TILES (Ryan, 2026-09-23) ─────────────────────────────────────
+   The three tiles again, in the rest screen's upper right, for the exercise
+   the rest leads into. Same component, same DOM, same rules — only smaller,
+   so the rest timer stays the dominant thing on the screen.
+
+   The tiles size from `100cqi` of their nearest size container, which on the
+   set screen is the whole pane. Here `.upnext` becomes that container, so the
+   row sizes from ITS width instead: all three tiles still size from one
+   number (the rule that keeps the row height fixed), and the scale follows
+   the column rather than being hard-coded. */
+.restlog-timer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr);
+  align-items: start;
+  gap: 8px 16px;
+}
+
+.restlog-timer-main {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  min-width: 0;
+}
+
+.upnext {
+  container-type: inline-size;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.upnext-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--fg-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stiles--compact {
+  --stile-gap: 8px;
+  --stile-pad: 6px;
+  /* The rest timer is the subject of this screen, so the tiles are capped
+     BELOW it rather than merely scaled: the timer is clamp(48px, 11cqi,
+     104px), so 44px keeps the numerals smaller than it at every width. In
+     portrait the tiles span more of the pane, and without this cap they
+     rendered at 104px against an 88px timer — bigger than the thing they
+     sit beside. */
+  --num-box: min(calc(var(--inner-std) / (2 * var(--digit-em))), 44px);
+}
+
+.stiles--compact .stile { padding: 6px var(--stile-pad) 8px; }
+.stiles--compact .stile-label { font-size: clamp(10px, 4cqi, 13px); letter-spacing: 0.12em; }
+.stiles--compact .stile-sub { font-size: clamp(10px, 4cqi, 13px); }
+
+/* Portrait / stacked: the width for a side-by-side column isn't there, so the
+   tiles sit under the timer — still subordinate to it, never full width. */
+@media (orientation: portrait) {
+  .restlog-timer { grid-template-columns: minmax(0, 1fr); }
+  .upnext { width: min(100%, 62%); }
+}
+
+/* The between-rounds rest centres its timer; the tiles sit under it, centred
+   and capped so they read as "what's next", not as the screen's subject. */
+.workout-pane-body > .upnext {
+  align-self: center;
+  width: min(100%, 60%);
+  margin-top: 10px;
+}

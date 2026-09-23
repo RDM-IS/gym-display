@@ -54,9 +54,15 @@ interface Props {
    * GD-LAST-ROUND: the label says so, so a number that just changed mid-session
    * can't be mistaken for last week's. */
   lastRound?: number | null;
+  /** GD-REST-TILES: the same three tiles, scaled down, for the rest screen —
+   * the rest timer stays the dominant thing on that screen. Same component and
+   * the same DOM, so nothing shifts at the rest → set boundary. */
+  compact?: boolean;
 }
 
-export default function StrengthTiles({ reps, cap, last, lastRound = null }: Props) {
+export default function StrengthTiles({
+  reps, cap, last, lastRound = null, compact = false,
+}: Props) {
   const repsText = reps != null ? String(reps) : "—";
   const capText = cap != null ? fmt(cap) : "—";
   const repsLeft = repsLeftHint(cap);
@@ -70,7 +76,8 @@ export default function StrengthTiles({ reps, cap, last, lastRound = null }: Pro
     : "first time";
 
   return (
-    <div className="stiles" data-testid="strength-tiles">
+    <div className={`stiles${compact ? " stiles--compact" : ""}`}
+         data-testid={compact ? "strength-tiles-compact" : "strength-tiles"}>
       <section className="stile" data-testid="tile-reps" aria-label={`Target reps ${repsText}`}>
         <div className="stile-label">Reps</div>
         <div className="stile-num" style={numStyle(charCount(repsText))}>{repsText}</div>

@@ -8,6 +8,7 @@ import {
 } from "../lib/strength-cues";
 import { speak } from "../lib/audio";
 import StrengthTiles from "../components/StrengthTiles";
+import UpNextTiles from "../components/UpNextTiles";
 import { storedRate } from "../lib/voice";
 import { weightStepFor } from "../lib/weight-step";
 import { fetchSessions } from "../lib/api";
@@ -27,7 +28,7 @@ import {
   type FlatSession,
   type Step,
 } from "../lib/timer";
-import { flattenBlocksToSteps } from "../lib/steps";
+import { flattenBlocksToSteps, nextExerciseFor } from "../lib/steps";
 import {
   beepCountdown,
   beepEndOfRest,
@@ -374,6 +375,8 @@ export default function WorkoutScreen({
                 remaining={remaining}
                 holding={holding}
                 upNextLabel={upNext?.label ?? null}
+                upNextExercise={nextExerciseFor(state.steps, state.cursor.stepIndex,
+                                                state.cursor.currentRound)}
                 setNum={restEntryRef.current.setNum}
                 sessionSets={sessionSets}
                 serverLoggedCount={serverLoggedCount}
@@ -394,6 +397,8 @@ export default function WorkoutScreen({
                 sessionSets={sessionSets}
                 serverLoggedCount={serverLoggedCount}
                 lastLogged={lastLogged}
+                upNextExercise={nextExerciseFor(state.steps, state.cursor.stepIndex,
+                                                state.cursor.currentRound)}
               />
             )}
           </div>
@@ -554,6 +559,7 @@ function Glance({
   sessionSets,
   serverLoggedCount,
   lastLogged,
+  upNextExercise,
 }: {
   plan: Plan;
   step: Step;
@@ -564,6 +570,8 @@ function Glance({
   sessionSets: SessionSets;
   serverLoggedCount: ServerLoggedCount;
   lastLogged: Record<string, LastLoggedEntry>;
+  /** GD-REST-TILES: what a rest leads into. Null on the final rest. */
+  upNextExercise: PlannedExercise | null;
 }) {
   if (step.kind === "warmup" || step.kind === "cooldown") {
     return (
@@ -575,11 +583,15 @@ function Glance({
     );
   }
   if (step.kind === "rest") {
+    // GD-REST-TILES: a between-rounds rest shows the first exercise of the
+    // round that follows; the final one shows nothing (upNextExercise null).
     return (
       <>
         <div className="glance-set">{step.isRoundBreak ? "Between rounds" : "Rest"}</div>
         <div className="glance-time mono" data-testid="glance-time" data-mode="rest">{formatMMSS(remaining)}</div>
         {step.label && step.label !== "Rest" && <div className="glance-desc">{step.label}</div>}
+        <UpNextTiles plan={plan} exercise={upNextExercise}
+                     sessionSets={sessionSets} lastLogged={lastLogged} />
       </>
     );
   }
@@ -654,6 +666,7 @@ function RestLog({
   remaining,
   holding,
   upNextLabel,
+  upNextExercise,
   setNum,
   sessionSets,
   serverLoggedCount,
@@ -668,6 +681,8 @@ function RestLog({
   remaining: number;
   holding: boolean;
   upNextLabel: string | null;
+  /** GD-REST-TILES: the exercise this rest leads into — null on the final rest. */
+  upNextExercise: PlannedExercise | null;
   setNum: number;
   sessionSets: SessionSets;
   serverLoggedCount: ServerLoggedCount;
@@ -687,15 +702,22 @@ function RestLog({
   return (
     <>
       <div className={`restlog-timer${holding ? " restlog-timer--over" : ""}`}>
-        <span className="restlog-label">{holding ? "Rest over" : "Rest"}</span>
-        <span className="restlog-time mono">{formatMMSS(remaining)}</span>
-        {upNextLabel && <span className="restlog-next">Next: {upNextLabel}</span>}
-        {onDeferNext && (
-          <button type="button" className="btn btn--defer restlog-defer" onClick={onDeferNext}
-                  data-testid="defer-next" aria-label={`${upNextLabel} busy — do the one after first`}>
-            Busy — later
-          </button>
-        )}
+        <div className="restlog-timer-main">
+          <span className="restlog-label">{holding ? "Rest over" : "Rest"}</span>
+          <span className="restlog-time mono">{formatMMSS(remaining)}</span>
+          {/* GD-REST-TILES: the name moved into the tiles; this stays only when
+              there are no tiles to carry it (a rest with nothing after it). */}
+          {upNextLabel && !upNextExercise
+            && <span className="restlog-next">Next: {upNextLabel}</span>}
+          {onDeferNext && (
+            <button type="button" className="btn btn--defer restlog-defer" onClick={onDeferNext}
+                    data-testid="defer-next" aria-label={`${upNextLabel} busy — do the one after first`}>
+              Busy — later
+            </button>
+          )}
+        </div>
+        <UpNextTiles plan={plan} exercise={upNextExercise}
+                     sessionSets={sessionSets} lastLogged={lastLogged} />
       </div>
       {/* GD-DISTANCE: exercise notes moved here from the active set. This is
           where "log seat + pin setting" is useful — you're entering them. */}
