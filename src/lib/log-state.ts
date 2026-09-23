@@ -1,5 +1,6 @@
 import { exerciseSets } from "./adjustment";
-import type { Plan } from "./types";
+import type { Step } from "./steps";
+import type { LastLoggedEntry, Plan } from "./types";
 import { parseSetup, type MachineSetup } from "./set-notes";
 
 // ---------------------------------------------------------------------------
@@ -151,4 +152,71 @@ export function buildCompletionMap(
     });
   }
   return m;
+}
+
+// ---------------------------------------------------------------------------
+// GD-LAST-ROUND (Ryan, at the gym 2026-09-23): LAST must read the most recent
+// logged set, which mid-session means round 1 of TODAY, not the previous
+// session. /last_logged already returns today's rows — the app just fetches it
+// once when the workout starts and never again, so the tile kept showing last
+// week until a reload. Today's sets are already in sessionSets; prefer them.
+// ---------------------------------------------------------------------------
+
+/** What the LAST tile should show, and which round of today it came from
+ * (null when it came from a previous session). */
+export interface LastShown {
+  entry: LastLoggedEntry;
+  /** Round number within today's session, 1-based. Null = an earlier day. */
+  round: number | null;
+}
+
+export function lastShownFor(
+  name: string,
+  sessionSets: SessionSets,
+  lastLogged: Record<string, LastLoggedEntry>,
+): LastShown | null {
+  const today = sessionSets[name] ?? [];
+  if (today.length > 0) {
+    // The most recent set logged this session — by set_num, then by arrival,
+    // so a corrected re-log of set 1 doesn't outrank set 2.
+    const set = today.reduce((best, s) => (s.set_num >= best.set_num ? s : best), today[0]);
+    return {
+      entry: {
+        exercise: name,
+        plan_date: null,
+        weight_lbs: set.weight_lbs,
+        reps_done: set.reps_done,
+        rpe_actual: set.rpe_actual,
+        duration_sec: null,
+        distance_m: null,
+        hr_avg: null,
+        hr_peak: null,
+      },
+      round: set.set_num,
+    };
+  }
+  const prior = lastLogged[name];
+  return prior ? { entry: prior, round: null } : null;
+}
+
+// ---------------------------------------------------------------------------
+// GD-REST-AUTOCONTINUE (Ryan, at the gym 2026-09-23): a logging rest holds at 0
+// so the set can be entered. Once it IS entered there is nothing left to wait
+// for, so the rest advances itself rather than making him tap Continue with
+// hands on a dumbbell.
+// ---------------------------------------------------------------------------
+
+/** Should this rest advance itself now that its timer has run out?
+ * Only a logging rest (holdAtEnd) whose own exercise has its set in for the
+ * round being walked. An unlogged rest still waits, as it always did. */
+export function restAutoContinues(
+  step: Step | null | undefined,
+  round: number,
+  sessionSets: SessionSets,
+  serverLoggedCount: ServerLoggedCount,
+): boolean {
+  if (!step || step.kind !== "rest" || !step.holdAtEnd) return false;
+  const name = step.precedingExerciseRef?.name;
+  if (!name) return false;
+  return loggedCountFor(name, sessionSets, serverLoggedCount) >= round;
 }

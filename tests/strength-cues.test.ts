@@ -221,33 +221,72 @@ describe("when the prompt fires", () => {
   } as unknown as CircuitBlocks;
   const steps = flattenBlocksToSteps(BLOCKS).steps;
 
-  /** Walk the whole session the way the screen does. */
-  function walk() {
+  /** Walk the whole session the way the screen does: the circuit body once per
+   * round, because steps are not unrolled — the cursor wraps and counts. */
+  function walk(rounds = 2) {
     const spoken = new Set<string>();
-    const fired: Array<{ index: number; name: string }> = [];
-    for (let i = 0; i < steps.length; i++) {
-      const t = promptTarget(steps, i, spoken);
-      if (!t) continue;
-      spoken.add(t.exercise.name);
-      fired.push({ index: i, name: t.exercise.name });
+    const fired: Array<{ index: number; round: number; name: string }> = [];
+    for (let round = 1; round <= rounds; round++) {
+      for (let i = 0; i < steps.length; i++) {
+        const t = promptTarget(steps, i, spoken, round);
+        if (!t) continue;
+        spoken.add(t.key);
+        // the key carries the round it ANNOUNCES, which for a round break is
+        // the next one, not the one being walked
+        fired.push({ index: i, round: Number(t.key.split(":")[0]), name: t.exercise.name });
+      }
     }
     return fired;
   }
 
-  it("once per exercise, however many rounds it appears in", () => {
+  it("once per exercise PER ROUND — round 2 is prompted again", () => {
+    // GD-ROUND-CUES (Ryan, at the gym 2026-09-23). Round 1 announces the two
+    // exercises that have a rest ahead of them, then the round break announces
+    // round 2's first; round 2 announces its own two.
+    expect(walk().map((f) => `${f.round}:${f.name}`)).toEqual([
+      "1:DB bench press", "1:Lat pulldown", "2:Leg press",
+      "2:DB bench press", "2:Lat pulldown",
+    ]);
+  });
+
+  it("every exercise is announced exactly once in each round", () => {
     const fired = walk();
-    expect(fired.map((f) => f.name)).toEqual(["DB bench press", "Lat pulldown"]);
+    for (const round of [1, 2]) {
+      const names = fired.filter((f) => f.round === round).map((f) => f.name);
+      expect(new Set(names).size).toBe(names.length);
+    }
+    expect(fired.filter((f) => f.round === 2).length).toBe(3);   // all three
   });
 
-  it("never before the first exercise — nothing rests ahead of it", () => {
-    expect(walk().some((f) => f.name === "Leg press")).toBe(false);
+  it("never before the FIRST exercise of round 1 — nothing rests ahead of it", () => {
+    expect(walk().some((f) => f.round === 1 && f.name === "Leg press")).toBe(false);
   });
 
-  it("fires on a REST step, and the very next step is that exercise", () => {
+  it("the round break announces the next round's first exercise", () => {
+    const rb = steps.findIndex((st) => st.isRoundBreak);
+    const t = promptTarget(steps, rb, new Set(), 1);
+    expect(t?.exercise.name).toBe("Leg press");
+    expect(t?.key).toBe("2:Leg press");
+  });
+
+  it("the FINAL round break says nothing — the cooldown is next, not a round", () => {
+    const rb = steps.findIndex((st) => st.isRoundBreak);
+    expect(promptTarget(steps, rb, new Set(), 2)).toBeNull();
+  });
+
+  it("fires on a REST step, and the exercise it names is the one that follows", () => {
     for (const f of walk()) {
-      expect(steps[f.index].kind).toBe("rest");
-      expect(steps[f.index + 1].kind).toBe("exercise");
-      expect(steps[f.index + 1].exerciseRef!.name).toBe(f.name);
+      const step = steps[f.index];
+      expect(step.kind).toBe("rest");
+      if (step.isRoundBreak) {
+        // the cursor wraps: the circuit's first exercise, in the next round
+        const first = steps.find((st) => st.kind === "exercise"
+                                 && st.circuitId === step.circuitId);
+        expect(first!.exerciseRef!.name).toBe(f.name);
+      } else {
+        expect(steps[f.index + 1].kind).toBe("exercise");
+        expect(steps[f.index + 1].exerciseRef!.name).toBe(f.name);
+      }
     }
   });
 
@@ -257,13 +296,7 @@ describe("when the prompt fires", () => {
       (st, i) => st.kind === "rest"
         && st.precedingExerciseRef?.name === steps[i + 1]?.exerciseRef?.name,
     );
-    if (interSet >= 0) expect(promptTarget(steps, interSet, new Set())).toBeNull();
-  });
-
-  it("never on a round break", () => {
-    const rb = steps.findIndex((st) => st.isRoundBreak);
-    expect(rb).toBeGreaterThan(-1);
-    expect(promptTarget(steps, rb, new Set())).toBeNull();
+    if (interSet >= 0) expect(promptTarget(steps, interSet, new Set(), 1)).toBeNull();
   });
 
   it("carries the rest length, so a short rest can be skipped", () => {

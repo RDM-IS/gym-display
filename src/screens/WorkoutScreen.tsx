@@ -40,7 +40,9 @@ import { acquireWakeLock, releaseWakeLock, takeWakeHint } from "../lib/wake-lock
 import {
   buildCompletionMap,
   computePrefill,
+  lastShownFor,
   loggedCountFor,
+  restAutoContinues,
   nextSetNumFor,
   totalSetsFor,
   type SessionSets,
@@ -188,14 +190,28 @@ export default function WorkoutScreen({
     lastIndexRef.current = state.cursor.stepIndex;
   }, [state.cursor.stepIndex, state.steps]);
 
-  // GD-STRENGTH-CUES: one spoken prompt per exercise, at the START of the rest
-  // period that precedes it. Not between sets of the same exercise, and not
-  // before the first — there is no rest to say it in. The beeps are untouched;
-  // this rides alongside them.
+  // GD-REST-AUTOCONTINUE: a logging rest that has run out and whose set is
+  // already entered advances itself — hands are on the weight, not the iPad.
+  // An unlogged rest still holds. Paused stays paused.
   useEffect(() => {
-    const target = promptTarget(state.steps, state.cursor.stepIndex, spokenForRef.current);
+    if (!holding || state.status !== "running") return;
+    if (!restAutoContinues(current, state.cursor.currentRound, sessionSets, serverLoggedCount)) {
+      return;
+    }
+    suppressIndexAudioRef.current = true;
+    dispatch({ type: "NEXT_STEP", now_ms: performance.now() });
+  }, [holding, state.status, current, state.cursor.currentRound, sessionSets,
+      serverLoggedCount]);
+
+  // GD-STRENGTH-CUES: one spoken prompt per exercise per ROUND (GD-ROUND-CUES,
+  // 2026-09-23), at the START of the rest period that precedes it. Not between
+  // sets of the same exercise, and not before the first — there is no rest to
+  // say it in. The beeps are untouched; this rides alongside them.
+  useEffect(() => {
+    const target = promptTarget(state.steps, state.cursor.stepIndex,
+                                spokenForRef.current, state.cursor.currentRound);
     if (!target) return;
-    const { exercise: ex, restSec } = target;
+    const { exercise: ex, restSec, key } = target;
     const average = lastSessionAverage(priorDays, ex.name, todayISO);
     const text = exercisePrompt({
       name: ex.name,
@@ -207,9 +223,10 @@ export default function WorkoutScreen({
     // A rest too short to finish the sentence gets no prompt at all, rather
     // than a voice still talking when the next set starts.
     if (!fitsInRest(text, restSec, storedRate())) return;
-    spokenForRef.current.add(ex.name);
+    spokenForRef.current.add(key);
     speak(text);
-  }, [state.cursor.stepIndex, state.steps, priorDays, todayISO, plan]);
+  }, [state.cursor.stepIndex, state.cursor.currentRound, state.steps, priorDays,
+      todayISO, plan]);
 
   useEffect(() => {
     lastBeepSecRef.current = null;
@@ -579,7 +596,9 @@ function Glance({
   const reps = ex?.format === "reps" && ex.target_reps != null ? `${ex.target_reps} reps` : null;
   const load = ex?.format === "reps" && ex.target_load_lbs != null ? `${fmt(ex.target_load_lbs)} lb` : null;
   const tags = ex ? exerciseTags(ex, plan.blocks?.rpe_cap ?? null) : [];
-  const last = isPlanExercise ? lastLogged[name] ?? null : null;
+  // GD-LAST-ROUND: today's logged sets outrank the previous session.
+  const shown = isPlanExercise ? lastShownFor(name, sessionSets, lastLogged) : null;
+  const last = shown?.entry ?? null;
   const openEnded = !!step.holdAtEnd;
   const capForHint = ex?.rpe_cap ?? plan.blocks?.rpe_cap ?? plan.target_rpe ?? null;
   const repsLeft = repsLeftHint(capForHint);
@@ -591,7 +610,8 @@ function Glance({
   if (ex?.format === "reps") {
     return (
       <div className="glance-strength" data-mode="set" data-testid="glance-strength">
-        <StrengthTiles reps={ex.target_reps ?? null} cap={capForHint} last={last} />
+        <StrengthTiles reps={ex.target_reps ?? null} cap={capForHint} last={last}
+                       lastRound={shown?.round ?? null} />
         {setLabel && <div className="glance-set">{setLabel}</div>}
         <div className="glance-name">{name}</div>
         {tags.length > 0 && <div className="glance-target glance-adjusted">{tags.join(" · ")}</div>}

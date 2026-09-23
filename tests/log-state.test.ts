@@ -5,12 +5,14 @@ import {
   isFullyLogged,
   loggedCountFor,
   nextSetNumFor,
+  lastShownFor,
   previousSetFor,
+  restAutoContinues,
   totalSetsFor,
   type SessionSets,
   type ServerLoggedCount,
 } from "../src/lib/log-state";
-import type { Plan } from "../src/lib/types";
+import type { LastLoggedEntry, Plan } from "../src/lib/types";
 
 const CIRCUIT: Plan = {
   plan_id: 1,
@@ -197,5 +199,104 @@ describe("buildCompletionMap", () => {
     const m = buildCompletionMap(CIRCUIT, names, sess, {});
     expect(m.get("Goblet squat")).toEqual({ logged: 1, total: 3 });
     expect(m.get("Plank")).toEqual({ logged: 0, total: 5 });
+  });
+});
+
+// ── GD-LAST-ROUND (Ryan, at the gym 2026-09-23) ────────────────────────────
+describe("what the LAST tile shows", () => {
+  const PRIOR: LastLoggedEntry = {
+    exercise: "Leg press", plan_date: "2026-09-18", weight_lbs: 175, reps_done: 12,
+    rpe_actual: 7, duration_sec: null, distance_m: null, hr_avg: null, hr_peak: null,
+  };
+  const set = (set_num: number, weight_lbs: number, reps_done = 12) =>
+    ({ set_num, weight_lbs, reps_done, rpe_actual: 6 });
+
+  it("falls back to the previous session before anything is logged today", () => {
+    const shown = lastShownFor("Leg press", {}, { "Leg press": PRIOR });
+    expect(shown?.round).toBeNull();
+    expect(shown?.entry.weight_lbs).toBe(175);
+  });
+
+  it("round 1 of today beats the previous session", () => {
+    const shown = lastShownFor("Leg press", { "Leg press": [set(1, 185)] },
+                               { "Leg press": PRIOR });
+    expect(shown?.round).toBe(1);
+    expect(shown?.entry.weight_lbs).toBe(185);
+    expect(shown?.entry.plan_date).toBeNull();      // today's, not a dated row
+  });
+
+  it("the latest round wins, whatever order the sets arrived in", () => {
+    const shown = lastShownFor("Leg press",
+                               { "Leg press": [set(2, 190), set(1, 185)] },
+                               { "Leg press": PRIOR });
+    expect(shown?.round).toBe(2);
+    expect(shown?.entry.weight_lbs).toBe(190);
+  });
+
+  it("a corrected re-log of round 1 does not outrank round 2", () => {
+    const shown = lastShownFor("Leg press",
+                               { "Leg press": [set(1, 185), set(2, 190), set(1, 180)] },
+                               { "Leg press": PRIOR });
+    expect(shown?.round).toBe(2);
+    expect(shown?.entry.weight_lbs).toBe(190);
+  });
+
+  it("carries reps and RPE from the logged set", () => {
+    const shown = lastShownFor("Leg press", { "Leg press": [set(1, 185, 10)] }, {});
+    expect([shown?.entry.reps_done, shown?.entry.rpe_actual]).toEqual([10, 6]);
+  });
+
+  it("is null for an exercise with no history at all", () => {
+    expect(lastShownFor("Leg press", {}, {})).toBeNull();
+  });
+
+  it("does not leak one exercise's sets into another", () => {
+    const shown = lastShownFor("Pec fly", { "Leg press": [set(1, 185)] },
+                               { "Pec fly": PRIOR });
+    expect(shown?.round).toBeNull();
+    expect(shown?.entry.weight_lbs).toBe(175);
+  });
+});
+
+// ── GD-REST-AUTOCONTINUE (Ryan, at the gym 2026-09-23) ─────────────────────
+describe("when a logging rest advances itself", () => {
+  const restStep = (over: Record<string, unknown> = {}) => ({
+    kind: "rest", label: "Rest", duration_sec: 60, holdAtEnd: true,
+    precedingExerciseRef: { name: "Leg press", format: "reps" },
+    ...over,
+  }) as never;
+  const set = (set_num: number) =>
+    ({ set_num, weight_lbs: 185, reps_done: 12, rpe_actual: 6 });
+
+  it("advances once the set for this round is logged", () => {
+    expect(restAutoContinues(restStep(), 1, { "Leg press": [set(1)] }, {})).toBe(true);
+  });
+
+  it("still waits when nothing is logged", () => {
+    expect(restAutoContinues(restStep(), 1, {}, {})).toBe(false);
+  });
+
+  it("waits in round 2 until round 2's set is in", () => {
+    const afterRound1 = { "Leg press": [set(1)] };
+    expect(restAutoContinues(restStep(), 2, afterRound1, {})).toBe(false);
+    expect(restAutoContinues(restStep(), 2, { "Leg press": [set(1), set(2)] }, {})).toBe(true);
+  });
+
+  it("counts sets the server already has, after a mid-workout reload", () => {
+    expect(restAutoContinues(restStep(), 1, {}, { "Leg press": 1 })).toBe(true);
+  });
+
+  it("never advances a rest that is not a logging rest, or a set step", () => {
+    const sets = { "Leg press": [set(1)] };
+    expect(restAutoContinues(restStep({ holdAtEnd: false }), 1, sets, {})).toBe(false);
+    expect(restAutoContinues(restStep({ kind: "exercise" }), 1, sets, {})).toBe(false);
+    expect(restAutoContinues(restStep({ precedingExerciseRef: undefined }), 1, sets, {}))
+      .toBe(false);
+    expect(restAutoContinues(null, 1, sets, {})).toBe(false);
+  });
+
+  it("a round break never auto-advances — it has no exercise of its own", () => {
+    expect(restAutoContinues(restStep({ isRoundBreak: true, precedingExerciseRef: undefined }),
+                             1, { "Leg press": [set(1)] }, {})).toBe(false);
   });
 });

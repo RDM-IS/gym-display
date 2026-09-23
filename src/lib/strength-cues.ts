@@ -138,28 +138,53 @@ export function fitsInRest(text: string, restSec: number, rate = 0.85): boolean 
 }
 
 
+/** The key under which an exercise counts as "already announced".
+ * GD-ROUND-CUES (Ryan, at the gym 2026-09-23): once per exercise PER ROUND, so
+ * round 2 is prompted again. Round 1 alone left the second half of a session
+ * silent, which is where the cue is most useful — by then he has stopped
+ * reading the screen. */
+export function spokenKey(round: number, name: string): string {
+  return `${round}:${name}`;
+}
+
 /** Should the step at `index` speak the next exercise's prompt?
  *
- * Yes exactly when it is a rest that PRECEDES a different exercise, and that
- * exercise hasn't been announced yet. So:
+ * Yes exactly when it is a rest that PRECEDES a different exercise which
+ * hasn't been announced IN THIS ROUND. So:
  *   - never between sets of the same exercise (the rest's preceding exercise
  *     is the same one that's coming up);
  *   - never before the first exercise (nothing rests ahead of it);
- *   - never on a round break (that is a round change, not a new exercise);
- *   - once per exercise, however many rounds it appears in.
+ *   - once per exercise per round, including on a round break — that rest
+ *     leads into the next round's first exercise, which is a different one
+ *     and has not been announced in the new round.
  */
 export function promptTarget(
   steps: Step[],
   index: number,
   alreadySpoken: ReadonlySet<string>,
-): { exercise: NonNullable<Step["exerciseRef"]>; restSec: number } | null {
+  round = 1,
+): { exercise: NonNullable<Step["exerciseRef"]>; restSec: number; key: string } | null {
   const step = steps[index];
-  if (!step || step.kind !== "rest" || step.isRoundBreak) return null;
-  const next = steps[index + 1];
-  if (!next || next.kind !== "exercise") return null;
-  const ex = next.exerciseRef;
+  if (!step || step.kind !== "rest") return null;
+
+  // A round break is the LAST step of the circuit body — the cursor wraps back
+  // to its first exercise rather than walking to steps[index + 1]. So the
+  // exercise it leads into is that first one, in the NEXT round. After the
+  // final round it leads to the cooldown instead, and says nothing.
+  let ex: Step["exerciseRef"];
+  let forRound = round;
+  if (step.isRoundBreak) {
+    if (step.totalRounds != null && round >= step.totalRounds) return null;
+    ex = steps.find((s) => s.kind === "exercise" && s.circuitId === step.circuitId)?.exerciseRef;
+    forRound = round + 1;
+  } else {
+    const next = steps[index + 1];
+    if (!next || next.kind !== "exercise") return null;
+    ex = next.exerciseRef;
+    if (ex && step.precedingExerciseRef?.name === ex.name) return null;
+  }
   if (!ex) return null;
-  if (step.precedingExerciseRef?.name === ex.name) return null;
-  if (alreadySpoken.has(ex.name)) return null;
-  return { exercise: ex, restSec: step.duration_sec };
+  const key = spokenKey(forRound, ex.name);
+  if (alreadySpoken.has(key)) return null;
+  return { exercise: ex, restSec: step.duration_sec, key };
 }
