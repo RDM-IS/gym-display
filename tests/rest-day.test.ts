@@ -4,6 +4,7 @@
 // blocks.type. The Blocks union did not know about it, so every switch fell
 // through to assertNeverBlock and the iPad showed "Something broke —
 // Unhandled blocks.type: rest" on every rest day.
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { flattenBlocksToSteps } from "../src/lib/steps";
 import { sessionLabel } from "../src/lib/format";
@@ -96,5 +97,20 @@ describe("the plan window a rest day asks for", () => {
 
   it("crosses a month and a year boundary without drifting", () => {
     expect(planWindowFrom("2026-12-26")).toEqual(["2026-12-26", "2027-01-08"]);
+  });
+});
+
+// CARDIO-LOC (2026-09-25): a cardio log must record the machine, not a display
+// name — the rowing baseline is "modality = 'row'", so a substitute that logs
+// without its modality would be indistinguishable from a row.
+describe("what a cardio log carries", () => {
+  it("copies modality and device from the row's resolved cardio", () => {
+    const src = readFileSync("src/screens/LogPanel.tsx", "utf8");
+    const save = src.slice(src.indexOf("async function saveCardio"),
+                           src.indexOf("async function saveSummary"));
+    expect(save).toContain("modality: resolved?.modality");
+    expect(save).toContain("device: resolved?.device");
+    // and it takes them from the ROW, never from the session's name
+    expect(save).toContain("plan.blocks.cardio");
   });
 });

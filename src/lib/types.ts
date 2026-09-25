@@ -139,6 +139,10 @@ export interface IntervalsBlocks extends BlocksBase {
 /** Cardio steady block (e.g. "Long Z2 Bike"). NO top-level exercises array. */
 export interface SteadyBlocks extends BlocksBase {
   type: "steady";
+  /** CARDIO-LOC: resolved by artemis from the location's inventory. */
+  cardio?: CardioResolved | null;
+  /** True when the location has no cardio at all (MSP home). */
+  no_equipment?: boolean;
   warmup_sec?: number | null;
   warmup_settings?: string | null;
   cooldown_sec?: number | null;
@@ -385,8 +389,25 @@ export interface LogSetIn {
   notes?: string | null;
 }
 
+/** CARDIO-LOC: what a cardio session runs on, resolved by artemis from the
+ * location's inventory and carried on the row — the client never picks. */
+export interface CardioResolved {
+  modality: "row" | "bike" | "treadmill" | "elliptical" | null;
+  device: string | null;
+  available?: Array<{ modality: string; device: string }>;
+  is_substitute?: boolean;
+  /** Present only when the location has no cardio at all. */
+  reason?: string;
+  elsewhere?: string[];
+  elsewhere_location?: string;
+}
+
 export interface LogExerciseIn {
   plan_id?: number | null;
+  /** CARDIO-LOC: copied from the row, so the log records the machine rather
+   * than leaving it to be guessed from a display name later. */
+  modality?: string | null;
+  device?: string | null;
   exercise?: string | null;
   log_type: LogType;
   sets: LogSetIn[];
