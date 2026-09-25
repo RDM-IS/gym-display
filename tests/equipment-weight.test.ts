@@ -146,7 +146,7 @@ describe("where the equipment class comes from", () => {
 
   it("a class this build does not know falls back instead of throwing", () => {
     // `bands` / `trx` arrive with LOCATION-1; an older client must not break
-    const ex = { name: "Leg press", format: "reps",
+    const ex = { name: "Leg press", format: "reps" as const,
                  equipment_class: "bands" as unknown as EquipmentClass };
     expect(equipmentClassFor(ex)).toBe("machine");
     expect(() => weightStepFor(ex)).not.toThrow();
