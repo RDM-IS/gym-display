@@ -82,6 +82,18 @@ export function weekHeading(days: PlanDay[]): string | null {
  * night). Rest, rest_mobility and skipped days are not sessions.
  *
  * Exported so the rest screen and its tests share one rule. */
+/** The [from, to] a rest screen asks /plan for: `days` calendar days starting
+ * at `startIso`, INCLUSIVE both ends. /plan caps a range at 14 days and answers
+ * 400 range_too_large beyond it — asking for today..today+14 is 15 days, which
+ * is how "Nothing scheduled in the next two weeks" reached the iPad on
+ * 2026-09-25. Exported so the arithmetic is pinned by a test. */
+export function planWindowFrom(startIso: string, days = 14): [string, string] {
+  const [y, m, d] = startIso.split("-").map((n) => parseInt(n, 10));
+  const at = (offset: number) =>
+    new Date(Date.UTC(y, m - 1, d + offset)).toISOString().slice(0, 10);
+  return [at(0), at(days - 1)];
+}
+
 export function nextSessionFrom(days: PlanDay[], today: string): PlanDay | null {
   return days.find((p) => {
     if (p.plan_date === today && p.slot !== "evening") return false;

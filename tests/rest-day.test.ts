@@ -7,7 +7,7 @@
 import { describe, expect, it } from "vitest";
 import { flattenBlocksToSteps } from "../src/lib/steps";
 import { sessionLabel } from "../src/lib/format";
-import { nextSessionFrom as nextSession } from "../src/lib/week";
+import { nextSessionFrom as nextSession, planWindowFrom } from "../src/lib/week";
 import type { Blocks, PlanDay } from "../src/lib/types";
 
 /** Exactly what GET /api/health/today returned for 2026-09-25, captured live
@@ -75,5 +75,26 @@ describe("what counts as the next session", () => {
 
   it("returns null when nothing in the window is a session", () => {
     expect(nextSession([day("2026-09-26", "morning", "rest")], TODAY)).toBeNull();
+  });
+});
+
+// The window the rest screen asks /plan for. It is inclusive at both ends and
+// /plan refuses more than 14 days with a 400 — today..today+14 is 15, which
+// reached the iPad on 2026-09-25 as "Nothing scheduled in the next two weeks".
+describe("the plan window a rest day asks for", () => {
+  const dayCount = ([from, to]: [string, string]) =>
+    (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000 + 1;
+
+  it("is exactly 14 days, inclusive — never 15", () => {
+    expect(dayCount(planWindowFrom("2026-09-25"))).toBe(14);
+    expect(planWindowFrom("2026-09-25")).toEqual(["2026-09-25", "2026-10-08"]);
+  });
+
+  it("starts today, so tonight's evening row is inside it", () => {
+    expect(planWindowFrom("2026-09-25")[0]).toBe("2026-09-25");
+  });
+
+  it("crosses a month and a year boundary without drifting", () => {
+    expect(planWindowFrom("2026-12-26")).toEqual(["2026-12-26", "2027-01-08"]);
   });
 });
