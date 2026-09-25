@@ -456,6 +456,9 @@ function buildRecoveryFlow(b: Builder, blocks: RecoveryFlowBlocks) {
 export function flattenBlocksToSteps(blocks: Blocks): FlatSession {
   const b: Builder = { steps: [], sections: [] };
   switch (blocks.type) {
+    // A rest day has no steps. Handled here so the union stays exhaustive;
+    // App never routes a rest day to the workout screens anyway.
+    case "rest":      break;
     case "circuit":   buildCircuit(b, blocks); break;
     case "intervals": buildIntervalsCardio(b, blocks); break;
     case "steady":    buildSteady(b, blocks); break;
