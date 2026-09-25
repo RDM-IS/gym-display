@@ -517,6 +517,8 @@ export interface LoggedExerciseSummary {
 export interface PlanDay {
   plan_id: number;
   plan_date: string;
+  /** EVENING-1: two rows can share a date. Null on rows seeded before it. */
+  slot?: "morning" | "evening" | null;
   session_type: SessionType;
   display_name: string | null;
   phase: number;

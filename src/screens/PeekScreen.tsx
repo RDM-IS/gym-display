@@ -136,7 +136,11 @@ function WeekView({ guess, onNavigate }: { guess: string; onNavigate: (t: BarTar
 
   const result = load.loading ? null : load.result;
   const data = result?.status === "ok" ? result.data : null;
-  const byDate = new Map<string, PlanDay>((data?.days ?? []).map((d) => [d.plan_date, d]));
+  // One row per date for this view: the API orders morning first, so keep the
+  // FIRST row and let a later evening row sit behind it (a Map built by
+  // assignment would let the evening row replace the morning session).
+  const byDate = new Map<string, PlanDay>();
+  for (const d of data?.days ?? []) if (!byDate.has(d.plan_date)) byDate.set(d.plan_date, d);
   const dates = weekDates(start);
   const today = data?.today ?? guess;
   const heading = data ? weekHeading(data.days) : null;

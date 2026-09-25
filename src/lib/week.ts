@@ -74,6 +74,22 @@ export function weekHeading(days: PlanDay[]): string | null {
   return `Phase ${top.phase} · Week ${top.week}${deload}`;
 }
 
+/** The next actual SESSION at or after `today`, across BOTH slots (EVENING-1).
+ *
+ * `days` must be ordered by date and, within a date, morning before evening —
+ * which is how /api/health/plan returns them. Today's own morning row is not
+ * "next"; today's EVENING row is (a rest morning usually has a flow that
+ * night). Rest, rest_mobility and skipped days are not sessions.
+ *
+ * Exported so the rest screen and its tests share one rule. */
+export function nextSessionFrom(days: PlanDay[], today: string): PlanDay | null {
+  return days.find((p) => {
+    if (p.plan_date === today && p.slot !== "evening") return false;
+    if (p.is_skipped) return false;
+    return p.session_type !== "rest" && p.session_type !== "rest_mobility";
+  }) ?? null;
+}
+
 export function tomorrowOf(resp: PlanRangeResponse): PlanDay | null {
   const t = addDays(resp.today, 1);
   return resp.days.find((d) => d.plan_date === t) ?? null;
