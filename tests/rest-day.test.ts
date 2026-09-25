@@ -11,23 +11,21 @@ import type { Blocks } from "../src/lib/types";
 
 /** Exactly what GET /api/health/today returned for 2026-09-25, captured live
  * before the fix. Synthetic values only — no logged data (PUBLIC-FIXTURES). */
-const REST_BLOCKS = {
+const REST_BLOCKS: Blocks = {
   type: "rest",
   notes: "Rest. Nothing planned this morning.",
-  day_type: "wi",
-  location: "Richfield",
   equipment: [],
   display_name: "Rest",
-} as const;
+};
 
 describe("a rest day", () => {
   it("flattens to no steps instead of throwing", () => {
-    expect(() => flattenBlocksToSteps(REST_BLOCKS as Blocks)).not.toThrow();
-    expect(flattenBlocksToSteps(REST_BLOCKS as Blocks).steps).toHaveLength(0);
+    expect(() => flattenBlocksToSteps(REST_BLOCKS)).not.toThrow();
+    expect(flattenBlocksToSteps(REST_BLOCKS).steps).toHaveLength(0);
   });
 
   it("keeps the block as its source, so the screen can read notes and location", () => {
-    const flat = flattenBlocksToSteps(REST_BLOCKS as Blocks);
+    const flat = flattenBlocksToSteps(REST_BLOCKS);
     expect(flat.source).toBe(REST_BLOCKS);
     expect(flat.sections).toHaveLength(0);
   });
