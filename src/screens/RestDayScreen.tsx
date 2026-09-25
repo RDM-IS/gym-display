@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { MobilityBlocks, Plan, PlanDay } from "../lib/types";
 import { fetchPlanRange } from "../lib/api";
 import { displayTitle, formatPlanDate, sessionLabel } from "../lib/format";
-import { dayLabel, nextSessionFrom } from "../lib/week";
+import { dayLabel, nextSessionFrom, planWindowFrom } from "../lib/week";
 import { adjustmentOf } from "../lib/adjustment";
 import AdjustmentBanner from "../components/AdjustmentBanner";
 import BottomBar from "../components/BottomBar";
@@ -26,12 +26,8 @@ function useNextSession(fromDate: string): PlanDay | null | undefined {
   const [next, setNext] = useState<PlanDay | null | undefined>(undefined);
   useEffect(() => {
     let cancelled = false;
-    const day = (offset: number) => {
-      const [y, m, d] = fromDate.split("-").map((n) => parseInt(n, 10));
-      const dt = new Date(Date.UTC(y, m - 1, d + offset));
-      return dt.toISOString().slice(0, 10);
-    };
-    fetchPlanRange(day(0), day(14)).then((r) => {
+    const [from, to] = planWindowFrom(fromDate);
+    fetchPlanRange(from, to).then((r) => {
       if (cancelled) return;
       if (r.status !== "ok") { setNext(null); return; }
       setNext(nextSessionFrom(r.data.days ?? [], fromDate));
