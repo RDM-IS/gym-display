@@ -5,7 +5,7 @@ import type { BarTarget } from "../lib/bottom-bar";
 import { fetchPlanRange, type FetchPlanRangeResult } from "../lib/api";
 import type { PlanDay } from "../lib/types";
 import { formatEstimate } from "../lib/format";
-import {
+import { isRestRow,
   addDays,
   asOfLabel,
   dayLabel,
@@ -136,18 +136,34 @@ function WeekView({ guess, onNavigate }: { guess: string; onNavigate: (t: BarTar
 
   const result = load.loading ? null : load.result;
   const data = result?.status === "ok" ? result.data : null;
-  // One row per date for this view: the API orders morning first, so keep the
-  // FIRST row and let a later evening row sit behind it (a Map built by
-  // assignment would let the evening row replace the morning session).
+  // EVENING-1: a date can carry two rows. The list shows the DATE once, with a
+  // sub-line per slot, so "Fri 9/25 Rest" and "Fri 9/25 Recovery Flow" stop
+  // reading as duplicates. The API orders morning before evening.
+  const rowsByDate = new Map<string, PlanDay[]>();
+  for (const d of data?.days ?? []) {
+    const list = rowsByDate.get(d.plan_date) ?? [];
+    list.push(d);
+    rowsByDate.set(d.plan_date, list);
+  }
+  //: The row that represents the day in the preview pane: its session if it has
+  //: one, else the morning row.
   const byDate = new Map<string, PlanDay>();
-  for (const d of data?.days ?? []) if (!byDate.has(d.plan_date)) byDate.set(d.plan_date, d);
+  for (const [date, list] of rowsByDate) {
+    byDate.set(date, list.find((p) => !isRestRow(p)) ?? list[0]);
+  }
   const dates = weekDates(start);
   const today = data?.today ?? guess;
   const heading = data ? weekHeading(data.days) : null;
   // Landscape preview column: today, else the week's first planned day.
   const pick = dates.includes(today) ? today : dates.find((d) => byDate.has(d)) ?? null;
   const detail = pick ? byDate.get(pick) ?? null : null;
-  const opened = openDay ? byDate.get(openDay) ?? null : null;
+  //: openDay is "<date>#<plan_id>" so a day's two slots open their own detail.
+  const opened = (() => {
+    if (!openDay) return null;
+    const [date, pid] = openDay.split("#");
+    const rows = rowsByDate.get(date) ?? [];
+    return rows.find((p) => String(p.plan_id) === pid) ?? byDate.get(date) ?? null;
+  })();
 
   if (openDay && opened) {
     return (
@@ -184,31 +200,44 @@ function WeekView({ guess, onNavigate }: { guess: string; onNavigate: (t: BarTar
       <div className="week-grid">
         <ol className="week-list" data-testid="week-list">
           {dates.map((d) => {
-            const day = byDate.get(d);
-            const st = day ? statusIcon(day.status) : null;
-            const mins = day ? totalMinutes(day) : null;
-            const cls = ["week-row", d === today ? "week-row--today" : "",
-                         day ? `week-row--${day.status}` : "week-row--empty"].filter(Boolean).join(" ");
+            const rows = rowsByDate.get(d) ?? [];
+            const showSlots = rows.length > 1;
             return (
-              <li key={d}>
-                <button
-                  type="button"
-                  className={cls}
-                  data-testid={`week-row-${d}`}
-                  aria-current={d === today ? "date" : undefined}
-                  disabled={!day}
-                  onClick={() => setOpenDay(d)}
-                >
-                  <span className="week-day">{dayLabel(d)}</span>
-                  <span className="week-session">
-                    {day ? sessionName(day) : "—"}
-                    {day?.adjusted && <span className="badge badge--adjusted">Adjusted</span>}
-                  </span>
-                  <span className="week-mins mono">{formatEstimate(mins)}</span>
-                  <span className={`week-status ds--${day?.status ?? "none"}`} aria-label={st?.label} title={st?.label}>
-                    {st?.icon ?? ""}
-                  </span>
-                </button>
+              <li key={d} className={`week-day-group${d === today ? " week-day-group--today" : ""}`}>
+                <div className="week-day" aria-current={d === today ? "date" : undefined}>
+                  {dayLabel(d)}
+                </div>
+                {rows.length === 0 ? (
+                  <div className="week-row week-row--empty" data-testid={`week-row-${d}`}>
+                    <span className="week-session">—</span>
+                  </div>
+                ) : (
+                  rows.map((day) => {
+                    const st = statusIcon(day.status);
+                    const cls = ["week-row", `week-row--${day.status}`].join(" ");
+                    return (
+                      <button
+                        key={day.plan_id}
+                        type="button"
+                        className={cls}
+                        data-testid={`week-row-${d}${showSlots && day.slot ? `-${day.slot}` : ""}`}
+                        onClick={() => setOpenDay(`${d}#${day.plan_id}`)}
+                      >
+                        {showSlots && day.slot && (
+                          <span className="week-slot">{day.slot === "evening" ? "Evening" : "Morning"}</span>
+                        )}
+                        <span className="week-session">
+                          {sessionName(day)}
+                          {day.adjusted && <span className="badge badge--adjusted">Adjusted</span>}
+                        </span>
+                        <span className="week-mins mono">{formatEstimate(totalMinutes(day))}</span>
+                        <span className={`week-status ds--${day.status}`} aria-label={st?.label} title={st?.label}>
+                          {st?.icon ?? ""}
+                        </span>
+                      </button>
+                    );
+                  })
+                )}
               </li>
             );
           })}
