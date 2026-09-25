@@ -81,6 +81,18 @@ export function weekHeading(days: PlanDay[]): string | null {
  *   recovery  — a flow. A scheduled session, but not training.
  *   training  — strength and cardio: everything else.
  */
+/** Rows by date, preserving the API's order (morning before evening). One
+ * helper so the week list and the status tiles group identically. */
+export function groupByDate(rows: PlanDay[]): Map<string, PlanDay[]> {
+  const out = new Map<string, PlanDay[]>();
+  for (const r of rows) {
+    const list = out.get(r.plan_date) ?? [];
+    list.push(r);
+    out.set(r.plan_date, list);
+  }
+  return out;
+}
+
 export function isRestRow(p: Pick<PlanDay, "session_type">): boolean {
   return p.session_type === "rest" || p.session_type === "rest_mobility";
 }

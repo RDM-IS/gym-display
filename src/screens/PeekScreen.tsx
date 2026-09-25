@@ -5,7 +5,7 @@ import type { BarTarget } from "../lib/bottom-bar";
 import { fetchPlanRange, type FetchPlanRangeResult } from "../lib/api";
 import type { PlanDay } from "../lib/types";
 import { formatEstimate } from "../lib/format";
-import { isRestRow,
+import { groupByDate, isRestRow,
   addDays,
   asOfLabel,
   dayLabel,
@@ -139,12 +139,7 @@ function WeekView({ guess, onNavigate }: { guess: string; onNavigate: (t: BarTar
   // EVENING-1: a date can carry two rows. The list shows the DATE once, with a
   // sub-line per slot, so "Fri 9/25 Rest" and "Fri 9/25 Recovery Flow" stop
   // reading as duplicates. The API orders morning before evening.
-  const rowsByDate = new Map<string, PlanDay[]>();
-  for (const d of data?.days ?? []) {
-    const list = rowsByDate.get(d.plan_date) ?? [];
-    list.push(d);
-    rowsByDate.set(d.plan_date, list);
-  }
+  const rowsByDate = groupByDate(data?.days ?? []);
   //: The row that represents the day in the preview pane: its session if it has
   //: one, else the morning row.
   const byDate = new Map<string, PlanDay>();

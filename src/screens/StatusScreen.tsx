@@ -26,7 +26,7 @@ import type {
   StrengthProgressRow,
   TrendPoint,
 } from "../lib/types";
-import { addDays, asOfLabel, dayLabel, statusIcon } from "../lib/week";
+import { addDays, asOfLabel, dayLabel, groupByDate, statusIcon } from "../lib/week";
 import { formatSetup } from "../lib/set-notes";
 
 // ---------------------------------------------------------------------------
@@ -193,24 +193,39 @@ export function WeekSection({ data, onOpen }: { data: OverviewResponse; onOpen: 
         <div className="muted">No sessions planned this week.</div>
       ) : (
         <div className="st-tiles">
-          {data.week_days.map((d) => {
-            const st = statusIcon(d.status);
-            const today = d.plan_date === data.date;
+          {/* EVENING-1: a date can carry two rows. The DATE heads the group
+              once, with a labelled sub-line per slot, so a rest morning beside
+              an evening flow stops reading as two duplicate days. */}
+          {[...groupByDate(data.week_days)].map(([date, rows]) => {
+            const today = date === data.date;
+            const showSlots = rows.length > 1;
             return (
-              <button
-                key={d.plan_date}
-                type="button"
-                className={`st-tile${today ? " st-tile--today" : ""}`}
-                data-testid={`st-tile-${d.plan_date}`}
-                aria-current={today ? "date" : undefined}
-                aria-label={`${dayLabel(d.plan_date)}, ${sessionName(d)}, ${st.label}${d.adjusted ? ", adjusted" : ""}`}
-                onClick={() => onOpen(d)}
-              >
-                <span className="st-tile-day">{dayLabel(d.plan_date)}</span>
-                <span className="st-tile-name">{sessionName(d)}</span>
-                <span className={`st-tile-icon ds--${d.status}`}>{st.icon}</span>
-                {d.adjusted && <span className="badge badge--adjusted">Adjusted</span>}
-              </button>
+              <div key={date} className={`st-tile-group${today ? " st-tile-group--today" : ""}`}
+                   data-testid={`st-day-${date}`}>
+                <span className="st-tile-day" aria-current={today ? "date" : undefined}>
+                  {dayLabel(date)}
+                </span>
+                {rows.map((d) => {
+                  const st = statusIcon(d.status);
+                  return (
+                    <button
+                      key={d.plan_id}
+                      type="button"
+                      className="st-tile"
+                      data-testid={`st-tile-${date}${showSlots && d.slot ? `-${d.slot}` : ""}`}
+                      aria-label={`${dayLabel(date)}${showSlots && d.slot ? `, ${d.slot}` : ""}, ${sessionName(d)}, ${st.label}${d.adjusted ? ", adjusted" : ""}`}
+                      onClick={() => onOpen(d)}
+                    >
+                      {showSlots && d.slot && (
+                        <span className="st-tile-slot">{d.slot === "evening" ? "Evening" : "Morning"}</span>
+                      )}
+                      <span className="st-tile-name">{sessionName(d)}</span>
+                      <span className={`st-tile-icon ds--${d.status}`}>{st.icon}</span>
+                      {d.adjusted && <span className="badge badge--adjusted">Adjusted</span>}
+                    </button>
+                  );
+                })}
+              </div>
             );
           })}
         </div>
