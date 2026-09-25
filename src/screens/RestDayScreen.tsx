@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { MobilityBlocks, Plan, PlanDay } from "../lib/types";
 import { fetchPlanRange } from "../lib/api";
 import { displayTitle, formatPlanDate, sessionLabel } from "../lib/format";
-import { dayLabel } from "../lib/week";
+import { dayLabel, nextSessionFrom } from "../lib/week";
 import { adjustmentOf } from "../lib/adjustment";
 import AdjustmentBanner from "../components/AdjustmentBanner";
 import BottomBar from "../components/BottomBar";
@@ -13,9 +13,15 @@ interface Props {
   onNavigate?: (target: BarTarget) => void;
 }
 
-/** GD-REST: the next day that actually has a session, so a rest day says what
- * is coming rather than just "see you tomorrow". Rest and skipped days are not
- * sessions. `undefined` = still looking, `null` = nothing in the window. */
+/** GD-REST: the next session, so a rest day says what is coming rather than
+ * just "see you tomorrow". Rest and skipped days are not sessions.
+ *
+ * EVENING-1: "next" spans BOTH slots. A rest MORNING often has a recovery flow
+ * that same evening, and that is tonight, not Tuesday — so the window starts
+ * today and keeps today's evening row while dropping today's own morning row.
+ * The API orders morning before evening within a date.
+ *
+ * `undefined` = still looking, `null` = nothing in the window. */
 function useNextSession(fromDate: string): PlanDay | null | undefined {
   const [next, setNext] = useState<PlanDay | null | undefined>(undefined);
   useEffect(() => {
@@ -25,13 +31,10 @@ function useNextSession(fromDate: string): PlanDay | null | undefined {
       const dt = new Date(Date.UTC(y, m - 1, d + offset));
       return dt.toISOString().slice(0, 10);
     };
-    fetchPlanRange(day(1), day(14)).then((r) => {
+    fetchPlanRange(day(0), day(14)).then((r) => {
       if (cancelled) return;
       if (r.status !== "ok") { setNext(null); return; }
-      const found = (r.data.days ?? []).find(
-        (p) => !p.is_skipped && p.session_type !== "rest" && p.session_type !== "rest_mobility",
-      );
-      setNext(found ?? null);
+      setNext(nextSessionFrom(r.data.days ?? [], fromDate));
     });
     return () => { cancelled = true; };
   }, [fromDate]);
@@ -64,7 +67,8 @@ export default function RestDayScreen({ plan, onNavigate }: Props) {
       {mobNotes && !dayOff && <div className="desc">{mobNotes}</div>}
       {next === undefined ? null : next ? (
         <div className="desc">
-          Next: {dayLabel(next.plan_date)} · {next.display_name || sessionLabel(next)}
+          Next: {next.plan_date === plan.plan_date ? "tonight" : dayLabel(next.plan_date)}
+          {" · "}{next.display_name || sessionLabel(next)}
           {next.location ? ` · ${next.location}` : ""}
         </div>
       ) : (
