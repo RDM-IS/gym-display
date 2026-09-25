@@ -306,8 +306,8 @@ describe("the exercise a rest leads into", () => {
       { name: "Leg press", format: "reps", target_reps: 12, rest_after_sec: 60 },
       { name: "DB bench press", format: "reps", target_reps: 12, rest_after_sec: 60 },
     ],
-  };
-  const steps = flattenBlocksToSteps(BLOCKS as never).steps;
+  } as never;
+  const steps = flattenBlocksToSteps(BLOCKS).steps;
   const restAfter = (name: string) =>
     steps.findIndex((s) => s.kind === "rest" && s.precedingExerciseRef?.name === name);
   const roundBreak = steps.findIndex((s) => s.isRoundBreak);
