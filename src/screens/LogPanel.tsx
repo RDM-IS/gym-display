@@ -147,9 +147,15 @@ export default function LogPanel({
     if (!state.cardio) return;
     dispatch({ type: "cardio_save_start" });
     const c = state.cardio;
+    // CARDIO-LOC: the log records WHAT IT WAS DONE ON, from the row's resolved
+    // cardio. Without this the modality is only a display name, and rowing
+    // cannot be told from a substitute when the baseline is computed.
+    const resolved = plan.blocks?.type === "steady" ? plan.blocks.cardio ?? null : null;
     const body: LogExerciseIn = {
       plan_id: plan.plan_id,
       exercise: plan.blocks?.display_name ?? displayTitle(plan),
+      modality: resolved?.modality ?? null,
+      device: resolved?.device ?? null,
       log_type: "cardio_block",
       sets: [{
         duration_sec: c.duration_sec ?? Math.round(elapsed_sec),
