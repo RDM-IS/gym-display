@@ -386,6 +386,9 @@ export default function App() {
   const isRestDay =
     result.plan.is_skipped ||
     result.plan.session_type === "rest_mobility" ||
+    // migration 042 (EVENING-1) gave rest mornings their own type
+    result.plan.session_type === "rest" ||
+    blocksType === "rest" ||
     blocksType === "mobility";
 
   if (isRestDay) {

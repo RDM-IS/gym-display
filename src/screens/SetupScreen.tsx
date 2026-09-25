@@ -88,6 +88,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function BlockDetail({ blocks, sessionRpe }: { blocks: Plan["blocks"]; sessionRpe: number | null }) {
   if (!blocks) return null;
   switch (blocks.type) {
+    // A rest day never reaches Setup — App renders RestDayScreen for it.
+    case "rest":      return null;
     case "circuit":   return <CircuitDetail b={blocks} sessionRpe={sessionRpe} />;
     case "intervals": return <IntervalsDetail b={blocks} />;
     case "steady":    return <SteadyDetail b={blocks} />;

@@ -3,6 +3,10 @@ import type { EquipmentClass } from "./equipment";
 export type { EquipmentClass };
 
 export type SessionType =
+  // ENUM-EXPAND: these mirror health.plan.session_type. `rest` arrived with
+  // migration 042 (EVENING-1) and was missing here, so nothing in this app
+  // knew rest days existed — see RestBlocks below.
+  | "rest"
   | "strength_a"
   | "strength_b"
   | "strength_c"
@@ -209,7 +213,17 @@ export interface WalkBlocks extends BlocksBase {
   intensity?: string | null;
 }
 
+/** A rest day: no exercises, nothing to log. `blocks.type === "rest"` has been
+ * arriving from the API since migration 042; until 2026-09-25 this union did
+ * not include it, so every switch below fell through to assertNeverBlock and
+ * the screen threw on every rest day. */
+export interface RestBlocks extends BlocksBase {
+  type: "rest";
+  notes?: string | null;
+}
+
 export type Blocks =
+  | RestBlocks
   | CircuitBlocks
   | IntervalsBlocks
   | SteadyBlocks

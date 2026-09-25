@@ -3,6 +3,7 @@ import type { Plan, SessionType } from "./types";
 export type { SessionType } from "./types";
 
 const SESSION_LABELS: Record<SessionType, string> = {
+  rest: "Rest",
   strength_a: "Strength A",
   strength_b: "Strength B",
   strength_c: "Strength C",
