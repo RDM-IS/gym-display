@@ -24,10 +24,18 @@ const CIRCUIT_PLAN: Plan = {
     rounds: 3,
     rest_between_rounds_sec: 120,
     exercises: [
-      { name: "Goblet squat", format: "reps", target_reps: 10, target_load_lbs: 35, rest_after_sec: 60 },
-      { name: "Plank", format: "duration", duration_sec: 30, rest_after_sec: 60 },
+      { name: "Goblet squat", format: "reps", target_reps: 10, target_load_lbs: 35,
+        rest_after_sec: 60, equipment_class: "dumbbell" },
+      { name: "Plank", format: "duration", duration_sec: 30, rest_after_sec: 60,
+        equipment_class: "bodyweight" },
     ],
     cooldown: "5 min easy",
+    // LOCATION-1: rows carry their gym's load config; without it the logger
+    // shows "No load configuration — log manually" instead of a stepper.
+    load_config: {
+      dumbbell: { mode: "numeric", step: 5, min: 5, max: 45 },
+      bodyweight: { mode: "none" },
+    },
   },
 };
 

@@ -187,7 +187,16 @@ export default function InlineExerciseLogger({
       </div>
 
       <div className="log-steppers">
-        {!w.isBodyweight && useReps && (
+        {w.loadMode === "unknown" && useReps && (
+          // LOCATION-1: the row does not say what a load means here — no class,
+          // no config, or a class this gym has no equipment for. Say so and let
+          // the weight be typed, rather than offering office numbers that may
+          // not exist at this gym.
+          <div className="desc" data-testid="load-unknown">
+            No load configuration — log manually.
+          </div>
+        )}
+        {w.loadMode === "numeric" && useReps && (
           <Stepper
             label="Weight"
             unit="lb"
@@ -202,7 +211,7 @@ export default function InlineExerciseLogger({
             disabled={isDone || skipped}
             sub={
               w.showPlateMath && state.weight != null
-                ? plateLabel(state.weight, w.barLbs)
+                ? plateLabel(state.weight, w.barLbs, w.plates ?? [])
                 : undefined
             }
             onChange={(v) => dispatch({ type: "set_weight", v })}

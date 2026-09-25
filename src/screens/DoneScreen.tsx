@@ -13,6 +13,7 @@ import {
   type SetEntry,
 } from "../lib/log-state";
 import type {
+  LoadConfigByClass,
   LastLoggedEntry,
   LogExerciseIn,
   Plan,
@@ -108,6 +109,7 @@ export default function DoneScreen({
                 slot={slot}
                 plan_id={plan.plan_id}
                 week_num={plan.week_num}
+                loadConfig={plan.blocks?.load_config}
                 sessionSets={sessionSets}
                 lastLogged={lastLogged[slot.exercise.name] ?? null}
                 onLoggedSet={onLoggedSet}
@@ -137,6 +139,7 @@ function UnloggedSlotCard({
   slot,
   plan_id,
   week_num,
+  loadConfig,
   sessionSets,
   lastLogged,
   onLoggedSet,
@@ -144,6 +147,9 @@ function UnloggedSlotCard({
   slot: UnloggedSlot;
   plan_id: number;
   week_num: number;
+  /** LOCATION-1: the row's load config, so the logger offers this gym's
+   * weights rather than saying it has none. */
+  loadConfig?: LoadConfigByClass | null;
   sessionSets: SessionSets;
   lastLogged: LastLoggedEntry | null;
   onLoggedSet: (exerciseName: string, set: SetEntry) => void;
@@ -190,6 +196,7 @@ function UnloggedSlotCard({
         key={`${slot.exercise.name}#${slot.set_num}`}
         exercise={slot.exercise}
         plan_id={plan_id}
+        loadConfig={loadConfig}
         week_num={week_num}
         set_num={slot.set_num}
         total_sets={slot.total_sets}
