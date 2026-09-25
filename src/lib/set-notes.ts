@@ -15,7 +15,7 @@ export const QUICK_FLAGS = ["skipped", "machine taken", "felt off", "form breakd
 export type QuickFlag = (typeof QUICK_FLAGS)[number];
 
 /** Classes with a seat / pad / range position worth recording. */
-export function supportsSetting(cls: EquipmentClass): boolean {
+export function supportsSetting(cls: EquipmentClass | null): boolean {
   return cls === "machine" || cls === "cable" || cls === "smith";
 }
 

@@ -53,7 +53,7 @@ import {
 } from "../lib/log-state";
 import { useMediaQuery } from "../lib/use-media";
 import { useSwipe } from "../lib/use-swipe";
-import type { LastLoggedEntry, Plan, PlannedExercise, SessionDayRow } from "../lib/types";
+import type { LoadConfigByClass, LastLoggedEntry, Plan, PlannedExercise, SessionDayRow } from "../lib/types";
 import JourneyMap from "../components/JourneyMap";
 import InlineExerciseLogger from "../components/InlineExerciseLogger";
 import { exerciseTags } from "../lib/adjustment";
@@ -219,7 +219,7 @@ export default function WorkoutScreen({
       name: ex.name,
       reps: ex.format === "reps" ? ex.target_reps ?? null : null,
       cap: ex.rpe_cap ?? plan.blocks?.rpe_cap ?? plan.target_rpe ?? null,
-      bodyweight: isBodyweight(ex),
+      bodyweight: isBodyweight(ex, plan.blocks?.load_config),
       average,
     });
     // A rest too short to finish the sentence gets no prompt at all, rather
@@ -541,10 +541,11 @@ function collectExerciseNames(plan: Plan): string[] {
   return out;
 }
 
-/** No load stepper at all → the spoken prompt leaves the weight out. */
-function isBodyweight(ex: PlannedExercise): boolean {
+/** No load stepper at all → the spoken prompt leaves the weight out.
+ * LOCATION-1: bands and TRX at the farm are "no load" too, per the row. */
+function isBodyweight(ex: PlannedExercise, loadConfig?: LoadConfigByClass | null): boolean {
   try {
-    return weightStepFor(ex).isBodyweight;
+    return weightStepFor(ex, loadConfig).isBodyweight;
   } catch {
     return false;
   }
@@ -743,6 +744,7 @@ function RestLog({
           key={`${exerciseName}#${setNum}`}
           exercise={exercise}
           plan_id={plan.plan_id}
+          loadConfig={plan.blocks?.load_config}
           week_num={plan.week_num}
           set_num={setNum}
           total_sets={total}

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import InlineExerciseLogger from "../src/components/InlineExerciseLogger";
+import type { LoadConfigByClass } from "../src/lib/types";
 import { applyKey, parseBuffer } from "../src/components/NumericKeypad";
 import { computePrefill } from "../src/lib/log-state";
 import { _resetQueueForTests } from "../src/lib/log-queue";
@@ -8,7 +9,18 @@ import type { LogExerciseIn, LogResponse, PlannedExercise } from "../src/lib/typ
 
 const LEG_PRESS: PlannedExercise = {
   name: "Leg press", format: "reps", target_reps: 12, target_load_lbs: 180, rest_after_sec: 60,
+  equipment_class: "machine",
 };
+
+//: LOCATION-1: what artemis sends on an office row. A fixture — the values
+//: live in knowledge/load_config.py and travel on the plan row.
+const OFFICE_CONFIG: LoadConfigByClass = {
+  dumbbell: { mode: "numeric", step: 5, min: 5, max: 45 },
+  machine: { mode: "numeric", step: 10, min: 0, max: 300 },
+  cable: { mode: "numeric", step: 10, min: 0, max: 200 },
+  bodyweight: { mode: "none" },
+};
+
 
 function okResponse(): LogResponse {
   return { plan_id: 7, inserted: 1, rows: [] };
@@ -39,6 +51,7 @@ function renderLogger(overrides: Partial<Parameters<typeof InlineExerciseLogger>
   return render(
     <InlineExerciseLogger
       exercise={LEG_PRESS}
+      loadConfig={OFFICE_CONFIG}
       plan_id={7}
       set_num={2}
       total_sets={3}

@@ -85,7 +85,28 @@ interface BlocksBase {
   mobility_focus?: string[] | null;
   mobility_min?: number | null;
   finisher?: Finisher | null;
+  /** LOCATION-1: what a load means where this session happens. Absent on rows
+   * seeded before LOCATION-1, which are all office rows. */
+  load_config?: LoadConfigByClass | null;
+  /** LOCATION-1: which gym — `office`, `richfield`, … */
+  location_key?: string | null;
 }
+
+/** One class's loading rules, exactly as the plan row carries them. */
+export type LoadSpec =
+  | { mode: "none" }
+  | {
+      mode: "numeric";
+      step: number;
+      min: number;
+      max: number;
+      /** Plate-loaded: the bar's own weight, and the plates available per side. */
+      bar?: number;
+      plates?: number[];
+      note?: string;
+    };
+
+export type LoadConfigByClass = Partial<Record<EquipmentClass, LoadSpec>>;
 
 export interface IntervalsTemplate {
   work_sec: number;
