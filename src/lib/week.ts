@@ -74,6 +74,34 @@ export function weekHeading(days: PlanDay[]): string | null {
   return `Phase ${top.phase} · Week ${top.week}${deload}`;
 }
 
+/** EVENING-1 row classification, in one place so the week list, the counters
+ * and the "next session" lookup agree.
+ *
+ *   rest      — `rest` or `rest_mobility`: nothing was scheduled.
+ *   recovery  — a flow. A scheduled session, but not training.
+ *   training  — strength and cardio: everything else.
+ */
+export function isRestRow(p: Pick<PlanDay, "session_type">): boolean {
+  return p.session_type === "rest" || p.session_type === "rest_mobility";
+}
+
+export function isRecoveryRow(p: Pick<PlanDay, "session_type">): boolean {
+  return p.session_type === "recovery_flow";
+}
+
+export function isTrainingRow(p: Pick<PlanDay, "session_type">): boolean {
+  return !isRestRow(p) && !isRecoveryRow(p);
+}
+
+/** Done / due counts for one bucket of rows. `due` excludes days still ahead,
+ * so "1 of 2" means one of the two that have come round so far. */
+export function tally(rows: PlanDay[]): { done: number; due: number; scheduled: number } {
+  const counted = rows.filter((p) => !p.is_skipped);
+  const done = counted.filter((p) => p.status === "done" || p.status === "partial").length;
+  const due = counted.filter((p) => p.status !== "upcoming").length;
+  return { done, due, scheduled: counted.length };
+}
+
 /** The next actual SESSION at or after `today`, across BOTH slots (EVENING-1).
  *
  * `days` must be ordered by date and, within a date, morning before evening —
@@ -98,7 +126,7 @@ export function nextSessionFrom(days: PlanDay[], today: string): PlanDay | null 
   return days.find((p) => {
     if (p.plan_date === today && p.slot !== "evening") return false;
     if (p.is_skipped) return false;
-    return p.session_type !== "rest" && p.session_type !== "rest_mobility";
+    return !isRestRow(p);
   }) ?? null;
 }
 

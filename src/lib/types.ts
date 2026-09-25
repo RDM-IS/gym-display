@@ -577,6 +577,11 @@ export interface ProgramInfo {
   week_end: string;
   sessions_done: number;
   sessions_planned: number;
+  /** Split counts: strength+cardio, then flows. Rest rows are in neither. */
+  training_done?: number;
+  training_scheduled?: number;
+  recovery_done?: number;
+  recovery_scheduled?: number;
   source: "state" | "derived";
 }
 

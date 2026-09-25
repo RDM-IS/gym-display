@@ -97,7 +97,7 @@ function lexGreater(a: number[], b: number[]): boolean {
 /** The exercise's class, from the ROW — or null when it carries none.
  *
  * LOCATION-1 (2026-09-25): the keyword rules are gone. They only knew the
- * office's vocabulary, so "TRX row" and "Band pulldown" both read as `machine`
+ * office's vocabulary, so "TRX row" read as `machine`
  * and offered a 10 lb stack step for a strap and a rubber band. Every row
  * carries `equipment_class` (EXERCISE-CLASS), and one that does not is an
  * explicit unknown the UI reports — never a guess.

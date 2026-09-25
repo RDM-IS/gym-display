@@ -162,7 +162,20 @@ export function ProgramSection({ data }: { data: OverviewResponse }) {
         <li><span className="st-label">Started</span> {md(p.anchor)}</li>
         {deload && <li><span className="st-label">Deload</span> {deload}</li>}
         <li>
-          <span className="st-label">This week</span> {p.sessions_done} / {p.sessions_planned} sessions done
+          {/* Split (2026-09-25): a flow is a scheduled session but not
+              training, so one figure meant two things. Rest rows count
+              toward neither. Older payloads without the split fall back to
+              the single figure rather than rendering "undefined". */}
+          <span className="st-label">This week</span>{" "}
+          {p.training_scheduled != null && p.recovery_scheduled != null ? (
+            <>
+              Training {p.training_done ?? 0}/{p.training_scheduled}
+              {" · "}
+              Recovery {p.recovery_done ?? 0}/{p.recovery_scheduled}
+            </>
+          ) : (
+            <>{p.sessions_done} / {p.sessions_planned} sessions done</>
+          )}
         </li>
       </ul>
     </Section>
