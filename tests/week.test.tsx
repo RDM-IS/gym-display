@@ -276,34 +276,38 @@ describe("Tomorrow view", () => {
 // EVENING-1 (2026-09-25): a date with two slots shows the date ONCE, with a
 // labelled sub-line per slot — "Fri 9/25 Rest" and "Fri 9/25 Recovery Flow"
 // used to read as two unrelated duplicate rows.
+//
+// The rows are built from the range the component ACTUALLY requests, not from
+// a hard-coded date: the first version pinned 2026-09-25 and passed locally
+// only because this machine's clock says so. CI's clock asks for a different
+// week and it found no rows.
 describe("a day with both slots", () => {
   it("shows the date once and labels each slot", async () => {
-    payload = () => ({
-      today: "2026-09-25",
-      timezone: "America/Chicago",
-      range_from: "2026-09-23",
-      range_to: "2026-09-29",
-      days: [
-        { plan_id: 1, plan_date: "2026-09-25", slot: "morning", session_type: "rest",
-          display_name: "Rest", phase: 1, week_num: 2, target_rpe: null, est_duration_min: 0,
-          location: "Richfield", is_skipped: false, adjusted: false, status: "today", blocks: {},
-          logged: [] },
-        { plan_id: 2, plan_date: "2026-09-25", slot: "evening", session_type: "recovery_flow",
-          display_name: "Recovery Flow", phase: 1, week_num: 2, target_rpe: null,
-          est_duration_min: 32, location: "Brown Deer", is_skipped: false, adjusted: false,
-          status: "today", blocks: {}, logged: [] },
-      ],
-    }) as unknown as ReturnType<typeof weekPayload>;
+    let both = "";
+    payload = (url: string) => {
+      const from = new URL(url, "http://x").searchParams.get("from")!;
+      both = weekDates(from)[2];              // any mid-week day of that range
+      const base = {
+        phase: 1, week_num: 2, target_rpe: null, is_skipped: false, adjusted: false,
+        status: "upcoming", blocks: {}, logged: [],
+      };
+      return resp(weekDates(from)[0], [
+        { ...base, plan_id: 1, plan_date: both, slot: "morning", session_type: "rest",
+          display_name: "Rest", est_duration_min: 0, location: "Richfield" },
+        { ...base, plan_id: 2, plan_date: both, slot: "evening", session_type: "recovery_flow",
+          display_name: "Recovery Flow", est_duration_min: 32, location: "Brown Deer" },
+      ] as unknown as PlanDay[]);
+    };
     render(<PeekScreen mode="week" onNavigate={vi.fn()} deviceToday="2026-09-25" />);
     await waitFor(() => expect(screen.getByTestId("week-list")).toBeDefined());
+    await waitFor(() => expect(screen.queryByTestId(`week-row-${both}-morning`)).not.toBeNull());
 
     const list = screen.getByTestId("week-list");
     // the date appears once in that day's group, not once per row
-    const group = within(list).getAllByText("Fri 9/25");
-    expect(group).toHaveLength(1);
+    expect(within(list).getAllByText(dayLabel(both))).toHaveLength(1);
 
-    const morning = screen.getByTestId("week-row-2026-09-25-morning");
-    const evening = screen.getByTestId("week-row-2026-09-25-evening");
+    const morning = screen.getByTestId(`week-row-${both}-morning`);
+    const evening = screen.getByTestId(`week-row-${both}-evening`);
     expect(morning.textContent).toContain("Morning");
     expect(morning.textContent).toContain("Rest");
     expect(evening.textContent).toContain("Evening");
