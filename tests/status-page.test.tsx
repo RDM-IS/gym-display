@@ -185,7 +185,10 @@ describe("labels", () => {
     expect(screen.getByTestId("st-tile-2026-09-19").textContent).toContain("✕");
     expect(screen.getByTestId("st-tile-2026-09-22").textContent).toContain("•");
     expect(screen.getByTestId("st-tile-2026-09-18").textContent).toContain("Adjusted");
-    expect(screen.getByTestId("st-tile-2026-09-21").getAttribute("aria-current")).toBe("date");
+    // EVENING-1: the DATE now heads the group, so today is marked on the day
+    // heading rather than on each slot's button.
+    expect(within(screen.getByTestId("st-day-2026-09-21")).getByText("Mon 9/21")
+      .getAttribute("aria-current")).toBe("date");
   });
 
   it("the bar on Status offers all three views", () => {
