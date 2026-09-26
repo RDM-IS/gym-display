@@ -3,6 +3,8 @@ import Stepper from "../components/Stepper";
 import RpeChips from "../components/RpeChips";
 import NotesField from "../components/NotesField";
 import InlineExerciseLogger from "../components/InlineExerciseLogger";
+import CardioFinishCard from "../components/CardioFinishCard";
+import { cardioExerciseName, isCardioPlan } from "../lib/cardio-finish";
 import { submitLog } from "../lib/log-queue";
 import { displayTitle, formatPlanDate } from "../lib/format";
 import {
@@ -189,6 +191,9 @@ export default function LogPanel({
   }
 
   const mains = mainExercises(plan.blocks);
+  // CARDIO-REQUIRED: a cardio row with no block yet can only finish with one.
+  const cardioOwed = isCardioPlan(plan)
+    && loggedCountFor(cardioExerciseName(plan), sessionSets, serverLoggedCount) === 0;
   const fins = finisherExercises(plan.blocks?.finisher);
   const blockType = plan.blocks?.type;
 
@@ -203,7 +208,7 @@ export default function LogPanel({
       </div>
 
       <div className="log-scroll">
-        {state.cardio && (
+        {state.cardio && !isCardioPlan(plan) && (
           <CardioCard
             blockType={blockType}
             form={state.cardio}
@@ -249,6 +254,17 @@ export default function LogPanel({
           </Section>
         )}
 
+        {cardioOwed ? (
+          // CARDIO-REQUIRED: a cardio row finishes only with its block.
+          <CardioFinishCard
+            plan={plan}
+            elapsed_sec={elapsed_sec}
+            hasSummary={hasSummary}
+            onLoggedSet={onLoggedSet}
+            onSummaryLogged={onSummaryLogged}
+            onFinished={onFinish}
+          />
+        ) : (
         <SummaryCard
           state={state}
           hasSummary={hasSummary}
@@ -256,6 +272,7 @@ export default function LogPanel({
           onNotes={(v) => dispatch({ type: "set_summary_notes", value: v })}
           onFinish={saveSummary}
         />
+        )}
       </div>
     </div>
   );

@@ -1,5 +1,7 @@
 import { useMemo, useReducer } from "react";
 import InlineExerciseLogger from "../components/InlineExerciseLogger";
+import CardioFinishCard from "../components/CardioFinishCard";
+import { cardioExerciseName, isCardioPlan } from "../lib/cardio-finish";
 import RpeChips from "../components/RpeChips";
 import NotesField from "../components/NotesField";
 import { submitLog } from "../lib/log-queue";
@@ -121,7 +123,17 @@ export default function DoneScreen({
 
       <section className="done-section">
         <h2 className="section-title">Session summary</h2>
-        <SummaryCard plan_id={plan.plan_id} hasSummary={hasSummary} onSummaryLogged={onSummaryLogged} />
+        {isCardioPlan(plan) && loggedCountFor(cardioExerciseName(plan), sessionSets, serverLoggedCount) === 0 ? (
+          <CardioFinishCard
+            plan={plan}
+            elapsed_sec={total_elapsed_sec}
+            hasSummary={hasSummary}
+            onLoggedSet={onLoggedSet}
+            onSummaryLogged={onSummaryLogged}
+          />
+        ) : (
+          <SummaryCard plan_id={plan.plan_id} hasSummary={hasSummary} onSummaryLogged={onSummaryLogged} />
+        )}
       </section>
 
       <footer className="done-footer">
