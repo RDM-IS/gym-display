@@ -90,6 +90,12 @@ interface BlocksBase {
   load_config?: LoadConfigByClass | null;
   /** LOCATION-1: which gym — `office`, `richfield`, … */
   location_key?: string | null;
+  /** LOCATION-1 (2026-09-26): this location has NO configured warmup or
+   * cooldown, so the row deliberately carries neither. Absent `warmup` alone is
+   * ambiguous — a session may simply not have one — so the flag makes it a
+   * positive fact and the screen says so instead of showing nothing. Same
+   * discipline as an absent `load_config`. */
+  prep_unknown?: boolean | null;
 }
 
 /** One class's loading rules, exactly as the plan row carries them. */

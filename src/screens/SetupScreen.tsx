@@ -118,11 +118,20 @@ function CircuitDetail({ b, sessionRpe }: { b: CircuitBlocks; sessionRpe: number
   const rounds = b.rounds ?? 1;
   return (
     <>
-      {b.warmup && (
+      {b.warmup ? (
         <Section title="Warmup">
           <div className="list">{b.warmup}</div>
         </Section>
-      )}
+      ) : b.prep_unknown ? (
+        // LOCATION-1: this gym has no configured warmup. Say so — the row used
+        // to carry the office's "5 min elliptical, easy" wherever it happened,
+        // which named equipment that is not in the room.
+        <Section title="Warmup">
+          <div className="list muted" data-testid="warmup-unknown">
+            Not configured for this location — warm up as you see fit and log it.
+          </div>
+        </Section>
+      ) : null}
       {exercises.length > 0 ? (
         <Section title={`Exercises — ${rounds} round${rounds === 1 ? "" : "s"}`}>
           <ul className="list">
@@ -144,11 +153,17 @@ function CircuitDetail({ b, sessionRpe }: { b: CircuitBlocks; sessionRpe: number
       ) : (
         <div className="list muted">No exercises in this block.</div>
       )}
-      {b.cooldown && (
+      {b.cooldown ? (
         <Section title="Cooldown">
           <div className="list">{b.cooldown}</div>
         </Section>
-      )}
+      ) : b.prep_unknown ? (
+        <Section title="Cooldown">
+          <div className="list muted" data-testid="cooldown-unknown">
+            Not configured for this location.
+          </div>
+        </Section>
+      ) : null}
       <FinisherDetail f={b.finisher} />
     </>
   );

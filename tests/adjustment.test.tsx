@@ -186,6 +186,41 @@ describe("AdjustmentBanner", () => {
     render(<SetupScreen plan={sessionB()} interrupted={false} onStart={() => {}} />);
     expect(screen.queryByTestId("adjustment-banner")).toBeNull();
   });
+
+  // LOCATION-1 (2026-09-26): the row used to carry the OFFICE warmup wherever the
+  // session happened, so a Richfield lift told Ryan to use an elliptical and a
+  // Stretch Trainer that are not in that room. The box now omits both and sets
+  // `prep_unknown`; the screen has to say so rather than render nothing.
+  it("says so when the location has no configured warmup or cooldown", () => {
+    const atRichfield = sessionB({
+      location_key: "richfield",
+      warmup: null,
+      cooldown: null,
+      prep_unknown: true,
+    });
+    render(<SetupScreen plan={atRichfield} interrupted={false} onStart={() => {}} />);
+    expect(screen.getByTestId("warmup-unknown").textContent)
+      .toContain("Not configured for this location");
+    expect(screen.getByTestId("cooldown-unknown")).toBeTruthy();
+    // and NEITHER office string is anywhere on the screen
+    expect(screen.queryByText(/elliptical/i)).toBeNull();
+    expect(screen.queryByText(/Stretch Trainer/i)).toBeNull();
+  });
+
+  it("an office row still shows its real warmup and cooldown", () => {
+    render(<SetupScreen plan={sessionB()} interrupted={false} onStart={() => {}} />);
+    expect(screen.getByText("5 min elliptical, easy")).toBeTruthy();
+    expect(screen.getByText("5 min Stretch Trainer")).toBeTruthy();
+    expect(screen.queryByTestId("warmup-unknown")).toBeNull();
+    expect(screen.queryByTestId("cooldown-unknown")).toBeNull();
+  });
+
+  it("a session that simply has no warmup stays silent, flag absent", () => {
+    render(<SetupScreen plan={sessionB({ warmup: null, cooldown: null })}
+                        interrupted={false} onStart={() => {}} />);
+    expect(screen.queryByTestId("warmup-unknown")).toBeNull();
+    expect(screen.queryByTestId("cooldown-unknown")).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------
