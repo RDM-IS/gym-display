@@ -199,3 +199,21 @@ describe("makeup (MAKEUP-2)", () => {
     expect(screen.queryByText("Make it up today")).toBeNull();
   });
 });
+
+describe("day off (PAIN-1)", () => {
+  it("offers only mobility and no makeup", async () => {
+    stubLibrary({ ...LIB,
+      locations: [{ key: "office", display: "office gym", sessions: [
+        { ...SESSION } as never,
+        { ...SESSION, session_type: "mobility", display_name: "Test Mobility" } as never,
+      ] }],
+      makeup: { week_start: "2027-03-07", not_done: [], repeat: false,
+        offer: { missed_plan_id: 1, missed_date: "2027-03-08", rest_plan_id: 2,
+                 session_type: "strength_a", display_name: "Test A" } } });
+    render(<LibraryScreen onLaunch={() => {}} dayOff />);
+    await waitFor(() => screen.getByText("Test Mobility"));
+    expect(screen.queryByText("Test Core")).toBeNull();
+    expect(screen.queryByText(/Make up/)).toBeNull();
+    expect(screen.getByText(/gentle mobility only/)).toBeDefined();
+  });
+});

@@ -60,6 +60,13 @@ function Loading() {
   );
 }
 
+/** PAIN-1: a check-in day off is a mobility block with zero minutes (the
+ * same test RestDayScreen uses). */
+function isDayOff(p: Plan | null): boolean {
+  const b = p?.blocks as { type?: string; duration_min?: number | null } | undefined;
+  return b?.type === "mobility" && b.duration_min === 0;
+}
+
 export default function App() {
   const [route, navigate] = usePath();
   const [planLoad, setPlanLoad] = useState<PlanLoad>({ loading: true, result: null });
@@ -365,6 +372,7 @@ export default function App() {
         {chrome}
         <LibraryScreen
           onLaunch={onLaunch}
+          dayOff={isDayOff(plan)}
           onMadeUp={() => {
             // Today's row is now the session: reload it and go run it as planned work.
             autoRedirectedRef.current = true;

@@ -18,7 +18,14 @@ interface Props {
   onLaunch: (plan: Plan, sessionType: string) => void;
   /** MAKEUP-2: today's rest row is now the made-up session — go run it. */
   onMadeUp?: () => void;
+  /** PAIN-1: today is a check-in day off — only gentle mobility is offered.
+   * Read live from today's row: the library is built at 00:20, before the
+   * check-in could have made the day a day off. */
+  dayOff?: boolean;
 }
+
+/** On a pain day off, only these extras. */
+const DAY_OFF_TYPES = new Set(["mobility"]);
 
 function dayName(iso: string): string {
   const d = new Date(`${iso}T12:00:00`);
@@ -45,7 +52,7 @@ export function planFromLibrary(s: LibrarySession, today: string): Plan {
   };
 }
 
-export default function LibraryScreen({ onLaunch, onMadeUp }: Props) {
+export default function LibraryScreen({ onLaunch, onMadeUp, dayOff = false }: Props) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [makeup, setMakeup] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
   const [locKey, setLocKey] = useState<string | null>(null);   // null = today's
@@ -92,7 +99,7 @@ export default function LibraryScreen({ onLaunch, onMadeUp }: Props) {
   return (
     <div className="screen screen--scroll library">
       <div className="h1">Start a session</div>
-      {data.makeup?.offer && (
+      {data.makeup?.offer && !dayOff && (
         <div className="log-card library-makeup">
           <div className="log-card-name">Make up {data.makeup.offer.display_name}</div>
           <p className="desc">
@@ -127,6 +134,9 @@ export default function LibraryScreen({ onLaunch, onMadeUp }: Props) {
         </p>
       )}
       <h2 className="section-title">Extras</h2>
+      {dayOff && (
+        <p className="desc">Day off from the check-in — gentle mobility only today.</p>
+      )}
       <div className="library-loc">
         <button
           type="button"
@@ -163,7 +173,7 @@ export default function LibraryScreen({ onLaunch, onMadeUp }: Props) {
         <p className="desc">No extras can be run at {location.display} yet.</p>
       ) : (
         <div className="library-list">
-          {location.sessions.map((s) => (
+          {location.sessions.filter((s) => !dayOff || DAY_OFF_TYPES.has(s.session_type)).map((s) => (
             <button
               key={s.session_type}
               type="button"
