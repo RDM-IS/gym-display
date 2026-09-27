@@ -10,7 +10,7 @@ import { pathToRoute, routeToPath } from "../src/lib/routing";
 import type { LibraryResponse, LogExerciseIn, Plan } from "../src/lib/types";
 
 const SESSION = {
-  session_type: "strength_a", display_name: "Test Strength A", week_num: 9, phase: 1,
+  session_type: "core", display_name: "Test Core", week_num: 9, phase: 1,
   target_rpe: 6, target_hr_zone: null, est_duration_min: 44,
   blocks: { type: "circuit", rounds: 1, exercises: [] },
 };
@@ -50,11 +50,11 @@ describe("LibraryScreen", () => {
     stubLibrary(LIB);
     const onLaunch = vi.fn();
     render(<LibraryScreen onLaunch={onLaunch} />);
-    await waitFor(() => expect(screen.getByText("Test Strength A")).toBeDefined());
+    await waitFor(() => expect(screen.getByText("Test Core")).toBeDefined());
     expect(screen.getByText(/office gym · today/)).toBeDefined();
-    fireEvent.click(screen.getByText("Test Strength A"));
+    fireEvent.click(screen.getByText("Test Core"));
     const [plan, type] = onLaunch.mock.calls[0] as [Plan, string];
-    expect(type).toBe("strength_a");
+    expect(type).toBe("core");
     expect(plan.plan_id).toBe(ADHOC_PLAN_ID);
     expect(plan.plan_date).toBe("2027-03-02");
   });
@@ -62,10 +62,10 @@ describe("LibraryScreen", () => {
   it("a location override is for this launch and shows only what's there", async () => {
     stubLibrary(LIB);
     render(<LibraryScreen onLaunch={() => {}} />);
-    await waitFor(() => screen.getByText("Test Strength A"));
+    await waitFor(() => screen.getByText("Test Core"));
     fireEvent.click(screen.getByLabelText("Change location for this session"));
     fireEvent.click(screen.getByRole("button", { name: "home" }));
-    expect(screen.queryByText("Test Strength A")).toBeNull();       // absent, not greyed
+    expect(screen.queryByText("Test Core")).toBeNull();       // absent, not greyed
     expect(screen.getByText("Test Flow")).toBeDefined();
     expect(screen.getByText(/home · this session only/)).toBeDefined();
   });
@@ -143,5 +143,59 @@ describe("RestDayScreen", () => {
 
   it("has no planned-session builder of its own", () => {
     expect(planFromLibrary(SESSION as never, "2027-03-02").blocks).toBe(SESSION.blocks);
+  });
+});
+
+describe("makeup (MAKEUP-2)", () => {
+  const OFFER = { missed_plan_id: 11, missed_date: "2027-03-09", rest_plan_id: 22,
+                  session_type: "strength_b", display_name: "Test B", location_key: "office" };
+
+  it("offers the one not-done session on a rest day and swaps it", async () => {
+    const calls: Array<{ url: string; body: unknown }> = [];
+    vi.stubGlobal("fetch", vi.fn(async (u: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(u);
+      if (url.includes("/makeup")) {
+        calls.push({ url, body: JSON.parse(init!.body as string) });
+        return new Response(JSON.stringify({ ok: true, plan_id: 22 }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ ...LIB, makeup: { week_start: "2027-03-07",
+        not_done: [{ plan_id: 11, plan_date: "2027-03-09", session_type: "strength_b",
+                     display_name: "Test B", skipped: false }], offer: OFFER, repeat: false } }),
+        { status: 200 });
+    }));
+    const onMadeUp = vi.fn();
+    render(<LibraryScreen onLaunch={() => {}} onMadeUp={onMadeUp} />);
+    await waitFor(() => screen.getByText("Make up Test B"));
+    fireEvent.click(screen.getByText("Make it up today"));
+    await waitFor(() => expect(onMadeUp).toHaveBeenCalled());
+    expect(calls[0].body).toEqual({ missed_plan_id: 11, rest_plan_id: 22 });
+  });
+
+  it("shows the server's reason when the swap is refused", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (u: RequestInfo | URL) => {
+      if (String(u).includes("/makeup")) {
+        return new Response(JSON.stringify({ detail: { error: "makeup_not_possible",
+          reason: "today's morning is no longer an unlogged rest day" } }), { status: 409 });
+      }
+      return new Response(JSON.stringify({ ...LIB, makeup: { week_start: "2027-03-07",
+        not_done: [], offer: OFFER, repeat: false } }), { status: 200 });
+    }));
+    const onMadeUp = vi.fn();
+    render(<LibraryScreen onLaunch={() => {}} onMadeUp={onMadeUp} />);
+    await waitFor(() => screen.getByText("Make it up today"));
+    fireEvent.click(screen.getByText("Make it up today"));
+    await waitFor(() => screen.getByText(/no longer an unlogged rest day/));
+    expect(onMadeUp).not.toHaveBeenCalled();
+  });
+
+  it("says the week repeats when more than one is not done — and offers nothing", async () => {
+    stubLibrary({ ...LIB, makeup: { week_start: "2027-03-07", offer: null, repeat: true,
+      not_done: [
+        { plan_id: 11, plan_date: "2027-03-08", session_type: "strength_a", display_name: "Test A", skipped: false },
+        { plan_id: 12, plan_date: "2027-03-09", session_type: "cardio_z2", display_name: "Test Z2", skipped: true },
+      ] } });
+    render(<LibraryScreen onLaunch={() => {}} />);
+    await waitFor(() => screen.getByText(/The week repeats/));
+    expect(screen.queryByText("Make it up today")).toBeNull();
   });
 });

@@ -320,3 +320,25 @@ export async function fetchLibrary(): Promise<FetchLibraryResult> {
     return { status: "error", message: err instanceof Error ? err.message : "Failed to load sessions." };
   }
 }
+
+export type PostMakeupResult =
+  | { status: "ok"; plan_id: number }
+  | { status: "error"; message: string };
+
+/** MAKEUP-2: swap the missed session onto today's rest day. The server checks
+ * everything again; a 409 carries the reason, shown as-is. */
+export async function postMakeup(missed_plan_id: number, rest_plan_id: number): Promise<PostMakeupResult> {
+  try {
+    const res = await apiFetch("/api/health/makeup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ missed_plan_id, rest_plan_id }),
+    });
+    const j = (await res.json().catch(() => null)) as
+      { plan_id?: number; detail?: { reason?: string } } | null;
+    if (!res.ok) return { status: "error", message: j?.detail?.reason ?? `HTTP ${res.status}` };
+    return { status: "ok", plan_id: j?.plan_id ?? rest_plan_id };
+  } catch (err) {
+    return { status: "error", message: err instanceof Error ? err.message : "Makeup failed." };
+  }
+}

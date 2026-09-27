@@ -424,3 +424,4 @@ input, textarea, select { font-size: max(16px, 1rem); }
 .library-item { display: flex; justify-content: space-between; align-items: center; }
 .library-min { color: var(--fg-dim); }
 .library-foot { margin-top: 12px; }
+.library-makeup { margin: 8px 0 4px; }

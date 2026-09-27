@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchLibrary } from "../lib/api";
+import { fetchLibrary, postMakeup } from "../lib/api";
 import { ADHOC_PLAN_ID } from "../lib/adhoc";
 import type { LibraryLocation, LibraryResponse, LibrarySession, Plan } from "../lib/types";
 
@@ -16,6 +16,13 @@ import type { LibraryLocation, LibraryResponse, LibrarySession, Plan } from "../
 
 interface Props {
   onLaunch: (plan: Plan, sessionType: string) => void;
+  /** MAKEUP-2: today's rest row is now the made-up session — go run it. */
+  onMadeUp?: () => void;
+}
+
+function dayName(iso: string): string {
+  const d = new Date(`${iso}T12:00:00`);
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "numeric", day: "numeric" });
 }
 
 type Load =
@@ -38,8 +45,9 @@ export function planFromLibrary(s: LibrarySession, today: string): Plan {
   };
 }
 
-export default function LibraryScreen({ onLaunch }: Props) {
+export default function LibraryScreen({ onLaunch, onMadeUp }: Props) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
+  const [makeup, setMakeup] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
   const [locKey, setLocKey] = useState<string | null>(null);   // null = today's
   const [picking, setPicking] = useState(false);
 
@@ -84,6 +92,41 @@ export default function LibraryScreen({ onLaunch }: Props) {
   return (
     <div className="screen screen--scroll library">
       <div className="h1">Start a session</div>
+      {data.makeup?.offer && (
+        <div className="log-card library-makeup">
+          <div className="log-card-name">Make up {data.makeup.offer.display_name}</div>
+          <p className="desc">
+            Not done on {dayName(data.makeup.offer.missed_date)}. Doing it today makes
+            that day a rest day and today this session.
+          </p>
+          {makeup.error && <div className="log-error">{makeup.error}</div>}
+          <button
+            type="button"
+            className="btn btn--block"
+            disabled={makeup.busy}
+            onClick={async () => {
+              const o = data.makeup!.offer!;
+              setMakeup({ busy: true, error: null });
+              const r = await postMakeup(o.missed_plan_id, o.rest_plan_id);
+              if (r.status === "ok") { setMakeup({ busy: false, error: null }); onMadeUp?.(); }
+              else setMakeup({ busy: false, error: r.message });
+            }}
+          >
+            {makeup.busy ? "Swapping…" : `Make it up today`}
+          </button>
+        </div>
+      )}
+      {!data.makeup?.offer && data.makeup?.offer_blocked && (
+        <p className="desc">{data.makeup.offer_blocked}, so it can't be made up here today.</p>
+      )}
+      {data.makeup?.repeat && (
+        <p className="desc">
+          {data.makeup.not_done.length} sessions not done this week
+          ({data.makeup.not_done.map((m) => `${dayName(m.plan_date)} ${m.display_name}`).join(", ")}).
+          The week repeats — Artemis will ask you to confirm.
+        </p>
+      )}
+      <h2 className="section-title">Extras</h2>
       <div className="library-loc">
         <button
           type="button"
@@ -117,7 +160,7 @@ export default function LibraryScreen({ onLaunch }: Props) {
       {!location ? (
         <p className="desc">Today's location isn't in the library.</p>
       ) : location.sessions.length === 0 ? (
-        <p className="desc">Nothing can be run at {location.display} yet.</p>
+        <p className="desc">No extras can be run at {location.display} yet.</p>
       ) : (
         <div className="library-list">
           {location.sessions.map((s) => (
@@ -134,8 +177,8 @@ export default function LibraryScreen({ onLaunch }: Props) {
         </div>
       )}
       <p className="desc dim library-foot">
-        Sets count toward your history. If today has an unfinished session of the
-        same type, this completes it.
+        Extras are low-impact work on top of the plan — they count toward your
+        history, never against it.
       </p>
     </div>
   );

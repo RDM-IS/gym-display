@@ -712,6 +712,25 @@ export interface LibraryLocation {
   sessions: LibrarySession[];
 }
 
+/** MAKEUP-2: the one session not done this program week, offered on a rest day. */
+export interface MakeupOffer {
+  missed_plan_id: number;
+  missed_date: string;
+  rest_plan_id: number;
+  session_type: string;
+  display_name: string;
+  location_key?: string;
+}
+
+export interface MakeupState {
+  week_start: string | null;
+  not_done: Array<{ plan_id: number; plan_date: string; session_type: string;
+                    display_name: string; skipped: boolean }>;
+  offer: MakeupOffer | null;
+  repeat: boolean;
+  offer_blocked?: string;
+}
+
 export type LibraryResponse =
   | { available: false; reason: string }
   | {
@@ -722,4 +741,5 @@ export type LibraryResponse =
       week_num: number;
       today_location_key: string;
       locations: LibraryLocation[];
+      makeup?: MakeupState;
     };

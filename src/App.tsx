@@ -363,7 +363,16 @@ export default function App() {
     return (
       <>
         {chrome}
-        <LibraryScreen onLaunch={onLaunch} />
+        <LibraryScreen
+          onLaunch={onLaunch}
+          onMadeUp={() => {
+            // Today's row is now the session: reload it and go run it as planned work.
+            autoRedirectedRef.current = true;
+            void refreshPlan();
+            void refreshStatus();
+            navigate("today");
+          }}
+        />
       </>
     );
   }
