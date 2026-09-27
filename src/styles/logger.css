@@ -230,6 +230,13 @@
 
 .log-finish { background: var(--ok); border-color: var(--ok); }
 
+/* CARDIO-REQUIRED: why "Finish cardio" is disabled — a prompt, not an error. */
+.log-hint {
+  padding: 8px 14px;
+  font-size: 15px;
+  color: var(--fg-dim);
+}
+
 .log-error {
   padding: 10px 14px;
   border-radius: 10px;
