@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
 
-export type Route = "today" | "status";
+export type Route = "today" | "status" | "library";
 
 export function pathToRoute(pathname: string): Route {
-  return pathname.replace(/\/$/, "").endsWith("/status") ? "status" : "today";
+  const p = pathname.replace(/\/$/, "");
+  if (p.endsWith("/status")) return "status";
+  if (p.endsWith("/library")) return "library";
+  return "today";
 }
 
 export function routeToPath(route: Route): string {
-  return route === "status" ? "/status" : "/today";
+  return route === "status" ? "/status" : route === "library" ? "/library" : "/today";
 }
 
 export function usePath(): [Route, (next: Route, opts?: { replace?: boolean }) => void] {

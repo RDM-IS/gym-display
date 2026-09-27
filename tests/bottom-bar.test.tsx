@@ -52,9 +52,10 @@ describe("bottom bar contents per view", () => {
 });
 
 describe("top tabs", () => {
-  it("say Workout and Status — no second 'Today'", () => {
+  it("say Workout, Status and Sessions — no second 'Today'", () => {
     render(<Nav route="today" onNavigate={() => {}} />);
-    expect(screen.getAllByRole("link").map((l) => l.textContent)).toEqual(["Workout", "Status"]);
+    expect(screen.getAllByRole("link").map((l) => l.textContent))
+      .toEqual(["Workout", "Status", "Sessions"]);
   });
 });
 

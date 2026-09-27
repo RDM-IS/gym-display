@@ -6,6 +6,8 @@ import ErrorScreen from "./screens/ErrorScreen";
 import RestDayScreen from "./screens/RestDayScreen";
 import StatusScreen from "./screens/StatusScreen";
 import FlowScreen from "./screens/FlowScreen";
+import LibraryScreen from "./screens/LibraryScreen";
+import { endAdhoc, startAdhoc } from "./lib/adhoc";
 import PeekScreen, { type PeekMode } from "./screens/PeekScreen";
 import type { BarTarget } from "./lib/bottom-bar";
 import Nav from "./components/Nav";
@@ -104,6 +106,10 @@ export default function App() {
   }, []);
   const handleSummaryLogged = useCallback(() => setLogHasSummary(true), []);
 
+  // SESSION-LIB: a session started from the library, run through the ordinary
+  // screens instead of today's plan. Its logs are ad-hoc (lib/adhoc.ts).
+  const [launched, setLaunched] = useState<Plan | null>(null);
+
   const refreshPlan = useCallback(async () => {
     setPlanLoad({ loading: true, result: null });
     const result = await fetchTodayPlan();
@@ -201,6 +207,7 @@ export default function App() {
   // Fires once after status loads. Skipped if user is mid-workout flow.
   useEffect(() => {
     if (autoRedirectedRef.current) return;
+    if (launched) return;
     if (route !== "today") return;
     if (peek) return;                  // Tomorrow / Week asked for explicitly
     if (flow !== "setup") return;
@@ -228,7 +235,7 @@ export default function App() {
       autoRedirectedRef.current = true;
       navigate("status", { replace: true });
     }
-  }, [route, flow, statusLoad, planLoad, navigate, peek]);
+  }, [route, flow, statusLoad, planLoad, navigate, peek, launched]);
 
   const plan: Plan | null =
     planLoad.result?.status === "ok" ? planLoad.result.plan : null;
@@ -239,7 +246,7 @@ export default function App() {
 
   // Hydrate the shared workout state when a workout starts: /today/logged for
   // set counts (mid-workout reload safety) and /last_logged for prefill.
-  const hydrateWorkoutState = useCallback(async (currentPlan: Plan) => {
+  const hydrateWorkoutState = useCallback(async (currentPlan: Plan, opts: { adhoc?: boolean } = {}) => {
     const names: string[] = [];
     const b = currentPlan.blocks;
     if (b?.type === "circuit" && Array.isArray(b.exercises)) {
@@ -250,10 +257,12 @@ export default function App() {
       for (const e of fin.exercises) names.push(e.name);
     }
     const [loggedR, lastR] = await Promise.all([
-      fetchLoggedToday(),
+      // An ad-hoc session starts from zero: today's logged counts belong to
+      // today's plan row, not to this launch.
+      opts.adhoc ? Promise.resolve(null) : fetchLoggedToday(),
       fetchLastLogged(names),
     ]);
-    if (loggedR.status === "ok") {
+    if (loggedR && loggedR.status === "ok") {
       const counts: ServerLoggedCount = {};
       for (const e of loggedR.data.exercises) counts[e.exercise] = e.set_count;
       setServerLoggedCount(counts);
@@ -284,6 +293,31 @@ export default function App() {
     setFlow("done");
   }, []);
 
+  const onLaunch = useCallback((p: Plan, sessionType: string) => {
+    startAdhoc(sessionType);
+    setLaunched(p);
+    setSessionSets({});
+    setServerLoggedCount({});
+    setLogHasSummary(false);
+    setFlow("setup");
+    autoRedirectedRef.current = true;          // a launch is not a rest-day redirect
+    navigate("today");
+  }, [navigate]);
+
+  const endLaunch = useCallback(() => {
+    endAdhoc();
+    setLaunched(null);
+    setFlow("setup");
+  }, []);
+
+  const onStartLaunched = useCallback(() => {
+    if (!launched) return;
+    void unlockAudio();
+    void acquireWakeLock();
+    setFlow("workout");
+    void hydrateWorkoutState(launched, { adhoc: true });
+  }, [launched, hydrateWorkoutState]);
+
   const onBackToStart = useCallback(() => {
     setFlow("setup");
   }, []);
@@ -302,6 +336,8 @@ export default function App() {
     <>
       <Nav route={route} onNavigate={(r) => {
         setPeek(null);
+        // Leaving a launched session that isn't running ends it.
+        if (launched && flow === "setup" && !flowRunning) endLaunch();
         if (r === "status") setStatusVisit((n) => n + 1);
         else autoRedirectedRef.current = true;   // the Workout tab means Workout
         navigate(r);
@@ -318,6 +354,63 @@ export default function App() {
       <>
         {chrome}
         <StatusScreen key={`status-${statusVisit}`} onNavigate={onStatusNavigate} />
+      </>
+    );
+  }
+
+  // ---- /library route (SESSION-LIB) ----
+  if (route === "library") {
+    return (
+      <>
+        {chrome}
+        <LibraryScreen onLaunch={onLaunch} />
+      </>
+    );
+  }
+
+  // ---- a session launched from the library ----
+  if (launched) {
+    if (launched.blocks?.type === "recovery_flow") {
+      return (
+        <>
+          {chrome}
+          <FlowScreen key="flow-launched" plan={launched} onRunningChange={setFlowRunning} />
+        </>
+      );
+    }
+    return (
+      <>
+        {chrome}
+        {flow === "setup" && (
+          <SetupScreen plan={launched} interrupted={false} onStart={onStartLaunched} />
+        )}
+        {flow === "workout" && (
+          <WorkoutScreen
+            key="workout-launched"
+            plan={launched}
+            sessionSets={sessionSets}
+            serverLoggedCount={serverLoggedCount}
+            lastLogged={lastLogged}
+            hasSummary={logHasSummary}
+            onLoggedSet={handleLoggedSet}
+            onSummaryLogged={handleSummaryLogged}
+            onDone={(sec) => { setTotalElapsedSec(sec); setFlow("done"); }}
+            onBackToHome={endLaunch}
+          />
+        )}
+        {flow === "done" && (
+          <DoneScreen
+            plan={launched}
+            total_elapsed_sec={totalElapsedSec}
+            sessionSets={sessionSets}
+            serverLoggedCount={serverLoggedCount}
+            lastLogged={lastLogged}
+            hasSummary={logHasSummary}
+            onLoggedSet={handleLoggedSet}
+            onSummaryLogged={handleSummaryLogged}
+            onBack={() => { endLaunch(); navigate("library"); }}
+          />
+        )}
       </>
     );
   }
@@ -395,7 +488,8 @@ export default function App() {
     return (
       <>
         {chrome}
-        <RestDayScreen plan={result.plan} onNavigate={onBarNavigate} />
+        <RestDayScreen plan={result.plan} onNavigate={onBarNavigate}
+          onOpenLibrary={() => navigate("library")} />
       </>
     );
   }

@@ -422,6 +422,8 @@ export interface LogExerciseIn {
    * this RPE in the same transaction. Used by Finish-workout to make
    * the last log + summary a single round-trip. */
   session_rpe?: number | null;
+  /** ADHOC-LOG: sent INSTEAD of plan_id for a session started from the library. */
+  adhoc_session_type?: string | null;
 }
 
 export interface LogRowOut {
@@ -445,6 +447,8 @@ export interface LogRowOut {
 
 export interface LogResponse {
   plan_id: number | null;
+  /** ADHOC-LOG: true when the sets were stored unattached to a plan row. */
+  adhoc?: boolean;
   inserted: number;
   rows: LogRowOut[];
 }
@@ -686,3 +690,36 @@ export interface OverviewResponse {
   weight_summary: { first: TrendPoint; latest: TrendPoint; change: number } | null;
   previous_program_end: string | null;
 }
+
+// ---------------------------------------------------------------------------
+// SESSION-LIB — GET /api/health/library
+// ---------------------------------------------------------------------------
+
+export interface LibrarySession {
+  session_type: string;
+  display_name: string;
+  week_num: number;
+  phase: number;
+  target_rpe: number | null;
+  target_hr_zone: number | null;
+  est_duration_min: number | null;
+  blocks: Blocks;
+}
+
+export interface LibraryLocation {
+  key: string;
+  display: string;
+  sessions: LibrarySession[];
+}
+
+export type LibraryResponse =
+  | { available: false; reason: string }
+  | {
+      available: true;
+      stale: boolean;
+      today: string;
+      generated_on: string;
+      week_num: number;
+      today_location_key: string;
+      locations: LibraryLocation[];
+    };

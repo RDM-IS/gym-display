@@ -1,5 +1,6 @@
 import type {
   LastLoggedResponse,
+  LibraryResponse,
   LogExerciseIn,
   LogResponse,
   LoggedTodayResponse,
@@ -299,5 +300,23 @@ export async function fetchOverview(): Promise<FetchOverviewResult> {
       /* fall through */
     }
     return { status: "error", message: err instanceof Error ? err.message : "Failed to load status." };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SESSION-LIB — the on-demand session library
+// ---------------------------------------------------------------------------
+
+export type FetchLibraryResult =
+  | { status: "ok"; data: LibraryResponse }
+  | { status: "error"; message: string };
+
+export async function fetchLibrary(): Promise<FetchLibraryResult> {
+  try {
+    const res = await apiFetch("/api/health/library");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return { status: "ok", data: (await res.json()) as LibraryResponse };
+  } catch (err) {
+    return { status: "error", message: err instanceof Error ? err.message : "Failed to load sessions." };
   }
 }
