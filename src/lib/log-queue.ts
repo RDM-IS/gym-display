@@ -1,6 +1,7 @@
 import { postLog } from "./api";
 import { isSessionExpired } from "./session";
 import type { LogExerciseIn, LogResponse } from "./types";
+import { applyAdhoc, noteAdhocResponse } from "./adhoc";
 
 // ---------------------------------------------------------------------------
 // Offline resilience for POST /api/health/log.
@@ -106,6 +107,7 @@ export async function flushQueue(): Promise<void> {
       const head = queue[0];
       const r = await postLog(head.body);
       if (r.status === "ok") {
+        noteAdhocResponse(r.data);
         queue.shift();
       } else if (r.sessionExpired) {
         // Hold everything; the reload after sign-in replays the queue.
@@ -137,13 +139,17 @@ export async function submitLog(
   body: LogExerciseIn,
   opts: { keepalive?: boolean } = {},
 ): Promise<SubmitResult> {
+  body = applyAdhoc(body);
   if (queue.length > 0 || isSessionExpired()) {
     enqueue(body);
     void flushQueue();
     return { status: "queued" };
   }
   const r = await postLog(body, opts);
-  if (r.status === "ok") return r;
+  if (r.status === "ok") {
+    noteAdhocResponse(r.data);
+    return r;
+  }
   if (r.retryable) {
     enqueue(body);
     return { status: "queued" };

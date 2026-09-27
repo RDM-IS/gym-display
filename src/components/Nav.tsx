@@ -26,6 +26,13 @@ export default function Nav({ route, onNavigate }: Props) {
       >
         Status
       </a>
+      <a
+        href="/library"
+        className={route === "library" ? "active" : ""}
+        onClick={(e) => go(e, "library")}
+      >
+        Sessions
+      </a>
     </nav>
   );
 }

@@ -11,6 +11,8 @@ import type { BarTarget } from "../lib/bottom-bar";
 interface Props {
   plan: Plan;
   onNavigate?: (target: BarTarget) => void;
+  /** SESSION-LIB: open the on-demand session library. */
+  onOpenLibrary?: () => void;
 }
 
 /** GD-REST: the next session, so a rest day says what is coming rather than
@@ -37,7 +39,7 @@ function useNextSession(fromDate: string): PlanDay | null | undefined {
   return next;
 }
 
-export default function RestDayScreen({ plan, onNavigate }: Props) {
+export default function RestDayScreen({ plan, onNavigate, onOpenLibrary }: Props) {
   const blocks = plan.blocks;
   const next = useNextSession(plan.plan_date);
   const isMobility = blocks?.type === "mobility";
@@ -53,13 +55,15 @@ export default function RestDayScreen({ plan, onNavigate }: Props) {
       <div className="meta">{formatPlanDate(plan)}</div>
       {adjustment && <AdjustmentBanner adjustment={adjustment} />}
       <div className="h1">{title}</div>
-      <div className="h2 dim">
-        {dayOff
-          ? "No training today."
-          : isMobility
-          ? `Mobility${mobDuration ? ` · ${mobDuration} min` : ""}${focus.length ? ` · ${focus.join(", ")}` : ""}`
-          : "Mobility 20 min or full rest."}
-      </div>
+      {/* SESSION-LIB: the rest screen offers something tappable or says
+          nothing — "Mobility 20 min or full rest" is retired. */}
+      {(dayOff || isMobility) && (
+        <div className="h2 dim">
+          {dayOff
+            ? "No training today."
+            : `Mobility${mobDuration ? ` · ${mobDuration} min` : ""}${focus.length ? ` · ${focus.join(", ")}` : ""}`}
+        </div>
+      )}
       {mobNotes && !dayOff && <div className="desc">{mobNotes}</div>}
       {next === undefined ? null : next ? (
         <div className="desc">
@@ -69,6 +73,11 @@ export default function RestDayScreen({ plan, onNavigate }: Props) {
         </div>
       ) : (
         <div className="desc">Nothing scheduled in the next two weeks.</div>
+      )}
+      {onOpenLibrary && !dayOff && (
+        <button type="button" className="btn" onClick={onOpenLibrary}>
+          Start a session
+        </button>
       )}
       {onNavigate && <BottomBar view="today" onNavigate={onNavigate} />}
     </div>

@@ -415,3 +415,13 @@ input, textarea, select { font-size: max(16px, 1rem); }
 .exercise-tags,
 .glance-adjusted { color: var(--accent); }
 .exercise--added strong::after { content: " ＋"; color: var(--accent); }
+
+/* SESSION-LIB — the on-demand session library */
+.library { gap: 12px; }
+.library-loc { margin: 4px 0; }
+.library-loc-pick { flex-wrap: wrap; gap: 8px; }
+.library-list { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.library-item { display: flex; justify-content: space-between; align-items: center; }
+.library-min { color: var(--fg-dim); }
+.library-foot { margin-top: 12px; }
+.library-makeup { margin: 8px 0 4px; }
