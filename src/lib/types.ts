@@ -14,7 +14,12 @@ export type SessionType =
   | "cardio_z2"
   | "walk"
   | "rest_mobility"
-  | "recovery_flow";
+  | "recovery_flow"
+  // YOGA-6 (2026-09-28): artemis emits this from EXTRA_TYPES. ENUM-EXPAND — the
+  // UNION is the fix, not the switches: a value missing here compiles cleanly and
+  // only shows up at runtime, and adding it is what forces every Record and
+  // never-default below to account for it.
+  | "yoga_strength";
 
 export type ExerciseFormat = "reps" | "duration";
 

@@ -56,6 +56,7 @@ import { useSwipe } from "../lib/use-swipe";
 import type { LoadConfigByClass, LastLoggedEntry, Plan, PlannedExercise, SessionDayRow } from "../lib/types";
 import JourneyMap from "../components/JourneyMap";
 import InlineExerciseLogger from "../components/InlineExerciseLogger";
+import PoseFigure from "../assets/poses";
 import { exerciseTags } from "../lib/adjustment";
 import SoundBadge from "../components/SoundBadge";
 import SyncBadge from "../components/SyncBadge";
@@ -627,7 +628,16 @@ function Glance({
         <StrengthTiles reps={ex.target_reps ?? null} cap={capForHint} last={last}
                        lastRound={shown?.round ?? null} />
         {setLabel && <div className="glance-set">{setLabel}</div>}
-        <div className="glance-name">{name}</div>
+        {/* EXTRA-FIGURES: the figure sits BESIDE the name, not above it. This
+            pane is already full on an iPad in landscape — a stacked figure
+            overflowed it at both ends and clipped the tile labels and the timer.
+            Beside the name it costs no height at all. Same registry the flow
+            uses, keyed by exercise name; nothing renders when there is no
+            drawing, so the layout is untouched for every exercise without one. */}
+        <div className="glance-name-row">
+          <PoseFigure name={name} className="glance-thumb" />
+          <div className="glance-name">{name}</div>
+        </div>
         {tags.length > 0 && <div className="glance-target glance-adjusted">{tags.join(" · ")}</div>}
         <div className="glance-time glance-time--set mono" data-testid="glance-time"
              aria-label={openEnded ? "Set time" : "Time remaining"}>
@@ -642,7 +652,10 @@ function Glance({
   return (
     <>
       {setLabel && <div className="glance-set">{setLabel}</div>}
-      <div className="glance-name">{name}</div>
+      <div className="glance-name-row">
+        <PoseFigure name={name} className="glance-thumb" />
+        <div className="glance-name">{name}</div>
+      </div>
       {/* Steady cardio carries the intensity as its step label. */}
       {step.label !== name && <div className="glance-target">{step.label}</div>}
       {(reps || load || capForHint != null) && (

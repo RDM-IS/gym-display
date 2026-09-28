@@ -1,0 +1,105 @@
+{
+  "plan_id": 90001,
+  "plan_date": "2027-05-03",
+  "session_type": "core",
+  "week_num": 1,
+  "phase": 1,
+  "target_rpe": 4.0,
+  "target_hr_zone": null,
+  "est_duration_min": 13,
+  "is_skipped": false,
+  "blocks": {
+    "type": "circuit",
+    "display_name": "Core (easy)",
+    "location": "Richfield",
+    "rounds": 2,
+    "rest_between_rounds_sec": 45,
+    "equipment": [
+      "mat"
+    ],
+    "exercises": [
+      {
+        "name": "Dead bug",
+        "format": "reps",
+        "rest_after_sec": 30,
+        "equipment_class": "bodyweight",
+        "notes": "each side",
+        "target_reps": 8
+      },
+      {
+        "name": "Bird dog",
+        "format": "reps",
+        "rest_after_sec": 30,
+        "equipment_class": "bodyweight",
+        "notes": "each side",
+        "target_reps": 8
+      },
+      {
+        "name": "Side plank",
+        "format": "duration",
+        "rest_after_sec": 30,
+        "equipment_class": "bodyweight",
+        "notes": "each side",
+        "duration_sec": 20
+      },
+      {
+        "name": "Glute bridge",
+        "format": "reps",
+        "rest_after_sec": 30,
+        "equipment_class": "bodyweight",
+        "notes": "",
+        "target_reps": 12
+      },
+      {
+        "name": "McGill curl-up",
+        "format": "reps",
+        "rest_after_sec": 45,
+        "equipment_class": "bodyweight",
+        "notes": "",
+        "target_reps": 5
+      }
+    ],
+    "setup_notes": [
+      "Light by design \u2014 after the day's lift, never before squats or hinges.",
+      "Slow and controlled; stop well short of fatigue."
+    ],
+    "extra": true,
+    "location_key": "richfield",
+    "load_config": {
+      "dumbbell": {
+        "mode": "numeric",
+        "step": 5,
+        "min": 5,
+        "max": 80,
+        "note": "PowerBlocks \u2014 TODO(richfield) confirm the increment"
+      },
+      "barbell": {
+        "mode": "numeric",
+        "step": 10,
+        "min": 0,
+        "max": 70,
+        "bar": 0,
+        "plates": [
+          10,
+          10,
+          5,
+          5,
+          2.5
+        ],
+        "note": "curl bar + 70 lb of plates \u2014 TODO(richfield) confirm the set"
+      },
+      "bands": {
+        "mode": "none"
+      },
+      "trx": {
+        "mode": "none"
+      },
+      "bodyweight": {
+        "mode": "none"
+      },
+      "cardio": {
+        "mode": "none"
+      }
+    }
+  }
+}
