@@ -93,8 +93,17 @@ interface BlocksBase {
   /** LOCATION-1: what a load means where this session happens. Absent on rows
    * seeded before LOCATION-1, which are all office rows. */
   load_config?: LoadConfigByClass | null;
+  /** PROGRAM-2: the heart-rate target(s) this session is run at. `source` says
+   * where the numbers came from, because they are an estimate until ZONE-1. */
+  zones?: SessionZones | null;
+  /** PROGRAM-2: an extra offered ALONGSIDE this session -- a session_type key
+   * like `core`. Display only: it seeds no row, and tapping it opens that
+   * library entry. */
+  suggested_extra?: string | null;
   /** LOCATION-1: which gym — `office`, `richfield`, … */
   location_key?: string | null;
+  /** The human location words ("the office"). `location_key` is the stable id. */
+  location?: string | null;
   /** LOCATION-1 (2026-09-26): this location has NO configured warmup or
    * cooldown, so the row deliberately carries neither. Absent `warmup` alone is
    * ambiguous — a session may simply not have one — so the flag makes it a
@@ -119,6 +128,22 @@ export type LoadSpec =
 
 export type LoadConfigByClass = Partial<Record<EquipmentClass, LoadSpec>>;
 
+/** PROGRAM-2: one zone target as the row carries it. */
+export interface ZoneTarget {
+  zone: string;
+  low_bpm: number;
+  high_bpm: number;
+  /** "estimate, Tanaka HRmax 174, age 49; ZONE-1 replaces" */
+  source: string;
+}
+
+/** `work` is the target; `easy` is what "easy" means between intervals. Both
+ * travel on the row so the screen never derives one from the other. */
+export interface SessionZones {
+  work?: ZoneTarget | null;
+  easy?: ZoneTarget | null;
+}
+
 export interface IntervalsTemplate {
   work_sec: number;
   work_settings?: string | null;
@@ -137,28 +162,45 @@ export interface CircuitBlocks extends BlocksBase {
   cooldown?: string | null;
 }
 
-export interface IntervalsBlocks extends BlocksBase {
+export interface IntervalsBlocks extends BlocksBase, CardioCommon {
   type: "intervals";
   warmup_sec?: number | null;
   warmup_settings?: string | null;
-  intervals_template: IntervalsTemplate;
+  /** The finisher shape. PROGRAM-2's own interval sessions carry `intervals`
+   * below instead, so this is optional rather than required. */
+  intervals_template?: IntervalsTemplate | null;
+  /** PROGRAM-2: reps x work / easy, with the warm-up and cool-down either side. */
+  intervals?: { reps: number; work_sec: number; easy_sec: number } | null;
+  warmup_min?: number | null;
+  cooldown_min?: number | null;
   rounds?: number | null;
   cooldown_sec?: number | null;
   cooldown_settings?: string | null;
 }
 
 /** Cardio steady block (e.g. "Long Z2 Bike"). NO top-level exercises array. */
-export interface SteadyBlocks extends BlocksBase {
-  type: "steady";
+/** The fields a cardio session carries whatever shape it runs in. Both steady
+ * and intervals rows get these from the same builder, so they are declared once
+ * -- a strength block has no business advertising `ran_as`. */
+interface CardioCommon {
   /** CARDIO-LOC: resolved by artemis from the location's inventory. */
   cardio?: CardioResolved | null;
   /** True when the location has no cardio at all (MSP home). */
   no_equipment?: boolean;
+  /** PROGRAM-2: "intervals" or "z2_variant". A row seeded as intervals that
+   * runs as Z2 says WHY in `z2_variant_reason`, because "why is this Zone 2
+   * today" is the first thing he will ask. */
+  ran_as?: "intervals" | "z2_variant" | null;
+  z2_variant_reason?: string | null;
+  intensity?: string | null;
+}
+
+export interface SteadyBlocks extends BlocksBase, CardioCommon {
+  type: "steady";
   warmup_sec?: number | null;
   warmup_settings?: string | null;
   cooldown_sec?: number | null;
   cooldown_settings?: string | null;
-  intensity?: string | null;
   duration_min: number;
   target_range_min?: [number, number] | string | null;
 }
