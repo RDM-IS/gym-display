@@ -425,23 +425,46 @@ DRAWINGS["low lunge twist"] = {
 };
 
 // ── Core ──────────────────────────────────────────────────────────────────
+/** Supine 90/90 base. `extend` swaps the NEAR arm and the FAR leg out to long. */
+function DeadBugFrame({ extend }: { extend: boolean }) {
+  return (
+    <>
+      <Floor from={60} to={368} />
+      <Torso neck={[266, 250]} hip={[180, 256]} />
+      <Head at={[288, 246]} />
+      {/* The left and right limbs are SPLAYED apart into a narrow V. In a true
+          side view they overlap almost exactly, so the start frame showed what
+          looked like one arm and one leg and read as a bracket rather than a body
+          with four limbs at 90/90. Nothing is parallel either: drawn square --
+          arm vertical, thigh vertical, shin level -- the limbs close into a
+          rectangle, which is what two earlier drafts did. */}
+      <Limb p={[[262, 252], [256, 206], [250, 168]]} far />
+      {extend
+        ? <Limb p={[[176, 258], [126, 252], [74, 248]]} far />
+        : <Limb p={[[176, 258], [160, 202], [204, 194]]} far />}
+      {extend
+        ? <Limb p={[[266, 250], [310, 256], [352, 260]]} />
+        : <Limb p={[[268, 250], [282, 208], [294, 170]]} />}
+      <Limb p={[[182, 256], [178, 196], [228, 210]]} />
+    </>
+  );
+}
+
 DRAWINGS["dead bug"] = {
+  // The side is the EXTENDING ARM: the base is the right arm reaching back with
+  // the LEFT leg long, and "L" mirrors to the left arm with the right leg.
   sided: true,
   art: () => (
     <>
-      <Floor />
-      {/* the low back stays DOWN: shoulders and hips both on the mat */}
-      <Torso neck={[266, 248]} hip={[180, 256]} />
-      <Head at={[288, 244]} />
-      {/* the EXTENDED pair — near arm reaching back overhead, far leg long and low */}
-      <Limb p={[[176, 258], [126, 252], [76, 246]]} far />
-      <Limb p={[[266, 248], [310, 254], [352, 258]]} />
-      {/* the HELD pair — near knee stacked over the hip with the shin level, far
-          arm reaching UP PAST THE EAR rather than straight up: a vertical arm
-          beside a level shin closes into a rectangle and the figure stops
-          reading as a body, which is what the first two drafts did */}
-      <Limb p={[[264, 250], [286, 214], [306, 184]]} far />
-      <Limb p={[[184, 252], [178, 194], [230, 188]]} />
+      {/* TWO FRAMES, like cat-cow -- the opposite-limb pairing IS the exercise and
+          no single position can show a pairing. STACKED rather than side by side:
+          a supine figure is wide and shallow, so half-width columns forced it down
+          to a third of the canvas and it stopped reading at all. Full size, top is
+          the 90/90 start, bottom is the move. */}
+      <g transform="translate(0 -148)">
+        <DeadBugFrame extend={false} />
+      </g>
+      <DeadBugFrame extend />
     </>
   ),
 };
@@ -488,19 +511,22 @@ DRAWINGS["side plank"] = {
 DRAWINGS["glute bridge"] = DRAWINGS.bridge;
 
 DRAWINGS["mcgill curl-up"] = {
+  // The side is WHICH KNEE IS BENT.
   sided: true,
   art: () => (
     <>
       <Floor />
-      {/* one knee bent with the foot flat, the other leg long on the mat */}
-      <Limb p={[[186, 256], [136, 262], [86, 264]]} far />
-      <Limb p={[[192, 252], [140, 214], [104, 258], [92, 264]]} />
-      {/* head and shoulders just off the mat — a curl, not a sit-up */}
-      <Torso neck={[248, 236]} hip={[190, 254]} bow={[218, 250]} />
-      <Head at={[262, 231]} />
-      {/* hands under the low back */}
-      <Limb p={[[244, 240], [222, 262], [198, 262]]} far />
-      <Limb p={[[248, 238], [226, 264], [202, 264]]} />
+      {/* the far leg stays LONG on the floor */}
+      <Limb p={[[182, 262], [132, 265], [82, 266]]} far />
+      {/* the near knee is bent with the foot FLAT on the mat */}
+      <Limb p={[[190, 256], [142, 212], [108, 258], [92, 264]]} />
+      {/* head and shoulders lift only SLIGHTLY — a small gap off the mat, not a
+          sit-up: the hips and the low back never leave the floor */}
+      <Torso neck={[250, 240]} hip={[186, 258]} bow={[216, 254]} />
+      <Head at={[270, 232]} />
+      {/* both hands flat UNDER the low back */}
+      <Limb p={[[246, 244], [220, 260], [194, 264]]} far />
+      <Limb p={[[250, 242], [224, 262], [198, 266]]} />
     </>
   ),
 };
@@ -528,19 +554,32 @@ DRAWINGS["cat-cow"] = {
 DRAWINGS["90/90 hip switch"] = {
   sided: false,
   art: () => (
+    // DRAWN FROM ABOVE, and it is the only figure here that is. Every other
+    // drawing is a profile, but 90/90 is defined by where the legs are in the
+    // TRANSVERSE plane — one thigh forward with the shin across the body, the
+    // other thigh out to the side with the shin back — and a side view collapses
+    // exactly the angles that make it the pose. Two side-view drafts read as a
+    // standing figure and as someone sitting on a stick. Clarity over a
+    // consistent viewpoint; there is no floor line because the floor is the page.
     <>
-      <Floor />
-      {/* SEATED: the hips are low and the torso is short next to the legs — the
-          first draft sat them high and it read as a standing figure */}
-      <Limb p={[[192, 240], [126, 250], [186, 270]]} far />
-      <Limb p={[[208, 240], [286, 252], [222, 268]]} />
-      <Limb p={[[192, 238], [208, 238]]} w={12} />
-      <Torso neck={[200, 152]} hip={[200, 238]} />
-      <Head at={[200, 130]} />
-      <Limb p={[[194, 158], [216, 196], [230, 226]]} far />
-      <Limb p={[[206, 158], [230, 196], [246, 226]]} />
-      {/* the switch: both knees travel across, which no single frame shows */}
-      <ArcArrow c={[200, 252]} r={80} from={198} to={-18} />
+      <Head at={[200, 112]} />
+      <Limb p={[[172, 142], [228, 142]]} w={12} />
+      <Torso neck={[200, 142]} hip={[200, 178]} />
+      <Limb p={[[176, 178], [224, 178]]} w={12} />
+      {/* arms resting on the floor either side */}
+      {/* NOTHING here is drawn faint, and that is the other consequence of the
+          viewpoint: `far` means "on the side of the body away from you", which
+          from ABOVE occludes nothing. Drawn faint, the back leg read as a ghost
+          bracket rather than a leg. */}
+      <Limb p={[[174, 146], [158, 154], [144, 162]]} />
+      <Limb p={[[226, 146], [250, 158], [270, 172]]} />
+      {/* BACK leg: thigh out to the SIDE, shin pointing BACK, knee on the floor.
+          Set wide and low so the shin finishes clear of the arm above it. */}
+      <Limb p={[[184, 182], [106, 208], [98, 158]]} />
+      {/* FRONT leg: thigh FORWARD, shin running ACROSS the body, knee on the floor */}
+      <Limb p={[[216, 180], [224, 238], [158, 250]]} />
+      {/* the switch is the KNEES swinging across, not the torso turning */}
+      <ArcArrow c={[200, 196]} r={92} from={28} to={152} />
     </>
   ),
 };
@@ -569,17 +608,21 @@ DRAWINGS["thread the needle"] = {
   art: () => (
     <>
       <Floor />
-      {/* knees stay under the hips */}
-      <Limb p={[[168, 206], [158, 240], [152, 262]]} far />
-      <Limb p={[[172, 204], [162, 238], [156, 262]]} />
-      <Limb p={[[168, 206], [124, 250], [104, 264]]} />
-      <Torso neck={[268, 214]} hip={[170, 204]} />
-      {/* the shoulder and the ear go down to the mat */}
-      <Head at={[292, 246]} r={16} />
-      {/* the threading arm passes UNDER the body */}
-      <Limb p={[[266, 216], [228, 250], [172, 262]]} />
-      {/* the supporting arm stays planted */}
-      <Limb p={[[272, 210], [306, 236], [340, 262]]} far />
+      {/* on all fours: hips stay UP, knees under them, shins back to the feet */}
+      <Limb p={[[174, 208], [164, 250], [120, 266]]} far />
+      <Limb p={[[180, 206], [170, 250], [126, 266]]} />
+      {/* the torso slopes DOWN to a shoulder that is on the mat -- that drop is
+          the pose, and a level torso made it read as a plain quadruped */}
+      <Torso neck={[266, 248]} hip={[180, 206]} />
+      {/* the SIDE of the head rests on the mat beside that shoulder */}
+      <Head at={[292, 258]} r={16} />
+      {/* the other hand stays planted */}
+      {/* clear of the head, which sat on top of it when the hand was closer in */}
+      <Limb p={[[272, 240], [312, 244], [342, 262]]} far />
+      {/* the threading arm slides UNDER the body and stops beneath the chest --
+          reaching it past the knees closed the torso, arm and thigh into one
+          triangle and the figure stopped reading as a person on all fours */}
+      <Limb p={[[266, 250], [238, 262], [206, 266]]} />
     </>
   ),
 };
