@@ -6,10 +6,12 @@ import type {
   Plan,
   PlannedExercise,
   SteadyBlocks,
+  SessionZones,
   WalkBlocks,
 } from "../lib/types";
 import { assertNeverBlock } from "../lib/types";
 import { dedupe, displayTitle, formatEstimate, formatPlanDate } from "../lib/format";
+import { easyZoneText, extraLabel, workZoneText } from "../lib/zones";
 import { adjustmentOf, exerciseSets, exerciseTags } from "../lib/adjustment";
 import AdjustmentBanner from "../components/AdjustmentBanner";
 import BottomBar from "../components/BottomBar";
@@ -87,6 +89,17 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function BlockDetail({ blocks, sessionRpe }: { blocks: Plan["blocks"]; sessionRpe: number | null }) {
   if (!blocks) return null;
+  return (
+    <>
+      <TypeDetail blocks={blocks} sessionRpe={sessionRpe} />
+      {/* PROGRAM-2: the extra rides on every block type, so it renders outside
+          the switch rather than being repeated in each branch. */}
+      <SuggestedExtra k={blocks.suggested_extra} />
+    </>
+  );
+}
+
+function TypeDetail({ blocks, sessionRpe }: { blocks: NonNullable<Plan["blocks"]>; sessionRpe: number | null }) {
   switch (blocks.type) {
     // A rest day never reaches Setup — App renders RestDayScreen for it.
     case "rest":      return null;
@@ -179,8 +192,14 @@ function IntervalsDetail({ b }: { b: IntervalsBlocks }) {
           <div className="list">{b.warmup_settings ?? ""}</div>
         </Section>
       )}
-      <Section title={`Intervals — ${rounds} rounds`}>
-        {t ? (
+      <Section title={`Intervals — ${b.intervals ? b.intervals.reps : rounds} rounds`}>
+        {b.intervals ? (
+          <ul className="list" data-testid="intervals-program2">
+            <li>{b.intervals.reps}× {b.intervals.work_sec}s hard / {b.intervals.easy_sec}s easy</li>
+            <ZoneLine z={b.zones} label="Work" pick="work" />
+            <ZoneLine z={b.zones} label="Easy" pick="easy" />
+          </ul>
+        ) : t ? (
           <ul className="list">
             <li>Work {t.work_sec}s — {t.work_settings ?? ""}</li>
             <li>Rest {t.rest_sec}s — {t.rest_settings ?? ""}</li>
@@ -194,6 +213,40 @@ function IntervalsDetail({ b }: { b: IntervalsBlocks }) {
       )}
       <FinisherDetail f={b.finisher} />
     </>
+  );
+}
+
+/** One zone target as a list row. Renders nothing at all when the row carries
+ * no usable numbers -- the card must not invent a range. */
+function ZoneLine({
+  z,
+  label = "Target HR",
+  pick = "work",
+}: {
+  z: SessionZones | null | undefined;
+  label?: string;
+  pick?: "work" | "easy";
+}) {
+  const text = pick === "work" ? workZoneText(z) : easyZoneText(z);
+  if (!text) return null;
+  const src = (pick === "work" ? z?.work?.source : z?.easy?.source) ?? null;
+  return (
+    <li data-testid={`zone-${pick}`}>
+      {label}: {text}
+      {src && <span className="dim"> · {src}</span>}
+    </li>
+  );
+}
+
+/** PROGRAM-2: an extra offered alongside the session. Display only -- it seeds
+ * no row and logs nothing, so it is deliberately not a button. */
+function SuggestedExtra({ k }: { k: string | null | undefined }) {
+  const label = extraLabel(k);
+  if (!label) return null;
+  return (
+    <Section title="Suggested extra">
+      <div className="list dim" data-testid="suggested-extra">+ {label} — optional</div>
+    </Section>
   );
 }
 
@@ -215,6 +268,10 @@ function SteadyDetail({ b }: { b: SteadyBlocks }) {
         <ul className="list">
           {b.intensity && <li>Intensity: {b.intensity}</li>}
           {rangeText && <li>Target: {rangeText}</li>}
+          <ZoneLine z={b.zones} />
+          {b.ran_as === "z2_variant" && b.z2_variant_reason && (
+            <li className="dim" data-testid="z2-variant-reason">{b.z2_variant_reason}</li>
+          )}
         </ul>
       </Section>
       {b.cooldown_sec != null && b.cooldown_sec > 0 && (

@@ -7,6 +7,7 @@ import type {
 import { exerciseSets } from "../lib/adjustment";
 import { buildFlowTimeline, flowTotalSec, formatClock, stepsForRound } from "../lib/flow";
 import { formatEstimate } from "../lib/format";
+import { extraLabel, workZoneText } from "../lib/zones";
 import { dayLabel, statusIcon } from "../lib/week";
 
 // ---------------------------------------------------------------------------
@@ -98,6 +99,7 @@ export default function PlanDayDetail({ day, today }: Props) {
         {b?.type === "steady" && (
           <ul className="list">
             <li>{b.duration_min} min {b.intensity ?? ""}</li>
+            {workZoneText(b.zones) && <li data-testid="plan-zone">{workZoneText(b.zones)}</li>}
             {(b.equipment ?? []).length > 0 && <li className="dim">{(b.equipment ?? []).join(", ")}</li>}
             {b.mobility_min ? <li>+ {b.mobility_min} min mobility ({(b.mobility_focus ?? []).join(", ")})</li> : null}
           </ul>
@@ -110,11 +112,25 @@ export default function PlanDayDetail({ day, today }: Props) {
         {b?.type === "walk" && <ul className="list"><li>{b.duration_min} min walk</li></ul>}
         {b?.type === "intervals" && (
           <ul className="list">
-            <li>{b.rounds ?? 1} rounds · {b.intervals_template?.work_sec}s work / {b.intervals_template?.rest_sec}s easy</li>
+            {b.intervals ? (
+              <li>
+                {b.intervals.reps}× {b.intervals.work_sec}s hard / {b.intervals.easy_sec}s easy
+              </li>
+            ) : (
+              <li>{b.rounds ?? 1} rounds · {b.intervals_template?.work_sec}s work / {b.intervals_template?.rest_sec}s easy</li>
+            )}
+            {workZoneText(b.zones) && <li data-testid="plan-zone">{workZoneText(b.zones)}</li>}
           </ul>
         )}
       </div>
 
+      {/* PROGRAM-2: display only. It seeds no row, so it is a line and not a
+          tile -- tapping it would imply the day has two sessions. */}
+      {extraLabel(b?.suggested_extra) && (
+        <div className="meta" data-testid="plan-suggested-extra">
+          + {extraLabel(b?.suggested_extra)} — optional
+        </div>
+      )}
       {(isPast || day.plan_date === today) && (day.logged.length > 0 || day.summary_notes) && (
         <div className="plan-detail-logged" data-testid="plan-detail-logged">
           <div className="section-title">Logged</div>
