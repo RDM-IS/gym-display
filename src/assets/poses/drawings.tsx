@@ -289,3 +289,319 @@ export const DRAWINGS: Record<string, Drawing> = {
 
 // YOGA-3: the opening minute sits cross-legged, like easy pose.
 DRAWINGS["seated meditation"] = DRAWINGS["easy pose"];
+
+// ---------------------------------------------------------------------------
+// EXTRA-FIGURES (2026-09-28) — the rest of the Extras get drawings.
+//
+// Original line figures drawn for gym-display in the same system as the 14
+// above: the same primitives, the same 400x300 canvas, the same floor, the same
+// stroke weights, `currentColor` throughout so light and dark follow the theme.
+// NOT traced or copied from any source.
+//
+// Same conventions: a profile figure faces RIGHT with its right limbs near, a
+// `sided` drawing is the "R" version and side "L" mirrors it, and limbs on the
+// far side of the body are drawn faint.
+//
+// YOGA-6 poses (5) are flow poses. Core (5) and Mobility (6) are CIRCUIT
+// exercises, keyed by exercise name into this same registry so there is one
+// place figures live — a second registry would drift from this one.
+//
+// Four of these are MOVEMENTS rather than positions (cat-cow, dead bug, bird
+// dog, 90/90). Cat-cow gets TWO FRAMES because its two ends are the whole
+// point; the other three get the key position plus an ArcArrow, because their
+// start and end differ only by which limb is out, and two near-identical frames
+// read as a mistake rather than a movement.
+// ---------------------------------------------------------------------------
+
+/** Hands-and-knees base, bowed up (cat) or down (cow) by `bow`. */
+function Quadruped({ bow }: { bow: readonly [number, number] }) {
+  return (
+    <>
+      <Floor />
+      {/* far arm + far shin */}
+      <Limb p={[[286, 202], [288, 234], [290, 262]]} far />
+      <Limb p={[[176, 208], [166, 240], [160, 262]]} far />
+      <Limb p={[[170, 210], [124, 250], [104, 264]]} far />
+      {/* near foreleg planted, near thigh + shin */}
+      <Limb p={[[292, 200], [296, 232], [298, 262]]} />
+      <Limb p={[[180, 206], [172, 238], [166, 262]]} />
+      <Limb p={[[176, 208], [130, 252], [108, 266]]} />
+      <Torso neck={[288, 198]} hip={[178, 206]} bow={bow} />
+    </>
+  );
+}
+
+// ── YOGA-6 ────────────────────────────────────────────────────────────────
+DRAWINGS["chair"] = {
+  sided: false,
+  art: () => (
+    <>
+      <Floor />
+      {/* far leg */}
+      <Limb p={[[128, 178], [166, 208], [140, 266]]} far />
+      {/* knees FORWARD of the ankles, hips BACK behind the heels */}
+      <Limb p={[[132, 176], [176, 206], [150, 266]]} />
+      <Torso neck={[176, 104]} hip={[132, 176]} />
+      <Head at={[188, 86]} />
+      {/* arms continue the line of the back, overhead and forward */}
+      <Limb p={[[170, 110], [208, 76], [240, 48]]} far />
+      <Limb p={[[174, 108], [214, 72], [248, 44]]} />
+    </>
+  ),
+};
+
+DRAWINGS["plank"] = {
+  sided: false,
+  art: () => (
+    <>
+      <Floor />
+      {/* one straight line heels -> hips -> shoulders */}
+      <Limb p={[[190, 228], [140, 246], [92, 264], [80, 266]]} far />
+      <Limb p={[[196, 225], [144, 244], [96, 262], [84, 266]]} />
+      <Torso neck={[290, 190]} hip={[196, 225]} />
+      <Head at={[306, 184]} />
+      {/* hands directly under the shoulders */}
+      <Limb p={[[286, 194], [288, 230], [290, 264]]} far />
+      <Limb p={[[290, 192], [294, 228], [296, 264]]} />
+    </>
+  ),
+};
+
+DRAWINGS["warrior ii"] = {
+  sided: true,
+  art: () => (
+    <>
+      <Floor />
+      {/* back leg straight, front leg bent to the screen's right */}
+      <Limb p={[[186, 168], [146, 216], [110, 264]]} far />
+      <Limb p={[[216, 168], [284, 214], [300, 264]]} />
+      <Limb p={[[186, 168], [216, 168]]} w={12} />
+      <Torso neck={[200, 100]} hip={[200, 166]} />
+      <Head at={[200, 76]} />
+      {/* arms long and level, front arm leading */}
+      <Limb p={[[194, 106], [134, 108], [72, 110]]} far />
+      <Limb p={[[206, 106], [266, 108], [330, 110]]} />
+    </>
+  ),
+};
+
+DRAWINGS["warrior iii"] = {
+  sided: true,
+  art: () => (
+    <>
+      <Floor />
+      {/* back leg reaching straight behind, level with the torso */}
+      <Limb p={[[196, 152], [142, 158], [88, 164]]} far />
+      {/* standing leg, vertical under the hip */}
+      <Limb p={[[196, 150], [197, 208], [198, 264]]} />
+      <Torso neck={[284, 142]} hip={[196, 150]} />
+      <Head at={[308, 140]} />
+      {/* arms reaching forward past the ears */}
+      <Limb p={[[278, 146], [322, 144], [366, 142]]} far />
+      <Limb p={[[280, 144], [324, 140], [368, 136]]} />
+    </>
+  ),
+};
+
+DRAWINGS["low lunge twist"] = {
+  sided: true,
+  art: () => (
+    <>
+      <Floor />
+      {/* back knee DOWN on the mat */}
+      <Limb p={[[184, 224], [136, 262], [92, 266]]} far />
+      <Limb p={[[186, 222], [140, 262], [96, 266]]} />
+      {/* front leg bent, foot flat */}
+      <Limb p={[[192, 222], [268, 236], [274, 264]]} />
+      <Torso neck={[196, 140]} hip={[190, 220]} />
+      <Head at={[200, 118]} />
+      {/* lower hand inside the front foot, upper arm stacked above it */}
+      <Limb p={[[198, 148], [222, 196], [248, 256]]} far />
+      <Limb p={[[194, 146], [176, 104], [168, 62]]} />
+      {/* the turn a single figure cannot show */}
+      <ArcArrow c={[196, 160]} r={54} from={-128} to={-34} />
+    </>
+  ),
+};
+
+// ── Core ──────────────────────────────────────────────────────────────────
+DRAWINGS["dead bug"] = {
+  sided: true,
+  art: () => (
+    <>
+      <Floor />
+      {/* the low back stays DOWN: shoulders and hips both on the mat */}
+      <Torso neck={[266, 248]} hip={[180, 256]} />
+      <Head at={[288, 244]} />
+      {/* the EXTENDED pair — near arm reaching back overhead, far leg long and low */}
+      <Limb p={[[176, 258], [126, 252], [76, 246]]} far />
+      <Limb p={[[266, 248], [310, 254], [352, 258]]} />
+      {/* the HELD pair — near knee stacked over the hip with the shin level, far
+          arm reaching UP PAST THE EAR rather than straight up: a vertical arm
+          beside a level shin closes into a rectangle and the figure stops
+          reading as a body, which is what the first two drafts did */}
+      <Limb p={[[264, 250], [286, 214], [306, 184]]} far />
+      <Limb p={[[184, 252], [178, 194], [230, 188]]} />
+    </>
+  ),
+};
+
+DRAWINGS["bird dog"] = {
+  sided: true,
+  art: () => (
+    <>
+      <Floor />
+      {/* supporting far hand and far knee */}
+      <Limb p={[[290, 200], [290, 232], [290, 264]]} far />
+      <Limb p={[[178, 206], [166, 240], [162, 262]]} far />
+      <Limb p={[[174, 208], [130, 252], [110, 266]]} far />
+      {/* near arm reaching forward, near leg reaching back, both level */}
+      <Limb p={[[298, 196], [334, 188], [372, 182]]} />
+      <Limb p={[[180, 202], [128, 194], [76, 188]]} />
+      <Torso neck={[292, 196]} hip={[180, 204]} />
+      <Head at={[316, 190]} />
+    </>
+  ),
+};
+
+DRAWINGS["side plank"] = {
+  sided: true,
+  art: () => (
+    <>
+      <Floor />
+      {/* forearm down, shoulder stacked above the elbow */}
+      <Limb p={[[124, 200], [118, 232], [86, 264], [122, 264]]} />
+      {/* one line shoulder -> hip -> stacked feet */}
+      <Limb p={[[212, 232], [262, 248], [310, 264]]} far />
+      <Limb p={[[216, 230], [266, 246], [314, 262]]} />
+      <Torso neck={[126, 200]} hip={[216, 230]} />
+      <Head at={[106, 193]} />
+      {/* top arm straight up */}
+      <Limb p={[[128, 198], [140, 148], [150, 98]]} />
+    </>
+  ),
+};
+
+// Core's "Glute bridge" is the Recovery Flow's "Bridge" — the same pose under
+// two names. Reused rather than redrawn: a second drawing of one pose is a
+// second thing to keep in step, and mine read worse than the original.
+DRAWINGS["glute bridge"] = DRAWINGS.bridge;
+
+DRAWINGS["mcgill curl-up"] = {
+  sided: true,
+  art: () => (
+    <>
+      <Floor />
+      {/* one knee bent with the foot flat, the other leg long on the mat */}
+      <Limb p={[[186, 256], [136, 262], [86, 264]]} far />
+      <Limb p={[[192, 252], [140, 214], [104, 258], [92, 264]]} />
+      {/* head and shoulders just off the mat — a curl, not a sit-up */}
+      <Torso neck={[248, 236]} hip={[190, 254]} bow={[218, 250]} />
+      <Head at={[262, 231]} />
+      {/* hands under the low back */}
+      <Limb p={[[244, 240], [222, 262], [198, 262]]} far />
+      <Limb p={[[248, 238], [226, 264], [202, 264]]} />
+    </>
+  ),
+};
+
+// ── Mobility ──────────────────────────────────────────────────────────────
+DRAWINGS["cat-cow"] = {
+  sided: false,
+  art: () => (
+    <>
+      {/* TWO FRAMES: the rounded end and the dipped end, which are the move */}
+      <g transform="translate(-6 24) scale(0.52)">
+        <Quadruped bow={[232, 150]} />
+        <Head at={[300, 224]} r={17} />
+      </g>
+      <g transform="translate(196 24) scale(0.52)">
+        <Quadruped bow={[232, 254]} />
+        <Head at={[300, 172]} r={17} />
+      </g>
+      <line x1={198} y1={92} x2={198} y2={230} stroke="currentColor" strokeWidth={3}
+            opacity={0.18} />
+    </>
+  ),
+};
+
+DRAWINGS["90/90 hip switch"] = {
+  sided: false,
+  art: () => (
+    <>
+      <Floor />
+      {/* SEATED: the hips are low and the torso is short next to the legs — the
+          first draft sat them high and it read as a standing figure */}
+      <Limb p={[[192, 240], [126, 250], [186, 270]]} far />
+      <Limb p={[[208, 240], [286, 252], [222, 268]]} />
+      <Limb p={[[192, 238], [208, 238]]} w={12} />
+      <Torso neck={[200, 152]} hip={[200, 238]} />
+      <Head at={[200, 130]} />
+      <Limb p={[[194, 158], [216, 196], [230, 226]]} far />
+      <Limb p={[[206, 158], [230, 196], [246, 226]]} />
+      {/* the switch: both knees travel across, which no single frame shows */}
+      <ArcArrow c={[200, 252]} r={80} from={198} to={-18} />
+    </>
+  ),
+};
+
+DRAWINGS["half-kneeling hip flexor stretch"] = {
+  sided: true,
+  art: () => (
+    <>
+      <Floor />
+      {/* back knee down, that hip pressing forward */}
+      <Limb p={[[182, 218], [136, 262], [92, 266]]} far />
+      <Limb p={[[186, 216], [140, 262], [96, 266]]} />
+      {/* front foot flat, shin vertical */}
+      <Limb p={[[192, 216], [266, 228], [272, 264]]} />
+      {/* torso TALL — the stretch is the hip, not a forward lean */}
+      <Torso neck={[192, 132]} hip={[188, 214]} />
+      <Head at={[196, 110]} />
+      <Limb p={[[188, 138], [200, 184], [210, 210]]} far />
+      <Limb p={[[194, 138], [208, 184], [220, 212]]} />
+    </>
+  ),
+};
+
+DRAWINGS["thread the needle"] = {
+  sided: true,
+  art: () => (
+    <>
+      <Floor />
+      {/* knees stay under the hips */}
+      <Limb p={[[168, 206], [158, 240], [152, 262]]} far />
+      <Limb p={[[172, 204], [162, 238], [156, 262]]} />
+      <Limb p={[[168, 206], [124, 250], [104, 264]]} />
+      <Torso neck={[268, 214]} hip={[170, 204]} />
+      {/* the shoulder and the ear go down to the mat */}
+      <Head at={[292, 246]} r={16} />
+      {/* the threading arm passes UNDER the body */}
+      <Limb p={[[266, 216], [228, 250], [172, 262]]} />
+      {/* the supporting arm stays planted */}
+      <Limb p={[[272, 210], [306, 236], [340, 262]]} far />
+    </>
+  ),
+};
+
+DRAWINGS["ankle rocks"] = {
+  sided: true,
+  art: () => (
+    <>
+      <Floor />
+      {/* half-kneeling, back knee down */}
+      <Limb p={[[182, 222], [136, 262], [92, 266]]} far />
+      <Limb p={[[186, 220], [140, 262], [96, 266]]} />
+      {/* the front knee travels FORWARD OVER the toes — heel stays down */}
+      <Limb p={[[192, 220], [296, 214], [278, 262], [296, 266]]} />
+      <Torso neck={[192, 138]} hip={[188, 218]} />
+      <Head at={[196, 116]} />
+      {/* hands on the front knee */}
+      <Limb p={[[190, 146], [232, 180], [284, 208]]} far />
+      <Limb p={[[194, 144], [236, 178], [290, 206]]} />
+      {/* the rock itself */}
+      <ArcArrow c={[250, 226]} r={62} from={-58} to={-4} />
+    </>
+  ),
+};
+
