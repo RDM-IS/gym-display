@@ -217,3 +217,18 @@ describe("day off (PAIN-1)", () => {
     expect(screen.getByText(/gentle mobility only/)).toBeDefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// NAMING (Ryan, 2026-09-28): a session name says WHAT, never WHERE.
+// ---------------------------------------------------------------------------
+describe("no session name carries a location", () => {
+  const PLACES = ["Office", "Richfield", "Brown Deer", "MSP"];
+
+  it("the fallback labels name no gym", async () => {
+    const src = (await import("../src/lib/format.ts?raw")).default;
+    const block = src.slice(src.indexOf("SESSION_LABELS"), src.indexOf("};", src.indexOf("SESSION_LABELS")));
+    for (const place of PLACES) {
+      expect(block, `${place} is in a session label`).not.toContain(place);
+    }
+  });
+});

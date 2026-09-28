@@ -2,13 +2,20 @@ import type { Plan, SessionType } from "./types";
 
 export type { SessionType } from "./types";
 
+// NAMING (Ryan, 2026-09-28): a session name says WHAT, never WHERE -- the
+// location is its own field and its own chip. This map is a LAST-RESORT fallback
+// for a row that carries no `blocks.display_name`; artemis's
+// health_office.display_name_for() is the source of truth and every seeded row
+// carries its answer. Keep the two in step: a name here that artemis does not
+// emit is drift, and it shows up as the iPad calling a session something the
+// morning post does not.
 const SESSION_LABELS: Record<SessionType, string> = {
   rest: "Rest",
   strength_a: "Strength A",
   strength_b: "Strength B",
   strength_c: "Strength C",
-  cardio_intervals: "Cardio Intervals",
-  cardio_z2: "Cardio Z2",
+  cardio_intervals: "Intervals",
+  cardio_z2: "Zone 2",
   walk: "Walk",
   rest_mobility: "Rest / Mobility",
   recovery_flow: "Recovery Flow",
