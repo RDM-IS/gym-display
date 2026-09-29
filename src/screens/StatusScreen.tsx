@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import BottomBar from "../components/BottomBar";
+import GoalTiles from "../components/GoalTiles";
+import {
+  CardioDetailSection,
+  NutritionDetailSection,
+  SleepRecoverySection,
+} from "../components/StatusDetail";
 import PlanDayDetail, { sessionName } from "../components/PlanDayDetail";
 import { fetchOverview, fetchPlanRange, type FetchOverviewResult, type FetchPlanRangeResult } from "../lib/api";
 import type { BarTarget } from "../lib/bottom-bar";
@@ -100,11 +106,33 @@ export default function StatusScreen({ onNavigate }: Props) {
         <div className="status-error" data-testid="status-error">Couldn't load status ({result.message}).</div>
       )}
       {data && (
+        <>
+        {/* STATUS-2: the goals come FIRST and span the page. They are the
+            question it exists to answer; everything below is how it is going.
+            Outside .status-grid on purpose — inside it they would be penned into
+            the narrower left column in landscape, which is where the iPad
+            spends most of its life on the rack. */}
+        {data.goals && <GoalTiles goals={data.goals} />}
         <div className="status-grid">
           <div className="status-col">
             <ProgramSection data={data} />
             <WeekSection data={data} onOpen={(day) => setView({ kind: "day", day })} />
             <TodaySection data={data} />
+            {data.cardio_detail && (
+              <Section title="Cardio" subtitle="weekly minutes and resting HR" testId="st-cardio-detail">
+                <CardioDetailSection detail={data.cardio_detail} />
+              </Section>
+            )}
+            {data.nutrition_7d && (
+              <Section title="Nutrition" subtitle="last 7 days" testId="st-nutrition-detail">
+                <NutritionDetailSection detail={data.nutrition_7d} />
+              </Section>
+            )}
+            {data.sleep_recovery && (
+              <Section title="Sleep & recovery" subtitle="sleep, resting HR, energy" testId="st-sleep">
+                <SleepRecoverySection detail={data.sleep_recovery} />
+              </Section>
+            )}
           </div>
           <div className="status-col">
             <StrengthSection rows={data.strength_progress} />
@@ -124,6 +152,7 @@ export default function StatusScreen({ onNavigate }: Props) {
             )}
           </div>
         </div>
+        </>
       )}
       <BottomBar view="status" onNavigate={onNavigate} />
     </div>
@@ -284,6 +313,14 @@ export function StrengthSection({ rows }: { rows: StrengthProgressRow[] }) {
       {rows.length === 0 ? (
         <div className="muted">No strength exercises this week.</div>
       ) : (
+        // STATUS-2: collapsed by default. It is the longest thing on the page
+        // and the least often wanted -- the goal tiles above answer "how is it
+        // going", and this answers "show me every lift", which is a deliberate
+        // act. <details> keeps it keyboard- and screen-reader-navigable for free.
+        <details className="st-collapse" data-testid="st-strength-details">
+          <summary data-testid="st-strength-summary">
+            {rows.length} exercise{rows.length === 1 ? "" : "s"} — show table
+          </summary>
         <div className="table-scroll" data-testid="st-strength-scroll">
           <table className="st-table">
             <thead>
@@ -318,6 +355,7 @@ export function StrengthSection({ rows }: { rows: StrengthProgressRow[] }) {
             </tbody>
           </table>
         </div>
+        </details>
       )}
     </Section>
   );
