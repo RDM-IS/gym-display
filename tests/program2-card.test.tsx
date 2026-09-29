@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import PlanDayDetail from "../src/components/PlanDayDetail";
-import { targetZoneLabel } from "../src/lib/hr-zone";
 import type { PlanDay } from "../src/lib/types";
 
 // PROGRAM-2 zones ride ON THE ROW: artemis resolves them in knowledge/zones.py
@@ -68,16 +67,19 @@ describe("the zone range on the card", () => {
     expect(screen.queryByTestId("plan-zone")).toBeNull();
   });
 
-  // The card must not fall back to deriving a range from a constant in this
-  // repo. hr-zone.ts still carries MAX_HR_BPM = 172 (220 − 48) while the rows
-  // carry Tanaka HRmax 174 at age 49, so the two disagree by ~2 bpm. ZONE-1
-  // reconciles them with a measured figure; until then this test fails loudly
-  // if anyone wires the card to the local constant.
-  it("does not render the locally-derived range", () => {
-    render(<PlanDayDetail day={day()} today="2026-10-06" />);
-    const shown = screen.getByTestId("plan-zone").textContent ?? "";
-    expect(targetZoneLabel(2)).not.toContain("105–122");
-    expect(shown).not.toBe(targetZoneLabel(2));
+  it("renders exactly the numbers the row carries", () => {
+    // There is no second source to fall back to any more: src/lib/hr-zone.ts
+    // (MAX_HR_BPM = 172, %max-HR bands) was deleted, and the guard below keeps
+    // it from coming back. The row is the only place HR numbers come from.
+    render(<PlanDayDetail day={day({
+      blocks: {
+        type: "steady", display_name: "Zone 2 – Bike", duration_min: 40,
+        zones: { work: { zone: "Z2", low_bpm: 111, high_bpm: 129, source: "measured" } },
+      },
+    })} today="2026-10-06" />);
+    // Deliberately NOT 105–122: a derived range would ignore these and show the
+    // constant's answer instead.
+    expect(screen.getByTestId("plan-zone").textContent).toBe("Z2 111–129 bpm");
   });
 });
 
