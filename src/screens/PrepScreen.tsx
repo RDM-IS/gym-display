@@ -315,10 +315,19 @@ function ShoppingTab({
 }
 
 function Line({ line }: { line: PrepLine }) {
+  // THE HEADLINE NUMBER IS WHAT TO PUT IN THE TROLLEY TODAY.
+  //
+  // For a top-up item those differ, and the first live list showed exactly that:
+  // chicken thighs read "1" while the split said buy 0 now and 1 on the 7th,
+  // because it is only eaten on the 7th and 8th and would not keep. A shopper
+  // reads the big number, so the big number has to be the one he acts on; the
+  // rest of the split is spelled out underneath.
+  const topUp = line.later_day !== null && line.packages_later !== null;
+  const headline = topUp ? line.packages_now : line.packages;
   return (
     <li className="prep-line">
       <div className="prep-line-main">
-        <span className="prep-qty">{fmtPackages(line.packages, line.package_label)}</span>
+        <span className="prep-qty">{fmtPackages(headline, line.package_label)}</span>
         <span className="prep-name">{line.name ?? "(unnamed)"}</span>
       </div>
       <div className="prep-line-sub muted">
@@ -326,8 +335,8 @@ function Line({ line }: { line: PrepLine }) {
         {line.on_hand_base !== null
           ? ` · have ${fmtBase(line.on_hand_base, line.unit)}`
           : " · never counted"}
-        {line.later_day
-          ? ` · ${line.packages_now ?? "?"} now, ${line.packages_later ?? "?"} on ${fmtDay(line.later_day)}`
+        {topUp
+          ? ` · ${line.packages_now ?? 0} now, ${line.packages_later} on ${fmtDay(line.later_day!)}`
           : ""}
       </div>
       {line.flags.length > 0 && (

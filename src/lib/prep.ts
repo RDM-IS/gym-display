@@ -172,9 +172,15 @@ export function fmtBase(value: number | null, unit: string | null): string {
   return unit ? `${n} ${unit}` : `${n}`;
 }
 
-/** "2 x 32 oz carton", or "2" when the package has no printed label. */
+/** "2 × 32 oz carton", or "2" when the package has no printed label.
+ *
+ * ZERO DROPS THE LABEL. "0 × 1.5 lb pack" reads like a quantity of something;
+ * "0" reads like the answer, which for a top-up row is "not on this trip". The
+ * distinction from `null` is preserved either way: null is "—", meaning nobody
+ * has said how big a package is, and that is a different statement entirely. */
 export function fmtPackages(packages: number | null, label: string | null): string {
   if (packages === null || packages === undefined) return "—";
+  if (packages === 0) return "0";
   return label ? `${packages} × ${label}` : `${packages}`;
 }
 
