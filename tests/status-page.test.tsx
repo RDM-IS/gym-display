@@ -51,7 +51,7 @@ describe("formatting", () => {
   });
 
   it("labels every check-in number", () => {
-    expect(checkinParts(OV.today.checkin)).toEqual(["Sleep 7.5 h", "Energy 4/5", "Weight 282.6 lb", "RHR 58 bpm"]);
+    expect(checkinParts(OV.today.checkin)).toEqual(["Sleep 7.5 h", "Energy 4/5", "Weight 342.6 lb", "RHR 88 bpm"]);
     expect(checkinParts(null)).toEqual([]);
   });
 
@@ -74,11 +74,11 @@ describe("formatting", () => {
 
 describe("weight chart", () => {
   it("one reading: a dot, no line; the axis is padded ±3 lb", () => {
-    const g = chartGeometry([{ date: "2026-09-21", value: 282.6 }], WEIGHT_BOX,
+    const g = chartGeometry([{ date: "2026-09-21", value: 342.6 }], WEIGHT_BOX,
       { pad: 3, from: "2026-08-23", to: "2026-09-21" });
     expect(g.dots).toHaveLength(1);
     expect(g.path).toBeNull();
-    expect([g.yMin, g.yMax]).toEqual([279, 286]);
+    expect([g.yMin, g.yMax]).toEqual([339, 346]);
     // Labels sit outside the plot: the plot starts right of the y-label gutter.
     expect(g.plot.x0).toBe(WEIGHT_BOX.left);
     expect(g.plot.y1).toBe(WEIGHT_BOX.height - WEIGHT_BOX.bottom);
@@ -88,8 +88,8 @@ describe("weight chart", () => {
       expect(d.y).toBeLessThanOrEqual(g.plot.y1);
     }
 
-    render(<WeightSection data={clone({ weight_30d: [{ date: "2026-09-21", value: 282.6 }],
-      weight_summary: { first: { date: "2026-09-21", value: 282.6 }, latest: { date: "2026-09-21", value: 282.6 }, change: 0 } })} />);
+    render(<WeightSection data={clone({ weight_30d: [{ date: "2026-09-21", value: 342.6 }],
+      weight_summary: { first: { date: "2026-09-21", value: 342.6 }, latest: { date: "2026-09-21", value: 342.6 }, change: 0 } })} />);
     expect(screen.getAllByTestId("weight-dot")).toHaveLength(1);
     expect(screen.queryByTestId("weight-line")).toBeNull();
     expect(screen.getByTestId("weight-summary").textContent).toContain("Change 0 lb");
@@ -100,11 +100,11 @@ describe("weight chart", () => {
     expect(screen.getAllByTestId("weight-dot")).toHaveLength(7);
     expect(screen.getByTestId("weight-line")).toBeDefined();
     const chart = screen.getByTestId("weight-chart");
-    expect(chart.textContent).toContain("295 lb");
-    expect(chart.textContent).toContain("279 lb");
+    expect(chart.textContent).toContain("355 lb");
+    expect(chart.textContent).toContain("339 lb");
     const sum = screen.getByTestId("weight-summary").textContent!;
-    expect(sum).toContain("First 291.2 lb (8/30)");
-    expect(sum).toContain("Latest 282.6 lb (9/21)");
+    expect(sum).toContain("First 351.2 lb (8/30)");
+    expect(sum).toContain("Latest 342.6 lb (9/21)");
     expect(sum).toContain("Change −8.6 lb");
   });
 
@@ -173,7 +173,7 @@ describe("labels", () => {
     render(<TodaySection data={OV} />);
     expect(screen.getByTestId("st-progress").textContent).toBe("Sets 1 / 12");
     const ci = screen.getByTestId("st-checkin").textContent!;
-    expect(ci).toContain("Sleep 7.5 h · Energy 4/5 · Weight 282.6 lb · RHR 58 bpm");
+    expect(ci).toContain("Sleep 7.5 h · Energy 4/5 · Weight 342.6 lb · RHR 88 bpm");
     expect(ci).toContain("Soreness hamstrings 2/5");
     expect(ci).toContain("Pain low back 3/5");
   });
