@@ -1,4 +1,4 @@
-import type { Task } from "../lib/prep-schedule";
+import { resourceLabel, type Task } from "../lib/prep-schedule";
 import { fmtCountdown } from "../lib/prep-session";
 
 export interface RailEntry {
@@ -41,7 +41,9 @@ export default function PrepTimerRail(
           >
             <span className="prep-timer-time">{fmtCountdown(remainingMs)}</span>
             <span className="prep-timer-name">{task.name}</span>
-            <span className="prep-timer-hint">{expired ? "tap = done" : task.resource}</span>
+            <span className="prep-timer-hint">
+              {expired ? "tap = done" : resourceLabel(task.resource)}
+            </span>
           </button>
         );
       })}

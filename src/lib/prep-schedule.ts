@@ -20,6 +20,27 @@
 export type Resource = "hands" | "oven" | "stove" | "air_fryer" | "counter" | "fridge";
 export type Mode = "active" | "passive" | "unattended";
 
+/** How each resource is written, everywhere it is written.
+ *
+ * A `Record<Resource, string>` rather than a list, so adding a resource BREAKS
+ * THE BUILD here until it has a label — the same reason the Route union is a
+ * Record. It exists because there were two vocabularies: the board's lanes said
+ * "Air fryer" and the run-order list printed the raw `air_fryer`, which is a
+ * field name leaking onto a screen he reads while cooking.
+ */
+export const RESOURCE_LABELS: Record<Resource, string> = {
+  hands: "Hands",
+  oven: "Oven",
+  stove: "Stovetop",
+  air_fryer: "Air fryer",
+  counter: "Counter",
+  fridge: "Fridge",
+};
+
+export function resourceLabel(resource: Resource): string {
+  return RESOURCE_LABELS[resource];
+}
+
 export interface PrepStep {
   stepNo: number;
   name: string;
