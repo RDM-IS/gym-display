@@ -28,7 +28,11 @@ export type SessionType =
   // of the rest-day crash: the union is the fix, and adding these two is what
   // forced SESSION_LABELS to name them.
   | "core"
-  | "mobility";
+  | "mobility"
+  // BW-CIRCUIT (2026-09-29). Swappable onto any day, so it reaches health.plan
+  // and migration 049 widens that CHECK. The UNION goes first, as always: adding
+  // it here is what breaks the build at SESSION_LABELS until the value is named.
+  | "bodyweight_circuit";
 
 export type ExerciseFormat = "reps" | "duration";
 
