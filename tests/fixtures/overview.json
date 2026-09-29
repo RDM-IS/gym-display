@@ -1019,8 +1019,8 @@
    "date": "2026-09-21",
    "sleep_hrs": 7.5,
    "energy": 4,
-   "weight_lbs": 282.6,
-   "resting_hr": 58,
+   "weight_lbs": 342.6,
+   "resting_hr": 88,
    "soreness": {
     "hamstrings": 2
    },
@@ -1359,7 +1359,7 @@
    "date": "2026-09-16",
    "sleep_hrs": 6.5,
    "energy": 5,
-   "weight_lbs": 284.5,
+   "weight_lbs": 344.5,
    "resting_hr": null,
    "soreness": {
     "overall": 0
@@ -1383,8 +1383,8 @@
    "date": "2026-09-18",
    "sleep_hrs": 6.0,
    "energy": 3,
-   "weight_lbs": 283.8,
-   "resting_hr": 60,
+   "weight_lbs": 343.8,
+   "resting_hr": 90,
    "soreness": {
     "legs": 2,
     "quads": 2
@@ -1397,7 +1397,7 @@
    "date": "2026-09-20",
    "sleep_hrs": 8.0,
    "energy": 4,
-   "weight_lbs": 283.0,
+   "weight_lbs": 343.0,
    "resting_hr": null,
    "soreness": {},
    "pain": {
@@ -1408,8 +1408,8 @@
    "date": "2026-09-21",
    "sleep_hrs": 7.5,
    "energy": 4,
-   "weight_lbs": 282.6,
-   "resting_hr": 58,
+   "weight_lbs": 342.6,
+   "resting_hr": 88,
    "soreness": {
     "hamstrings": 2
    },
@@ -1464,41 +1464,41 @@
  "weight_30d": [
   {
    "date": "2026-08-30",
-   "value": 291.2
+   "value": 351.2
   },
   {
    "date": "2026-09-05",
-   "value": 289.0
+   "value": 349.0
   },
   {
    "date": "2026-09-12",
-   "value": 286.4
+   "value": 346.4
   },
   {
    "date": "2026-09-16",
-   "value": 284.5
+   "value": 344.5
   },
   {
    "date": "2026-09-18",
-   "value": 283.8
+   "value": 343.8
   },
   {
    "date": "2026-09-20",
-   "value": 283.0
+   "value": 343.0
   },
   {
    "date": "2026-09-21",
-   "value": 282.6
+   "value": 342.6
   }
  ],
  "weight_summary": {
   "first": {
    "date": "2026-08-30",
-   "value": 291.2
+   "value": 351.2
   },
   "latest": {
    "date": "2026-09-21",
-   "value": 282.6
+   "value": 342.6
   },
   "change": -8.6
  },
