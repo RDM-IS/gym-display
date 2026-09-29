@@ -14,6 +14,9 @@ import type {
 import type {
   MacrosResponse,
   PantryResponse,
+  PrepBoardResponse,
+  PrepStepPayload,
+  PrepStepsResponse,
   ShoppingResponse,
 } from "./prep";
 import {
@@ -452,5 +455,153 @@ export async function postPantryCount(
       status: "error",
       message: err instanceof Error ? err.message : "Count failed.",
     };
+  }
+}
+
+// ── PREP-2: the prep board ──────────────────────────────────────────────────
+//
+// The board and the event log are DIFFERENT kinds of call, and they fail
+// differently on purpose. A failed board read means no session; a failed EVENT
+// write means one line of future calibration data is lost, which must never
+// interrupt a session in progress. So the event poster swallows its errors and the
+// board reader does not.
+
+export type FetchBoardResult =
+  | { status: "ok"; data: PrepBoardResponse }
+  | { status: "no_stay"; message: string }
+  | { status: "error"; message: string };
+
+export async function fetchPrepBoard(stayId?: number): Promise<FetchBoardResult> {
+  try {
+    const q = stayId ? `?stay_id=${stayId}` : "";
+    const res = await apiFetch(`/api/prep/board${q}`);
+    if (res.status === 404) return { status: "no_stay", message: "No stay yet." };
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return { status: "ok", data: (await res.json()) as PrepBoardResponse };
+  } catch (err) {
+    return {
+      status: "error",
+      message: err instanceof Error ? err.message : "Failed to load the board.",
+    };
+  }
+}
+
+export type FetchStepsResult =
+  | { status: "ok"; data: PrepStepsResponse }
+  | { status: "error"; message: string };
+
+export async function fetchPrepSteps(): Promise<FetchStepsResult> {
+  try {
+    const res = await apiFetch("/api/prep/steps");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return { status: "ok", data: (await res.json()) as PrepStepsResponse };
+  } catch (err) {
+    return {
+      status: "error",
+      message: err instanceof Error ? err.message : "Failed to load steps.",
+    };
+  }
+}
+
+export type PutStepsResult =
+  | { status: "ok"; steps: number }
+  | { status: "refused"; message: string }
+  | { status: "error"; message: string };
+
+/** Replace one recipe's steps. `refused` is its own outcome: the server rejects an
+ * oven step with no temperature, a duplicate step number and an unknown resource
+ * with a message, and the editor shows it rather than a generic failure. */
+export async function putPrepSteps(
+  recipe_id: string,
+  steps: PrepStepPayload[],
+): Promise<PutStepsResult> {
+  try {
+    const res = await apiFetch("/api/prep/steps", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recipe_id, steps }),
+    });
+    const j = (await res.json().catch(() => null)) as
+      { steps?: number; detail?: { message?: string } } | null;
+    if (res.status === 400) {
+      return { status: "refused", message: j?.detail?.message ?? "Refused." };
+    }
+    if (!res.ok) return { status: "error", message: j?.detail?.message ?? `HTTP ${res.status}` };
+    return { status: "ok", steps: j?.steps ?? steps.length };
+  } catch (err) {
+    return {
+      status: "error",
+      message: err instanceof Error ? err.message : "Save failed.",
+    };
+  }
+}
+
+export type PostSessionResult =
+  | { status: "ok"; session_id: number }
+  | { status: "error"; message: string };
+
+export async function postPrepSession(body: {
+  stay_id: number | null;
+  session_date: string;
+  status: string;
+  schedule_json?: unknown;
+  shortcuts: string[];
+  planned_min?: number;
+  hands_on_min?: number;
+}): Promise<PostSessionResult> {
+  try {
+    const res = await apiFetch("/api/prep/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const j = (await res.json().catch(() => null)) as { session_id?: number } | null;
+    if (!res.ok || j?.session_id == null) {
+      return { status: "error", message: `HTTP ${res.status}` };
+    }
+    return { status: "ok", session_id: j.session_id };
+  } catch (err) {
+    return {
+      status: "error",
+      message: err instanceof Error ? err.message : "Could not record the session.",
+    };
+  }
+}
+
+export async function setPrepSessionStatus(
+  sessionId: number, status: string,
+): Promise<void> {
+  try {
+    await apiFetch(`/api/prep/session/${sessionId}/status?status=${status}`,
+                   { method: "POST" });
+  } catch {
+    /* The session is running on this device regardless. Losing the server's copy
+       of "it finished" costs a row, not the cook. */
+  }
+}
+
+/** Log one start / done / extend / skip. DELIBERATELY SILENT ON FAILURE.
+ *
+ * These rows are future calibration data and nothing reads them yet. A dropped
+ * connection mid-session must not produce an error banner over a board he is
+ * cooking from — the cost of losing one is one data point. */
+export async function postPrepEvent(body: {
+  session_id: number;
+  task_key: string;
+  task_name?: string;
+  resource?: string;
+  kind: "start" | "done" | "extend" | "skip";
+  planned_min?: number;
+  actual_min?: number;
+}): Promise<void> {
+  if (!body.session_id) return;
+  try {
+    await apiFetch("/api/prep/event", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    /* see above */
   }
 }

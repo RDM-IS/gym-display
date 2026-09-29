@@ -160,3 +160,313 @@
   .prep-qty { min-width: 3.5em; }
   .prep-macro-date { min-width: 100%; }
 }
+
+/* ── PREP-2: the prep board ─────────────────────────────────────────────────
+   Designed for an iPad in landscape on a counter, read from about 60 cm, touched
+   with wet or floury hands. Every control is at least 44px. */
+
+.prep-board { padding-bottom: 24px; }
+
+.prep-board-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0 12px;
+}
+
+.prep-board-stats { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.95rem; }
+.prep-board-actions { display: flex; gap: 8px; align-items: center; }
+.prep-audio-hint { font-size: 0.8rem; }
+
+.prep-start { font-weight: 700; }
+
+/* ── the timer rail ─────────────────────────────────────────────────────────
+   Pinned above the board. Any number at once — the kitchen decides, not the
+   layout. An expired timer holds at 0:00 and flashes: iOS will not play sound from
+   a backgrounded tab, so the flash is the alarm that still works. */
+.prep-rail {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 8px 0;
+  position: sticky;
+  top: 56px;
+  background: var(--bg);
+  z-index: 3;
+  min-height: 64px;
+}
+
+.prep-rail--empty { align-items: center; }
+
+.prep-timer {
+  min-width: 132px;
+  min-height: 56px;
+  border-radius: 12px;
+  border: 2px solid var(--line, #3a3a3a);
+  background: transparent;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 6px 10px;
+  gap: 1px;
+}
+
+.prep-timer-time {
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.prep-timer-name { font-size: 0.8rem; text-align: left; }
+.prep-timer-hint { font-size: 0.7rem; opacity: 0.6; }
+
+.prep-timer--oven      { border-color: #ff8b7b; }
+.prep-timer--stove     { border-color: #ffc46b; }
+.prep-timer--air_fryer { border-color: #d9a0ff; }
+.prep-timer--hands     { border-color: #9fd0ff; }
+.prep-timer--counter,
+.prep-timer--fridge    { border-color: #8fd8c0; }
+
+.prep-timer.is-expired {
+  animation: prep-flash 1s steps(2, start) infinite;
+  border-width: 3px;
+}
+
+@keyframes prep-flash {
+  0%   { background: rgba(255, 139, 123, 0.35); }
+  100% { background: transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Still unmistakable without motion: a reduced-motion setting must not cost him
+     the only alarm that works when the tab is backgrounded. */
+  .prep-timer.is-expired {
+    animation: none;
+    background: rgba(255, 139, 123, 0.35);
+    outline: 3px solid #ff8b7b;
+  }
+}
+
+/* ── shortcuts ──────────────────────────────────────────────────────────── */
+.prep-shortcuts { display: flex; flex-wrap: wrap; gap: 8px; padding: 6px 0 12px; }
+
+.prep-shortcut {
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+}
+
+.prep-shortcut.is-on {
+  background: rgba(143, 216, 192, 0.2);
+  border-color: #8fd8c0;
+  font-weight: 600;
+}
+
+/* ── lanes ──────────────────────────────────────────────────────────────── */
+.prep-lanes-wrap { overflow-x: auto; padding-bottom: 8px; }
+.prep-lanes { position: relative; padding-top: 22px; }
+
+.prep-ticks { position: relative; height: 18px; margin-left: 96px; }
+
+.prep-tick {
+  position: absolute;
+  font-size: 0.7rem;
+  opacity: 0.5;
+  transform: translateX(-50%);
+}
+
+.prep-now {
+  position: absolute;
+  top: 20px;
+  bottom: 0;
+  width: 2px;
+  margin-left: 96px;
+  background: #8fd8c0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.prep-lane { display: flex; align-items: stretch; min-height: 86px; }
+
+.prep-lane-label {
+  width: 96px;
+  flex: 0 0 96px;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.75;
+  position: sticky;
+  left: 0;
+  background: var(--bg);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+}
+
+.prep-lane-track {
+  position: relative;
+  flex: 1;
+  border-top: 1px solid rgba(128, 128, 128, 0.18);
+}
+
+.prep-card {
+  position: absolute;
+  top: 4px;
+  /* FIXED height, not min-height. Cards are absolutely positioned inside a lane
+     of a known height, so a card whose text wraps would otherwise grow downward
+     and overlap the lane BELOW it — which it did: the shared-prep cards, the only
+     ones with a sub-line, spilled into the oven row. Clipping is the right
+     trade here because the run-order list underneath carries the full detail. */
+  height: 66px;
+  border-radius: 8px;
+  border: 1px solid var(--line, #3a3a3a);
+  padding: 4px 6px;
+  font-size: 0.8rem;
+  overflow: hidden;
+  background: rgba(128, 128, 128, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.prep-card--active  { background: rgba(159, 208, 255, 0.18); }
+.prep-card--passive { background: rgba(255, 196, 107, 0.18); }
+.prep-card--unattended { background: rgba(143, 216, 192, 0.14); }
+.prep-card.is-filler { border-style: dashed; background: transparent; }
+.prep-card.is-done { opacity: 0.45; }
+.prep-card.is-running { outline: 2px solid #8fd8c0; }
+.prep-card.is-skipped { opacity: 0.3; text-decoration: line-through; }
+
+/* One line each, clipped rather than wrapped: a wrapped name doubles a card's
+   height and there is no room for that in a lane. */
+.prep-card-name {
+  display: block;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.prep-card-sub {
+  display: block;
+  font-size: 0.7rem;
+  opacity: 0.75;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A narrow card has room for its name and nothing else; the badge would cover it. */
+.prep-card .chip { align-self: flex-start; font-size: 0.65rem; padding: 0 5px; }
+
+.prep-card-actions { display: flex; gap: 3px; margin-top: auto; }
+
+.prep-card-actions button {
+  min-width: 32px;
+  min-height: 26px;
+  font-size: 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--line, #3a3a3a);
+  background: transparent;
+  color: inherit;
+}
+
+.prep-card-actions button:disabled { opacity: 0.35; }
+
+/* ── phone layout: Now / Next up / list ─────────────────────────────────── */
+.prep-phone { padding: 8px 0; }
+.prep-next h3 { font-size: 0.85rem; text-transform: uppercase; opacity: 0.7; }
+
+.prep-next-card {
+  border: 2px solid #8fd8c0;
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.prep-next-name { font-size: 1.35rem; font-weight: 700; }
+.prep-next-actions { display: flex; gap: 8px; margin-top: 10px; }
+.prep-next-actions .btn { min-height: 44px; flex: 1; }
+
+/* ── run order ─────────────────────────────────────────────────────────── */
+.prep-runorder { margin-top: 18px; }
+.prep-runorder h3 { font-size: 0.85rem; text-transform: uppercase; opacity: 0.7; }
+.prep-runorder ol { list-style: none; margin: 0; padding: 0; }
+
+.prep-runorder li {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.14);
+  font-size: 0.9rem;
+}
+
+.prep-runorder li.is-done { opacity: 0.45; }
+.prep-runorder li.is-running { font-weight: 600; }
+.prep-ro-time { min-width: 5.5em; font-variant-numeric: tabular-nums; opacity: 0.8; }
+.prep-ro-name { flex: 1; }
+
+/* ── steps editor ──────────────────────────────────────────────────────── */
+.prep-disclose {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  padding: 0 6px 0 0;
+  min-height: 44px;
+}
+
+.prep-steps-edit { padding: 4px 0 12px; }
+
+.prep-step-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.14);
+}
+
+.prep-step-row input,
+.prep-step-row select {
+  min-height: 40px;
+  border-radius: 8px;
+  border: 1px solid var(--line, #3a3a3a);
+  background: transparent;
+  color: inherit;
+  padding: 0 8px;
+  font: inherit;
+}
+
+.prep-step-row input[type="number"] { width: 5.5em; }
+.prep-step-row > input:first-child { flex: 1 1 14em; }
+
+.prep-step-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  opacity: 0.8;
+}
+
+.prep-step-row > button {
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: 8px;
+  border: 1px solid var(--line, #3a3a3a);
+  background: transparent;
+  color: inherit;
+}
+
+.prep-steps-actions { display: flex; gap: 8px; align-items: center; padding-top: 10px; }

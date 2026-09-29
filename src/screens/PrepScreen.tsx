@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
+import PrepBoard from "./PrepBoard";
+import PrepSteps from "./PrepSteps";
 import {
   fetchPantry,
+  fetchPrepBoard,
   fetchPrepMacros,
   fetchShopping,
   postPantryCount,
 } from "../lib/api";
+import type { PrepBoardResponse } from "../lib/prep";
 import {
   FLAG_LABELS,
   MACRO_LABELS,
@@ -17,7 +21,16 @@ import {
   type ShoppingResponse,
 } from "../lib/prep";
 
-type Tab = "shopping" | "pantry";
+// ENUM-EXPAND, the same discipline as the Route union: the tab set is a union, so
+// adding one breaks the build at every switch until it is handled.
+type Tab = "shopping" | "pantry" | "board" | "steps";
+
+const TAB_LABELS: Record<Tab, string> = {
+  shopping: "Shopping",
+  pantry: "Pantry",
+  board: "Board",
+  steps: "Steps",
+};
 
 /** Where the last list is kept so the shop works without a signal.
  *
@@ -115,25 +128,24 @@ export default function PrepScreen() {
   return (
     <div className="screen prep">
       <div className="prep-tabs" role="tablist">
-        <button
-          role="tab"
-          aria-selected={tab === "shopping"}
-          className={tab === "shopping" ? "active" : ""}
-          onClick={() => setTab("shopping")}
-        >
-          Shopping
-        </button>
-        <button
-          role="tab"
-          aria-selected={tab === "pantry"}
-          className={tab === "pantry" ? "active" : ""}
-          onClick={() => setTab("pantry")}
-        >
-          Pantry
-        </button>
+        {(Object.keys(TAB_LABELS) as Tab[]).map((key) => (
+          <button
+            key={key}
+            role="tab"
+            aria-selected={tab === key}
+            className={tab === key ? "active" : ""}
+            onClick={() => setTab(key)}
+          >
+            {TAB_LABELS[key]}
+          </button>
+        ))}
       </div>
 
-      {tab === "shopping" ? (
+      {tab === "board" ? (
+        <BoardTab />
+      ) : tab === "steps" ? (
+        <PrepSteps />
+      ) : tab === "shopping" ? (
         <ShoppingTab
           data={shopping}
           macros={macros}
@@ -160,6 +172,51 @@ export default function PrepScreen() {
     </div>
   );
 }
+
+// ── board ───────────────────────────────────────────────────────────────────
+
+/** Loads what the SCHEDULER needs and hands it over. The schedule itself is
+ * computed in the browser (see src/lib/prep-schedule.ts) so a re-flow works with
+ * the Wi-Fi off, which is the normal state of a kitchen. */
+function BoardTab() {
+  const [data, setData] = useState<PrepBoardResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [noStay, setNoStay] = useState(false);
+
+  const load = useCallback(async () => {
+    const res = await fetchPrepBoard();
+    if (res.status === "ok") { setData(res.data); setError(null); setNoStay(false); }
+    else if (res.status === "no_stay") setNoStay(true);
+    else setError(res.message);
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  if (noStay) {
+    return <div className="prep-body"><p className="muted">No stay to cook for yet.</p></div>;
+  }
+  if (error) {
+    return (
+      <div className="prep-body">
+        <p className="banner prep-error">{error}</p>
+        <button className="btn" onClick={() => void load()}>Try again</button>
+      </div>
+    );
+  }
+  if (!data) return <div className="prep-body muted">Loading…</div>;
+  if (data.recipes.length === 0) {
+    return (
+      <div className="prep-body">
+        <p className="muted">
+          Nothing to cook for this stay yet — no recipe with servings to make has
+          steps. Add steps in the Steps tab.
+        </p>
+      </div>
+    );
+  }
+  return <div className="prep-body"><PrepBoard data={data} /></div>;
+}
+
 
 // ── shopping ────────────────────────────────────────────────────────────────
 
