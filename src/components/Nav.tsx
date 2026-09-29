@@ -33,6 +33,13 @@ export default function Nav({ route, onNavigate }: Props) {
       >
         Sessions
       </a>
+      <a
+        href="/prep"
+        className={route === "prep" ? "active" : ""}
+        onClick={(e) => go(e, "prep")}
+      >
+        Prep
+      </a>
     </nav>
   );
 }

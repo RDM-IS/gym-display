@@ -1,16 +1,31 @@
 import { useEffect, useState } from "react";
 
-export type Route = "today" | "status" | "library";
+// ENUM-EXPAND: "prep" goes in the UNION first and the build then names every
+// place that has to handle it. A `never` default only narrows over what the union
+// declares, so adding the route to a switch without adding it here would compile
+// cleanly and throw at runtime — the 2026-09-25 rest-day crash exactly.
+export type Route = "today" | "status" | "library" | "prep";
 
 export function pathToRoute(pathname: string): Route {
   const p = pathname.replace(/\/$/, "");
   if (p.endsWith("/status")) return "status";
   if (p.endsWith("/library")) return "library";
+  if (p.endsWith("/prep")) return "prep";
   return "today";
 }
 
+const ROUTE_PATHS: Record<Route, string> = {
+  today: "/today",
+  status: "/status",
+  library: "/library",
+  prep: "/prep",
+};
+
 export function routeToPath(route: Route): string {
-  return route === "status" ? "/status" : route === "library" ? "/library" : "/today";
+  // A Record over the union rather than a ternary chain: adding a route to the
+  // union now BREAKS THE BUILD here until its path exists, where a chain would
+  // have silently sent it to /today.
+  return ROUTE_PATHS[route];
 }
 
 export function usePath(): [Route, (next: Route, opts?: { replace?: boolean }) => void] {

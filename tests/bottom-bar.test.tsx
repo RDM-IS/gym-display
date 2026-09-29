@@ -52,10 +52,19 @@ describe("bottom bar contents per view", () => {
 });
 
 describe("top tabs", () => {
-  it("say Workout, Status and Sessions — no second 'Today'", () => {
+  it("say Workout, Status, Sessions and Prep — no second 'Today'", () => {
     render(<Nav route="today" onNavigate={() => {}} />);
     expect(screen.getAllByRole("link").map((l) => l.textContent))
-      .toEqual(["Workout", "Status", "Sessions"]);
+      .toEqual(["Workout", "Status", "Sessions", "Prep"]);
+  });
+
+  it("marks only the active route", () => {
+    // PREP-1 added a fourth tab. The exact-list assertion above is what caught
+    // it, which is the point of asserting the whole list rather than a subset:
+    // a tab added by accident, or one lost in a refactor, both fail here.
+    render(<Nav route="prep" onNavigate={() => {}} />);
+    const active = screen.getAllByRole("link").filter((l) => l.className === "active");
+    expect(active.map((l) => l.textContent)).toEqual(["Prep"]);
   });
 });
 

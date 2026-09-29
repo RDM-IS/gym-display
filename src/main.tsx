@@ -12,6 +12,7 @@ import "./styles/week.css";
 import "./styles/status2.css";
 import "./styles/music.css";
 import "./styles/circuit.css";
+import "./styles/prep.css";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("#root not found");

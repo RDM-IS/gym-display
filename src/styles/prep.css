@@ -1,0 +1,162 @@
+/* PREP-1 — Prep board: shopping list + pantry.
+   Follows the existing screen conventions (see status2.css): the tokens come
+   from base.css and nothing here declares a colour of its own except the flag
+   chips, which need to be distinguishable at a glance in a shop. */
+
+.prep {
+  padding: 0 16px 96px;          /* 16px side gutter; room for the nav bar */
+}
+
+.prep-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 12px 0;
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 2;
+}
+
+.prep-tabs button {
+  flex: 1;
+  padding: 10px 12px;
+  font-size: 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--line, #3a3a3a);
+  background: transparent;
+  color: inherit;
+}
+
+.prep-tabs button.active {
+  background: var(--accent-dim, rgba(255, 255, 255, 0.12));
+  font-weight: 600;
+}
+
+.prep-head { padding: 4px 0 12px; }
+
+.prep-note { margin: 4px 0 12px; }
+
+.prep-store { margin: 0 0 20px; }
+
+.prep-store-name {
+  font-size: 1.05rem;
+  margin: 12px 0 4px;
+  border-bottom: 1px solid var(--line, #3a3a3a);
+  padding-bottom: 4px;
+}
+
+.prep-aisle { margin: 8px 0 12px; }
+
+.prep-aisle-name {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.7;
+  margin-bottom: 4px;
+}
+
+.prep-lines { list-style: none; margin: 0; padding: 0; }
+
+.prep-line { padding: 8px 0; border-bottom: 1px solid rgba(128, 128, 128, 0.18); }
+
+.prep-line-main {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+/* The package count is what he reads in the aisle, so it leads and it is big. */
+.prep-qty {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  min-width: 4.5em;
+}
+
+.prep-name { flex: 1; }
+
+.prep-line-sub { font-size: 0.85rem; margin-top: 2px; }
+
+.prep-flags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+
+.chip {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  opacity: 0.9;
+}
+
+/* A flag is a reason to look, not an error — so these are legible, not alarming.
+   The two that can change what he buys are the loudest. */
+.chip--no_store,        .chip--over        { color: #ff8b7b; }
+.chip--top_up,          .chip--under       { color: #ffc46b; }
+.chip--count_unknown,   .chip--no_unit,
+.chip--no_package_size, .chip--no_servings { color: #9fd0ff; }
+.chip--no_rank1,        .chip--par_only,
+.chip--estimate                            { color: #b9b9b9; }
+
+.prep-macros { margin: 8px 0 16px; }
+
+.prep-macro-day {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 3px 0;
+}
+
+.prep-macro-date { font-size: 0.85rem; min-width: 7em; opacity: 0.8; }
+
+/* The banner that matters: an unsynced database makes the list SHORT, and a
+   short list looks finished. */
+.prep-incomplete {
+  border-left: 3px solid #ff8b7b;
+  padding: 10px 12px;
+  margin: 8px 0 14px;
+  background: rgba(255, 139, 123, 0.1);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.prep-stale {
+  border-left: 3px solid #ffc46b;
+  padding: 8px 12px;
+  margin: 8px 0;
+  font-size: 0.9rem;
+}
+
+.prep-error {
+  border-left: 3px solid #ff8b7b;
+  padding: 8px 12px;
+  margin: 8px 0;
+  font-size: 0.9rem;
+}
+
+.prep-stepper { display: flex; align-items: center; gap: 4px; }
+
+/* 44px targets: this is tapped while holding a jar. */
+.prep-stepper button {
+  width: 44px;
+  height: 44px;
+  font-size: 1.3rem;
+  border-radius: 10px;
+  border: 1px solid var(--line, #3a3a3a);
+  background: transparent;
+  color: inherit;
+}
+
+.prep-stepper button:disabled { opacity: 0.4; }
+
+.prep-count {
+  min-width: 3em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.prep-pantry-row .prep-line-main { align-items: center; }
+
+@media (max-width: 420px) {
+  .prep-qty { min-width: 3.5em; }
+  .prep-macro-date { min-width: 100%; }
+}
