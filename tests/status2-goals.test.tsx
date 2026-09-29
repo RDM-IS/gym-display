@@ -241,3 +241,36 @@ describe("copy", () => {
     expect(line?.textContent).toContain("2 readings");
   });
 });
+
+describe("ZONE-0: where the zone split came from", () => {
+  it("labels a split derived from session averages", () => {
+    // One hr_avg per session puts a whole interval session into whichever zone
+    // its average landed in. That is not the same claim as measured minutes, so
+    // the card says which it is rather than presenting them as equivalent.
+    render(<CardioTile g={{ ...cardio, zone_source: "session_average" }} />);
+    expect(screen.getByTestId("cardio-zone-source").textContent).toMatch(/session averages/i);
+  });
+
+  it("says nothing extra when the minutes came from the watch and cover the week", () => {
+    render(<CardioTile g={{
+      ...cardio, zone_source: "watch", zone_sessions: 3, zone_sessions_total: 3,
+    }} />);
+    expect(screen.queryByTestId("cardio-zone-source")).toBeNull();
+    expect(screen.queryByTestId("cardio-zone-coverage")).toBeNull();
+  });
+
+  it("says how much of the week the watch actually covered", () => {
+    render(<CardioTile g={{
+      ...cardio, zone_source: "watch", zone_sessions: 1, zone_sessions_total: 4,
+    }} />);
+    expect(screen.getByTestId("cardio-zone-coverage").textContent).toContain("1 of 4");
+  });
+
+  it("still shows no-heart-rate-data when there is no split at all", () => {
+    render(<CardioTile g={{
+      ...cardio, has_zone_data: false, z2_minutes: null, z4_minutes: null, zone_source: null,
+    }} />);
+    expect(screen.getByTestId("cardio-no-zones").textContent).toMatch(/minutes logged only/i);
+    expect(screen.queryByTestId("cardio-zones")).toBeNull();
+  });
+});

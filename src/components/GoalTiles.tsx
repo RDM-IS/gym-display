@@ -101,9 +101,22 @@ export function CardioTile({ g }: { g: CardioGoal }) {
         {g.has_zone_data ? (
           <li data-testid="cardio-zones">
             Z2 {num(g.z2_minutes, 0)} min · Z4 {num(g.z4_minutes, 0)} min
+            {/* ZONE-0: say where the split came from. Minutes measured from the
+                watch's samples and minutes bucketed from one session average are
+                not the same claim — the second puts an entire interval session
+                into whichever zone its average landed in. */}
+            {g.zone_source === "session_average" && (
+              <span className="dim" data-testid="cardio-zone-source"> · from session averages</span>
+            )}
+            {g.zone_source === "watch" && g.zone_sessions_total
+              && g.zone_sessions !== g.zone_sessions_total && (
+              <span className="dim" data-testid="cardio-zone-coverage">
+                {" "}· {g.zone_sessions} of {g.zone_sessions_total} sessions
+              </span>
+            )}
           </li>
         ) : (
-          // Not "Z2 0 min": no logged session carries a heart rate, which is a
+          // Not "Z2 0 min": no session has heart-rate data behind it, which is a
           // different statement from having spent no time in the zone.
           <li className="dim" data-testid="cardio-no-zones">
             No heart-rate data yet — minutes logged only
