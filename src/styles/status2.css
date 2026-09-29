@@ -28,7 +28,9 @@
 }
 .status-col { display: flex; flex-direction: column; gap: var(--gutter); min-width: 0; }
 @media (orientation: landscape) {
-  .status-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); }
+  /* Even columns now that both carry sections; 1fr/1.25fr was sized for a page
+     whose right column held only the strength table. */
+  .status-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }
 
 .status-stale, .status-error { margin-bottom: var(--gap); }
@@ -259,3 +261,27 @@
   padding: 0 14px 12px;
 }
 .st-section > .st-collapse { padding: 0 14px 6px; }
+
+/* ── STATUS-2 polish (round #18) ───────────────────────────────────────── */
+
+/* Portrait: 2x2, not 3+1. `auto-fit` with a 190px floor gave three across at
+ * 820px and left Nutrition alone on a second row, which read as if it were a
+ * lesser goal than the other three. */
+.tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (orientation: landscape) {
+  .tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+/* The resting-HR qualifier belongs on the same line as the trend it qualifies. */
+.st-rhr-line { display: inline; }
+
+/* The backticked command in the gate's reason is punctuation on a card, not
+ * formatting. */
+.chip {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.92em;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: rgba(245, 245, 245, 0.12);
+  white-space: nowrap;
+}

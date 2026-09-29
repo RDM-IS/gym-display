@@ -784,6 +784,15 @@ export interface CardioGoal {
   z2_minutes: number | null;
   z4_minutes: number | null;
   has_zone_data: boolean;
+  /** ZONE-0: where the zone split came from. "watch" = per-sample minutes from
+   * health.watch_heart_rate; "session_average" = bucketed from one hr_avg per
+   * session, which puts a whole interval session in one zone and is therefore
+   * labelled rather than presented as equivalent. */
+  zone_source?: "watch" | "session_average" | null;
+  /** How many of this week's cardio sessions have a usable breakdown, of how
+   * many there were — a split covering 1 of 4 must not imply it covered them all. */
+  zone_sessions?: number;
+  zone_sessions_total?: number;
   /** Read off the next cardio_intervals ROW — the one place the wake job
    * writes the gate's answer. The client never evaluates the gate. */
   interval_gate: "intervals" | "z2_variant" | "unresolved" | null;

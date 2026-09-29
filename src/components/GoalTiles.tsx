@@ -37,6 +37,21 @@ function Tile({ title, testId, section, children }: {
   );
 }
 
+/** The gate's reason arrives with the command in backticks, because it is also
+ * posted to Mattermost where backticks ARE the formatting. On the card they are
+ * just punctuation, so they render as a chip instead of as stray characters. */
+function Ticked({ text }: { text: string }) {
+  const parts = text.split(/`([^`]+)`/g);
+  return (
+    <>
+      {parts.map((part, i) =>
+        i % 2 === 1
+          ? <code className="chip" key={i} data-testid="gate-chip">{part}</code>
+          : <span key={i}>{part}</span>)}
+    </>
+  );
+}
+
 /** A number, or an em dash when there is nothing to show. Never a 0 standing in
  * for an absent value. */
 function num(v: number | null | undefined, digits = 1, suffix = ""): string {
@@ -86,9 +101,22 @@ export function CardioTile({ g }: { g: CardioGoal }) {
         {g.has_zone_data ? (
           <li data-testid="cardio-zones">
             Z2 {num(g.z2_minutes, 0)} min · Z4 {num(g.z4_minutes, 0)} min
+            {/* ZONE-0: say where the split came from. Minutes measured from the
+                watch's samples and minutes bucketed from one session average are
+                not the same claim — the second puts an entire interval session
+                into whichever zone its average landed in. */}
+            {g.zone_source === "session_average" && (
+              <span className="dim" data-testid="cardio-zone-source"> · from session averages</span>
+            )}
+            {g.zone_source === "watch" && g.zone_sessions_total
+              && g.zone_sessions !== g.zone_sessions_total && (
+              <span className="dim" data-testid="cardio-zone-coverage">
+                {" "}· {g.zone_sessions} of {g.zone_sessions_total} sessions
+              </span>
+            )}
           </li>
         ) : (
-          // Not "Z2 0 min": no logged session carries a heart rate, which is a
+          // Not "Z2 0 min": no session has heart-rate data behind it, which is a
           // different statement from having spent no time in the zone.
           <li className="dim" data-testid="cardio-no-zones">
             No heart-rate data yet — minutes logged only
@@ -98,7 +126,8 @@ export function CardioTile({ g }: { g: CardioGoal }) {
           <li data-testid="cardio-gate" className={g.interval_gate === "intervals" ? "ok" : "dim"}>
             {g.interval_gate === "intervals"
               ? `Intervals cleared for ${g.interval_gate_date ?? "the next one"}`
-              : `Next intervals run Zone 2${g.interval_gate_reason ? ` — ${g.interval_gate_reason}` : ""}`}
+              : <>Next intervals run Zone 2{g.interval_gate_reason
+                  ? <> — <Ticked text={g.interval_gate_reason} /></> : null}</>}
           </li>
         )}
       </ul>
@@ -137,7 +166,7 @@ export function NutritionTile({ g }: { g: NutritionGoal }) {
           {g.target_protein_g !== null && <span className="dim"> of {g.target_protein_g} g</span>}
         </li>
         <li data-testid="nutrition-fiber">
-          {num(g.avg_fiber_g, 0, " g")} fibre
+          {num(g.avg_fiber_g, 0, " g")} fiber
           {g.target_fiber_g !== null && <span className="dim"> of {g.target_fiber_g} g</span>}
         </li>
         {hasTarget ? (
