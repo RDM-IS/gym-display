@@ -128,18 +128,25 @@ export default function StatusScreen({ onNavigate }: Props) {
                 <NutritionDetailSection detail={data.nutrition_7d} />
               </Section>
             )}
+            {/* Body weight sits with cardio and nutrition: it is the outcome
+                those two move, and it evens the columns out — the right one ran
+                ~600px longer than the left once the details were split. */}
+            <WeightSection data={data} />
+          </div>
+          <div className="status-col">
+            {/* Sleep, strength and the flags live in the right column. It was
+                EMPTY in landscape while every detail section queued up on the
+                left -- half the iPad showing nothing, on a device that spends
+                its life in landscape on the rack. */}
             {data.sleep_recovery && (
               <Section title="Sleep & recovery" subtitle="sleep, resting HR, energy" testId="st-sleep">
                 <SleepRecoverySection detail={data.sleep_recovery} />
               </Section>
             )}
-          </div>
-          <div className="status-col">
             <StrengthSection rows={data.strength_progress} />
             <CheckinSection checkins={data.checkins_14d} />
             {data.patterns.length > 0 && <PatternSection patterns={data.patterns} />}
             <FlagSection flags={data.flags} />
-            <WeightSection data={data} />
             {data.previous_program_end && (
               <button
                 type="button"

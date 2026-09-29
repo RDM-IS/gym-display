@@ -41,9 +41,13 @@ export function CardioDetailSection({ detail }: { detail: CardioDetail }) {
         </ul>
       )}
       {rhr.length > 0 && (
-        <div className="st-facts" data-testid="rhr-trend">
-          Resting HR {n(first)} → {n(last)} bpm
-          <span className="dim"> · {rhr.length} readings</span>
+        // One line, not two: "· 4 readings" wrapped onto its own line and read
+        // as a separate fact rather than as the qualifier it is.
+        <div className="st-facts st-rhr" data-testid="rhr-trend">
+          <span className="st-rhr-line">
+            Resting HR {n(first)} → {n(last)} bpm
+            <span className="dim">&nbsp;· {rhr.length} readings</span>
+          </span>
         </div>
       )}
     </div>
@@ -62,7 +66,7 @@ export function NutritionDetailSection({ detail }: { detail: NutritionDetail }) 
         <li key={d.day} className={d.items === 0 ? "dim" : undefined}>
           {md(d.day)} — {d.items === 0 ? "not logged" : (
             <>
-              {n(d.kcal)} kcal<span className="dim"> · {n(d.protein_g)} g protein · {n(d.fiber_g)} g fibre</span>
+              {n(d.kcal)} kcal<span className="dim"> · {n(d.protein_g)} g protein · {n(d.fiber_g)} g fiber</span>
             </>
           )}
         </li>

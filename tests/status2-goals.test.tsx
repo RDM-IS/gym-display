@@ -180,3 +180,64 @@ describe("the detail sections fail closed too", () => {
     expect(screen.getByTestId("rhr-trend").textContent).toContain("99 → 98 bpm");
   });
 });
+
+// ── Round #18 polish ──────────────────────────────────────────────────────
+
+describe("the tile and the detail below it agree", () => {
+  it("both say couldn't-read when the section is down", () => {
+    // The Lambda now returns ONE status per domain (api: _nutrition returns the
+    // tile and the detail together), so this is the shape the screen must honour
+    // rather than something it derives.
+    const down = { ok: false, reason: "couldn't read nutrition" };
+    const { unmount } = render(<NutritionTile g={{ ...nutrition, section: down }} />);
+    expect(screen.getByTestId("tile-unreadable").textContent).toBe("couldn't read nutrition");
+    unmount();
+    render(<NutritionDetailSection detail={{ section: down, days: [] } as NutritionDetail} />);
+    expect(screen.getByTestId("nutrition-unreadable").textContent).toBe("couldn't read nutrition");
+    // And neither shows numbers.
+    expect(screen.queryByTestId("nutrition-7d")).toBeNull();
+  });
+});
+
+describe("copy", () => {
+  it("spells fiber the American way, on the tile and in the detail", () => {
+    const { unmount } = render(<NutritionTile g={nutrition} />);
+    expect(screen.getByTestId("nutrition-fiber").textContent).toContain("fiber");
+    expect(screen.getByTestId("nutrition-fiber").textContent).not.toContain("fibre");
+    unmount();
+    render(<NutritionDetailSection detail={{
+      section: OK,
+      days: [{ day: "2099-01-07", kcal: 2100, protein_g: 111, fiber_g: 22, items: 4 }],
+    } as NutritionDetail} />);
+    const text = screen.getByTestId("nutrition-7d").textContent ?? "";
+    expect(text).toContain("fiber");
+    expect(text).not.toContain("fibre");
+  });
+
+  it("renders the backticked command as a chip, not as backticks", () => {
+    render(<CardioTile g={cardio} />);
+    const chip = screen.getByTestId("gate-chip");
+    expect(chip.tagName).toBe("CODE");
+    expect(chip.textContent).toBe("intervals cleared");
+    // The raw punctuation must be gone from the rendered line.
+    expect(screen.getByTestId("cardio-gate").textContent).not.toContain("`");
+  });
+
+  it("leaves a reason with no backticks alone", () => {
+    render(<CardioTile g={{ ...cardio, interval_gate_reason: "only 1 of the last 6 are logged" }} />);
+    expect(screen.getByTestId("cardio-gate").textContent).toContain("only 1 of the last 6");
+    expect(screen.queryByTestId("gate-chip")).toBeNull();
+  });
+
+  it("keeps the readings count on the resting-HR line", () => {
+    render(<CardioDetailSection detail={{
+      section: OK, weeks: [],
+      resting_hr: [{ date: "2099-01-04", value: 99 }, { date: "2099-01-05", value: 98 }],
+    } as CardioDetail} />);
+    // One element carries both halves, so they cannot wrap apart into what looks
+    // like two separate facts.
+    const line = screen.getByTestId("rhr-trend").querySelector(".st-rhr-line");
+    expect(line?.textContent).toContain("99");
+    expect(line?.textContent).toContain("2 readings");
+  });
+});
