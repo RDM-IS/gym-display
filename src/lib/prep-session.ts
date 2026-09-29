@@ -142,6 +142,22 @@ export function runningTasks(
       || a.task.key.localeCompare(b.task.key));
 }
 
+/** Hands tasks running right now.
+ *
+ * THERE MUST NEVER BE MORE THAN ONE. The hands are the single resource the whole
+ * schedule is built around, and the board was letting four hands cards run at
+ * once — Press curd, Rinse pulses, Clean as you go and Mix jars together, which
+ * is not a thing one person can do. The scheduler already knew that; only the
+ * manual start path did not.
+ */
+export function runningHandsTasks(
+  schedule: Schedule, run: RunState, nowMs: number,
+): Task[] {
+  return runningTasks(schedule, run, nowMs)
+    .map((x) => x.task)
+    .filter((t) => t.resource === "hands");
+}
+
 /** A timer that has reached zero STAYS at zero until he taps Done.
  *
  * It must not disappear on its own: the food is out of the oven when he takes it
@@ -154,6 +170,40 @@ export function expiredTasks(
     .filter((x) => x.remainingMs <= 0)
     .map((x) => x.task);
 }
+
+/** Start a task, returning the new run state and whatever this ended.
+ *
+ * ONE PAIR OF HANDS. Starting a hands card finishes whichever hands card was
+ * running, because that is what physically happened: he put the last thing down to
+ * pick this one up. The board was letting four hands cards run at once — Press
+ * curd, Rinse pulses, Clean as you go and Mix jars together — which is not a thing
+ * a person can do. The scheduler always knew it; only the manual start path did
+ * not.
+ *
+ * PASSIVE AND HEAT TASKS ARE UNTOUCHED. The oven, the hob and the air fryer run at
+ * once and must — four concurrent timers is a requirement, and this rule is about
+ * the one resource that cannot be doubled.
+ *
+ * Pure, and it returns the ended tasks so the caller can log their real elapsed
+ * time. That is the calibration data we want anyway.
+ */
+export function startTask(
+  schedule: Schedule, run: RunState, task: Task, nowMs: number,
+): { run: RunState; ended: { task: Task; startedMs: number }[] } {
+  const actual: Record<string, TaskActual> = { ...run.actual };
+  const ended: { task: Task; startedMs: number }[] = [];
+  if (task.resource === "hands") {
+    for (const other of runningHandsTasks(schedule, run, nowMs)) {
+      if (other.key === task.key) continue;
+      const prev = actual[other.key] ?? {};
+      actual[other.key] = { ...prev, doneMs: nowMs };
+      if (prev.startedMs != null) ended.push({ task: other, startedMs: prev.startedMs });
+    }
+  }
+  actual[task.key] = { ...actual[task.key], startedMs: nowMs };
+  return { run: { ...run, actual }, ended };
+}
+
 
 /** The next hands card — the phone layout's "Next up". */
 export function nextHandsTask(

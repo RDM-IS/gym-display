@@ -291,25 +291,33 @@
   width: 2px;
   margin-left: 96px;
   background: #8fd8c0;
-  z-index: 2;
+  /* Below the lane labels (4), above the cards (auto). */
+  z-index: 3;
   pointer-events: none;
 }
 
-.prep-lane { display: flex; align-items: stretch; min-height: 86px; }
+.prep-lane { display: flex; align-items: stretch; min-height: 108px; }
 
+/* Sticky, and it must sit ABOVE the cards.
+   Once the board follows the now line it is almost always scrolled, and at z-index
+   1 the cards slid underneath the label and their text showed through it — the
+   lane name became unreadable exactly when the board was in use. The background
+   is opaque for the same reason: a translucent label over a card is two texts. */
 .prep-lane-label {
   width: 96px;
   flex: 0 0 96px;
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  opacity: 0.75;
+  opacity: 0.95;
   position: sticky;
   left: 0;
-  background: var(--bg);
-  z-index: 1;
+  background: var(--bg, #000);
+  box-shadow: 6px 0 6px -6px rgba(0, 0, 0, 0.9);
+  z-index: 4;
   display: flex;
   align-items: center;
+  padding-right: 4px;
 }
 
 .prep-lane-track {
@@ -326,7 +334,7 @@
      and overlap the lane BELOW it — which it did: the shared-prep cards, the only
      ones with a sub-line, spilled into the oven row. Clipping is the right
      trade here because the run-order list underneath carries the full detail. */
-  height: 66px;
+  height: 88px;
   border-radius: 8px;
   border: 1px solid var(--line, #3a3a3a);
   padding: 4px 6px;
@@ -346,15 +354,21 @@
 .prep-card.is-running { outline: 2px solid #8fd8c0; }
 .prep-card.is-skipped { opacity: 0.3; text-decoration: line-through; }
 
-/* One line each, clipped rather than wrapped: a wrapped name doubles a card's
-   height and there is no room for that in a lane. */
+/* THE NAME WRAPS TO TWO LINES AND IS NEVER ELLIPSISED.
+   At 15 px/min with one clipped line, "Press curd" read as "P…" and "Cube and
+   season" as "Cub…". A name he cannot read is not a card. The scale went to
+   28 px/min and the card grew a second line, which between them fit every name in
+   the sample batch — asserted by a test that walks the schedule and checks each
+   name against the width its duration buys. */
 .prep-card-name {
-  display: block;
-  font-weight: 600;
-  line-height: 1.3;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
+  font-weight: 600;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .prep-card-sub {
@@ -366,10 +380,28 @@
   text-overflow: ellipsis;
 }
 
-/* A narrow card has room for its name and nothing else; the badge would cover it. */
-.prep-card .chip { align-self: flex-start; font-size: 0.65rem; padding: 0 5px; }
+/* Badge and controls share the footer row, so the badge costs no vertical space
+   of its own — which is what "must fit inside its card" needs on a 4-minute card. */
+.prep-card-foot {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: auto;
+  min-width: 0;
+}
 
-.prep-card-actions { display: flex; gap: 3px; margin-top: auto; }
+.prep-keep {
+  font-size: 0.62rem;
+  line-height: 1.5;
+  padding: 0 5px;
+  border-radius: 999px;
+  border: 1px solid #ffc46b;
+  color: #ffc46b;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.prep-card-actions { display: flex; gap: 3px; }
 
 .prep-card-actions button {
   min-width: 32px;

@@ -6,6 +6,7 @@ import { useMediaQuery } from "../lib/use-media";
 import {
   DEFAULT_KITCHEN,
   availableShortcuts,
+  resourceLabel,
   schedule as runSchedule,
   shortcutSaving,
   type KitchenProfile,
@@ -25,6 +26,7 @@ import {
   projectedFinishMs,
   runningTasks,
   saveRun,
+  startTask as startTaskState,
   type RunState,
 } from "../lib/prep-session";
 import { postPrepEvent, postPrepSession, setPrepSessionStatus } from "../lib/api";
@@ -36,22 +38,29 @@ export interface BoardData {
   kitchen: KitchenProfile;
 }
 
-const LANES: { resource: Task["resource"]; label: string }[] = [
-  { resource: "hands", label: "Hands" },
-  { resource: "oven", label: "Oven" },
-  { resource: "stove", label: "Stovetop" },
-  { resource: "air_fryer", label: "Air fryer" },
-  { resource: "counter", label: "Counter" },
-  { resource: "fridge", label: "Fridge" },
+/** Lane order. The LABELS come from prep-schedule's RESOURCE_LABELS, so the board
+ * and the run-order list cannot drift into two vocabularies — the list used to
+ * print the raw `air_fryer`. */
+const LANE_ORDER: Task["resource"][] = [
+  "hands", "oven", "stove", "air_fryer", "counter", "fridge",
 ];
 
-/** Horizontal scale. The spec's ~15 px per minute, which is what makes a card's
- * width readable as its length from about 60 cm away. */
-const PX_PER_MIN = 15;
+/** Horizontal scale.
+ *
+ * The spec suggested ~15 px/min, and at 15 the short hands cards were unreadable:
+ * "Press curd" became "P…" and "Cube and season" became "Cub…". A name he cannot
+ * read is not a card, so the scale is what gives. 28 px/min makes the shortest
+ * real task (2 min) 56 px, which fits a wrapped two-line name — and the board
+ * scrolls horizontally, which costs far less than an ellipsis does at 60 cm. */
+const PX_PER_MIN = 28;
 const TICK_MIN = 5;
+/** Below this card width the sub-line drops the recipe names and keeps the grams.
+ *  Measured against the sample batch: "900 g · Gamma curd + Delta poultry" needs
+ *  about 300 px at 0.7rem, and a 5-minute card buys 140. */
+const SUB_FULL_PX = 300;
 /** Card height + the gap under it, in px. Mirrors .prep-card in prep.css — the two
  * are one fact, and a lane sized against a stale number clips its bottom row. */
-const CARD_H = 74;
+const CARD_H = 96;
 
 /** Assign each task to the lowest sub-row in which it overlaps nothing.
  *
@@ -166,13 +175,24 @@ export default function PrepBoard({ data }: { data: BoardData }) {
     setRun(initialRun());
   }, []);
 
-  const startTask = useCallback((task: Task) => {
-    setRun((r) => ({
-      ...r,
-      actual: { ...r.actual, [task.key]: { ...r.actual[task.key], startedMs: Date.now() } },
-    }));
+  const beginTask = useCallback((task: Task) => {
+    const now = Date.now();
+    setRun((r) => {
+      const { run: next, ended } = startTaskState(plan, r, task, now);
+      // Log the real elapsed time of whatever this displaced — one pair of hands,
+      // and the actual minutes are the calibration data we want anyway.
+      for (const e of ended) {
+        void postPrepEvent({
+          session_id: r.sessionId ?? 0, task_key: e.task.key,
+          task_name: e.task.name, resource: e.task.resource, kind: "done",
+          planned_min: e.task.durationMin,
+          actual_min: Math.round(((now - e.startedMs) / 60000) * 10) / 10,
+        });
+      }
+      return next;
+    });
     logEvent(task, "start");
-  }, [logEvent]);
+  }, [logEvent, plan]);
 
   const doneTask = useCallback((task: Task) => {
     const now = Date.now();
@@ -267,10 +287,10 @@ export default function PrepBoard({ data }: { data: BoardData }) {
 
       {phone ? (
         <PhoneLayout plan={plan} run={run} nowMs={nowMs}
-                     onStart={startTask} onDone={doneTask} onAdd={addMin} />
+                     onStart={beginTask} onDone={doneTask} onAdd={addMin} />
       ) : (
         <Lanes plan={plan} proj={proj} nowMin={nowMin} running={running}
-               onStart={startTask} onDone={doneTask} onAdd={addMin}
+               onStart={beginTask} onDone={doneTask} onAdd={addMin}
                canStartTask={(t) => canStart(plan, run, t, nowMs)} />
       )}
 
@@ -299,8 +319,23 @@ function Lanes({
   const width = Math.max(plan.makespanMin, 30) * PX_PER_MIN + 40;
   const ticks = [];
   for (let m = 0; m <= plan.makespanMin + TICK_MIN; m += TICK_MIN) ticks.push(m);
+
+  // KEEP THE NOW LINE ON SCREEN. At 28 px/min an iPad shows about 38 minutes, so
+  // a 62-minute session runs off the right-hand edge — and a board he has to
+  // scroll with floury hands to find out what is happening now is a board he
+  // stops reading. It only follows while the session is running, so browsing the
+  // plan beforehand is not fought.
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!running) return;
+    const el = wrapRef.current;
+    if (!el) return;
+    const target = nowMin * PX_PER_MIN - el.clientWidth * 0.4;
+    el.scrollTo({ left: Math.max(0, target), behavior: "smooth" });
+  }, [running, nowMin]);
+
   return (
-    <div className="prep-lanes-wrap">
+    <div className="prep-lanes-wrap" ref={wrapRef}>
       <div className="prep-lanes" style={{ width }}>
         <div className="prep-ticks">
           {ticks.map((m) => (
@@ -310,8 +345,8 @@ function Lanes({
         {running && (
           <div className="prep-now" style={{ left: nowMin * PX_PER_MIN }} aria-label="now" />
         )}
-        {LANES.map((lane) => {
-          const tasks = plan.tasks.filter((t) => t.resource === lane.resource);
+        {LANE_ORDER.map((resource) => {
+          const tasks = plan.tasks.filter((t) => t.resource === resource);
           if (tasks.length === 0) return null;
           const temps = [...new Set(tasks.map((t) => t.tempF).filter(Boolean))];
           // Two oven racks means two cards genuinely overlap in time. Overlaying
@@ -319,11 +354,13 @@ function Lanes({
           // is what the lane's height is then sized to.
           const { rowOf, rows } = subRows(tasks);
           return (
-            <div className="prep-lane" key={lane.resource}
+            <div className="prep-lane" key={resource}
                  style={{ minHeight: rows * CARD_H + 12 }}>
               <div className="prep-lane-label">
-                {lane.label}
-                {temps.length > 0 && <span className="dim"> {temps.join("/")}°F</span>}
+                {resourceLabel(resource)}
+                {temps.length > 0 && (
+                  <span className="dim"> · {temps.join(" / ")}°F</span>
+                )}
               </div>
               <div className="prep-lane-track">
                 {tasks.map((t) => {
@@ -342,23 +379,35 @@ function Lanes({
                       <span className="prep-card-name">{t.name}</span>
                       {t.recipes.length > 1 && (
                         <span className="prep-card-sub">
-                          {t.grams ? `${t.grams} g · ` : ""}{t.recipes.join(" + ")}
+                          {/* A narrow card gets the grams alone rather than a
+                              truncated list of recipes. Shortening to something
+                              TRUE beats ellipsising something longer — the full
+                              list is on the card's title and in the run order. */}
+                          {t.durationMin * PX_PER_MIN >= SUB_FULL_PX
+                            ? `${t.grams ? `${t.grams} g · ` : ""}${t.recipes.join(" + ")}`
+                            : (t.grams ? `${t.grams} g` : `${t.recipes.length} recipes`)}
                         </span>
                       )}
-                      {t.keepSeparate && (
-                        <span className="chip chip--top_up">keep separate</span>
-                      )}
-                      <span className="prep-card-actions">
-                        {phase === "waiting" && (
-                          <button disabled={!canStartTask(t)} onClick={() => onStart(t)}>▶</button>
+                      {/* Badge and controls share the footer row, so the badge
+                          does not need a line of its own on a short card. */}
+                      <span className="prep-card-foot">
+                        {t.keepSeparate && (
+                          <span className="prep-keep" title={t.keepSeparateNote ?? "keep separate"}>
+                            separate
+                          </span>
                         )}
-                        {phase === "running" && (
-                          <>
-                            <button onClick={() => onDone(t)}>✓</button>
-                            <button onClick={() => onAdd(t, 1)}>+1</button>
-                            <button onClick={() => onAdd(t, 5)}>+5</button>
-                          </>
-                        )}
+                        <span className="prep-card-actions">
+                          {phase === "waiting" && (
+                            <button disabled={!canStartTask(t)} onClick={() => onStart(t)}>▶</button>
+                          )}
+                          {phase === "running" && (
+                            <>
+                              <button onClick={() => onDone(t)}>✓</button>
+                              <button onClick={() => onAdd(t, 1)}>+1</button>
+                              <button onClick={() => onAdd(t, 5)}>+5</button>
+                            </>
+                          )}
+                        </span>
                       </span>
                     </div>
                   );
@@ -392,7 +441,7 @@ function PhoneLayout({
           <div className="prep-next-card">
             <div className="prep-next-name">{next.name}</div>
             <div className="muted">
-              {next.durationMin} min · {next.resource}
+              {next.durationMin} min · {resourceLabel(next.resource)}
               {next.recipes.length > 1 ? ` · ${next.recipes.join(" + ")}` : ""}
             </div>
             {p?.phase === "running" ? (
@@ -425,7 +474,7 @@ function RunOrder({ plan, run, nowMs }: { plan: Schedule; run: RunState; nowMs: 
                 {run.startedAtMs && p ? fmtClock(p.startMs) : `+${t.startMin}m`}
               </span>
               <span className="prep-ro-name">{t.name}</span>
-              <span className="prep-ro-lane dim">{t.resource}</span>
+              <span className="prep-ro-lane dim">{resourceLabel(t.resource)}</span>
               <span className="prep-ro-dur dim">{t.durationMin} min</span>
               {p?.late && <span className="chip chip--under">+{p.lateByMin} late</span>}
             </li>

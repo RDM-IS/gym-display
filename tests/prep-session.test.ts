@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { schedule, type PrepRecipeInput, type PrepStep } from "../src/lib/prep-schedule";
 import {
   canStart,
+  runningHandsTasks,
+  startTask,
   clearRun,
   expiredTasks,
   fmtCountdown,
@@ -109,6 +111,68 @@ describe("four or more timers at once", () => {
     expect(rail).toHaveLength(4);
     const remaining = rail.map((r) => r.remainingMs);
     expect([...remaining].sort((a, b) => a - b)).toEqual(remaining);
+  });
+});
+
+describe("one pair of hands", () => {
+  /** The board was letting four hands cards run at once — Press curd, Rinse
+   * pulses, Clean as you go and Mix jars together — which is not a thing a person
+   * can do. The scheduler always knew it; only the manual start path did not. */
+  const plan = schedule(batch());
+  const handsTasks = () => plan.tasks.filter((t) => t.resource === "hands");
+
+  it("starting a hands card ends the hands card that was running", () => {
+    const [first, second] = handsTasks();
+    const started = startTask(plan, running([], T0), first, T0).run;
+    const after = startTask(plan, started, second, T0 + 60_000);
+    expect(after.run.actual[first.key]?.doneMs).toBe(T0 + 60_000);
+    expect(after.run.actual[second.key]?.startedMs).toBe(T0 + 60_000);
+    expect(after.ended.map((e) => e.task.key)).toEqual([first.key]);
+  });
+
+  it("never leaves two hands tasks running, however many are started", () => {
+    let run = running([], T0);
+    let t = T0;
+    for (const task of handsTasks()) {
+      t += 60_000;
+      run = startTask(plan, run, task, t).run;
+      expect(runningHandsTasks(plan, run, t)).toHaveLength(1);
+    }
+  });
+
+  it("reports the displaced task's real start so its actual time can be logged", () => {
+    const [first, second] = handsTasks();
+    const started = startTask(plan, running([], T0), first, T0).run;
+    const after = startTask(plan, started, second, T0 + 90_000);
+    expect(after.ended[0].startedMs).toBe(T0);
+  });
+
+  it("leaves the oven, the hob and the air fryer running — four at once still", () => {
+    // The rule is about the ONE resource that cannot be doubled. Passive work is
+    // the entire point of the schedule and must not be disturbed.
+    const devices = ["Air-fry", "Simmer", "Bake", "Pressing"]
+      .map((n) => plan.tasks.find((t) => t.name === n)!);
+    let run = running(devices.map((d) => d.key), T0);
+    run = startTask(plan, run, handsTasks()[0], T0 + 60_000).run;
+    const rail = runningTasks(plan, run, T0 + 61_000);
+    expect(rail.filter((r) => r.task.resource !== "hands")).toHaveLength(4);
+    expect(rail).toHaveLength(5);
+  });
+
+  it("re-starting the SAME hands task does not mark it done", () => {
+    const [first] = handsTasks();
+    const started = startTask(plan, running([], T0), first, T0).run;
+    const again = startTask(plan, started, first, T0 + 30_000);
+    expect(again.run.actual[first.key]?.doneMs).toBeUndefined();
+    expect(again.ended).toEqual([]);
+  });
+
+  it("a task that was never started is not reported as ended", () => {
+    const [first, second] = handsTasks();
+    // `first` is waiting, not running; starting `second` must not invent an end.
+    const after = startTask(plan, running([], T0), second, T0);
+    expect(after.ended).toEqual([]);
+    expect(after.run.actual[first.key]).toBeUndefined();
   });
 });
 
