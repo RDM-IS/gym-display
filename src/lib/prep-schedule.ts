@@ -35,6 +35,21 @@ export interface PrepStep {
   keepSeparateNote: string | null;
   shortcutKey: string | null;
   notes: string | null;
+  /** An independent line of work inside the recipe.
+   *
+   * Steps sharing a key are sequential; DIFFERENT KEYS RUN IN PARALLEL; null is a
+   * BARRIER that waits for every chain and after which every chain continues.
+   *
+   * This exists because its absence was measured. The seeded Lentil tofu bowl has
+   * eleven steps, and treating step N as always depending on N-1 cooked the
+   * lentils, the vegetables and the tofu strictly one after another: the live
+   * board read **125 minutes with a 25-minute idle gap** for about an hour of
+   * work. The synthetic test batch never showed it, because it modelled those
+   * three as separate recipes — which is how the source spec lists them.
+   *
+   * A recipe that really is one queue needs no keys at all: every step is then a
+   * barrier, which is exactly the old behaviour. */
+  chainKey?: string | null;
 }
 
 export interface PrepRecipeInput {
@@ -160,9 +175,11 @@ export function buildTasks(
   const out: Task[] = [];
   for (const r of recipes) {
     if (!(r.servings > 0)) continue;
-    // The key of the previous KEPT step, so step N still depends on N-1 when the
-    // step between them was removed by a shortcut.
-    let prevKey: string | null = null;
+    // The tip of each chain: the key of the last KEPT step on it, so step N still
+    // follows N-1 on its own chain when a shortcut removed the step between them.
+    const tips = new Map<string, string>();
+    // Where a chain with no history starts: the last barrier, or nothing.
+    let lastBarrier: string | null = null;
     const steps = [...r.steps].sort((a, b) => a.stepNo - b.stepNo);
     for (const s of steps) {
       if (s.shortcutKey && skip.has(s.shortcutKey)) continue;
@@ -170,6 +187,15 @@ export function buildTasks(
       const dur = s.mode === "unattended" ? 0 : round1(s.baseMin + perPart);
       const mid = mergeId(s);
       const existing = mid ? byMerge.get(mid) : undefined;
+      const chain = s.chainKey ?? null;
+      // What this step waits for: its own chain's tip (or the last barrier, for a
+      // chain starting fresh); a BARRIER waits for every chain plus the barrier
+      // before it.
+      const deps: string[] = chain === null
+        ? [...new Set([...tips.values(), ...(lastBarrier ? [lastBarrier] : [])])]
+        : (tips.has(chain) ? [tips.get(chain)!]
+                           : (lastBarrier ? [lastBarrier] : []));
+
       if (existing && mid) {
         // Merge: the per-serving parts ADD (more food to cut) and the bases do
         // NOT (you wash the board once), so the base is the LARGEST, not the sum.
@@ -180,10 +206,15 @@ export function buildTasks(
           ? 0 : round1(parts.base + parts.perSum);
         if (!existing.recipes.includes(r.name)) existing.recipes.push(r.name);
         if (r.grams != null) existing.grams = round1((existing.grams ?? 0) + r.grams);
-        if (prevKey && !existing.afterKeys.includes(prevKey)) {
-          existing.afterKeys.push(prevKey);
+        for (const d of deps) {
+          if (!existing.afterKeys.includes(d)) existing.afterKeys.push(d);
         }
-        prevKey = existing.key;
+        if (chain === null) {
+          lastBarrier = existing.key;
+          tips.clear();
+        } else {
+          tips.set(chain, existing.key);
+        }
         continue;
       }
       const key = mid ?? `${r.notionId}#${s.stepNo}`;
@@ -198,7 +229,7 @@ export function buildTasks(
         grams: r.grams ?? null,
         keepSeparate: s.keepSeparate,
         keepSeparateNote: s.keepSeparateNote,
-        afterKeys: prevKey ? [prevKey] : [],
+        afterKeys: deps,
         batchKey: s.batchKey,
         shortcutKey: s.shortcutKey,
         notes: s.notes,
@@ -213,7 +244,14 @@ export function buildTasks(
         mergeParts.set(mid, { perSum: perPart, base: s.baseMin });
       }
       out.push(task);
-      prevKey = key;
+      if (chain === null) {
+        // A barrier: everything after it waits for it, and the chains restart
+        // from it rather than from their own older tips.
+        lastBarrier = key;
+        tips.clear();
+      } else {
+        tips.set(chain, key);
+      }
     }
   }
   return out;
