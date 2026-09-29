@@ -129,6 +129,86 @@ describe("shared prep merges into one task", () => {
   });
 });
 
+describe("chains inside one recipe run in parallel", () => {
+  /** Found by running it: the seeded 11-step bowl became one queue and the live
+   * board read 125 min with a 25-min idle gap for about an hour of work. */
+
+  function threeChains(): PrepRecipeInput[] {
+    return [{ notionId: "r", name: "Rho", servings: 2, steps: [
+      step({ stepNo: 1, name: "Rinse", baseMin: 3, chainKey: "lentil" }),
+      step({ stepNo: 2, name: "Simmer", resource: "stove", mode: "passive",
+             baseMin: 20, chainKey: "lentil" }),
+      step({ stepNo: 3, name: "Wash", baseMin: 5, chainKey: "veg" }),
+      step({ stepNo: 4, name: "Roast", resource: "oven", mode: "passive",
+             baseMin: 25, tempF: 425, chainKey: "veg" }),
+      step({ stepNo: 5, name: "Press", baseMin: 2, chainKey: "tofu" }),
+      step({ stepNo: 6, name: "Bake", resource: "oven", mode: "passive",
+             baseMin: 25, tempF: 425, chainKey: "tofu" }),
+      // a barrier: you cannot portion until all three are done
+      step({ stepNo: 7, name: "Portion", perServingMin: 2 }),
+    ] }];
+  }
+
+  it("a step follows its OWN chain, not the step numbered before it", () => {
+    const tasks = buildTasks(threeChains());
+    const byName = new Map(tasks.map((t) => [t.name, t]));
+    // Wash starts a new chain: it must NOT wait for Simmer.
+    expect(byName.get("Wash")!.afterKeys).toEqual([]);
+    expect(byName.get("Roast")!.afterKeys).toEqual([byName.get("Wash")!.key]);
+    expect(byName.get("Simmer")!.afterKeys).toEqual([byName.get("Rinse")!.key]);
+  });
+
+  it("a null chain key is a BARRIER that waits for every chain", () => {
+    const tasks = buildTasks(threeChains());
+    const byName = new Map(tasks.map((t) => [t.name, t]));
+    const portion = byName.get("Portion")!;
+    expect(new Set(portion.afterKeys)).toEqual(new Set([
+      byName.get("Simmer")!.key, byName.get("Roast")!.key, byName.get("Bake")!.key,
+    ]));
+  });
+
+  it("parallel chains are dramatically shorter than the same steps in one queue", () => {
+    const parallel = schedule(threeChains()).makespanMin;
+    // the same steps with every chain key removed — the old behaviour
+    const serial = schedule(threeChains().map((r) => ({
+      ...r, steps: r.steps.map((s) => ({ ...s, chainKey: null })),
+    }))).makespanMin;
+    expect(parallel).toBeLessThan(serial);
+    expect(serial - parallel).toBeGreaterThan(20);
+  });
+
+  it("a recipe with NO chain keys behaves exactly as before — one queue", () => {
+    const tasks = buildTasks([{ notionId: "r", name: "R", servings: 1, steps: [
+      step({ stepNo: 1, name: "One", baseMin: 5 }),
+      step({ stepNo: 2, name: "Two", baseMin: 5 }),
+      step({ stepNo: 3, name: "Three", baseMin: 5 }),
+    ] }]);
+    expect(tasks[1].afterKeys).toEqual([tasks[0].key]);
+    expect(tasks[2].afterKeys).toEqual([tasks[1].key]);
+  });
+
+  it("after a barrier the chains restart from it, not from their old tips", () => {
+    const tasks = buildTasks([{ notionId: "r", name: "R", servings: 1, steps: [
+      step({ stepNo: 1, name: "A1", baseMin: 2, chainKey: "a" }),
+      step({ stepNo: 2, name: "Gate", baseMin: 1 }),
+      step({ stepNo: 3, name: "A2", baseMin: 2, chainKey: "a" }),
+    ] }]);
+    const byName = new Map(tasks.map((t) => [t.name, t]));
+    expect(byName.get("A2")!.afterKeys).toEqual([byName.get("Gate")!.key]);
+  });
+
+  it("a shortcut that removes a chain's only step does not orphan the barrier", () => {
+    const tasks = buildTasks([{ notionId: "r", name: "R", servings: 1, steps: [
+      step({ stepNo: 1, name: "Skip me", baseMin: 5, chainKey: "x", shortcutKey: "s" }),
+      step({ stepNo: 2, name: "Keep", baseMin: 5, chainKey: "y" }),
+      step({ stepNo: 3, name: "Portion", baseMin: 1 }),
+    ] }], ["s"]);
+    const keys = new Set(tasks.map((t) => t.key));
+    const portion = tasks.find((t) => t.name === "Portion")!;
+    for (const d of portion.afterKeys) expect(keys.has(d)).toBe(true);
+  });
+});
+
 describe("M3 acceptance — the sample batch", () => {
   const s = schedule(sampleBatch());
 
