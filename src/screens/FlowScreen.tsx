@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import MusicPlayer from "../components/MusicPlayer";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import Stepper from "../components/Stepper";
 import {
@@ -76,7 +77,22 @@ function now(): number {
  * Switch sides and round changes keep their own screens. No tones anywhere —
  * voice only. Logs complete / partial by itself. Tap to pause (transitions
  * too), swipe to skip — both optional. */
-export default function FlowScreen({ plan, onRunningChange, onNavigate }: Props) {
+// MUSIC-1: the player is mounted by the WRAPPER, not inside FlowFlow below.
+// FlowScreen returns a different tree for each phase (invalid / ready / running)
+// and the running tree re-renders on every step, so a player placed inside any
+// of them would be torn down and reloaded -- on the ready→running transition at
+// the very least, which is one tap after he starts the flow. Out here it mounts
+// once per session and survives every phase change and every step.
+export default function FlowScreen(props: Props) {
+  return (
+    <>
+      <FlowRun {...props} />
+      <MusicPlayer sessionType={props.plan.session_type} />
+    </>
+  );
+}
+
+function FlowRun({ plan, onRunningChange, onNavigate }: Props) {
   const blocks = plan.blocks as RecoveryFlowBlocks;
   const items = useMemo(() => buildFlowTimeline(blocks), [blocks]);
   const errors = useMemo(() => validateFlow(blocks), [blocks]);

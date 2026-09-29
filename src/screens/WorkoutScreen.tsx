@@ -8,6 +8,7 @@ import {
 } from "../lib/strength-cues";
 import { speak } from "../lib/audio";
 import StrengthTiles from "../components/StrengthTiles";
+import MusicPlayer from "../components/MusicPlayer";
 import UpNextTiles from "../components/UpNextTiles";
 import { setupReminder } from "../lib/set-notes";
 import { storedRate } from "../lib/voice";
@@ -97,7 +98,20 @@ function haptic(ms = 30): void {
  *            set just finished, controls in the bottom half.
  * Landscape: journey map (~35%) | active pane. Portrait / narrow: stacked, map
  * collapsed to a strip. Horizontal swipe on the pane = next / prev step. */
-export default function WorkoutScreen({
+// MUSIC-1: same reasoning as FlowScreen -- the player is mounted by the wrapper
+// so advancing a set, a round or an exercise cannot remount the iframe. Only
+// Core and Mobility resolve to a playlist today (see lib/music.ts); every other
+// circuit renders no player, so lifts are unaffected.
+export default function WorkoutScreen(props: Props) {
+  return (
+    <>
+      <WorkoutRun {...props} />
+      <MusicPlayer sessionType={props.plan.session_type} />
+    </>
+  );
+}
+
+function WorkoutRun({
   plan,
   sessionSets,
   serverLoggedCount,

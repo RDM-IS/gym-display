@@ -1,0 +1,70 @@
+/* MUSIC-1 — a compact, collapsible player.
+ *
+ * Fixed to the bottom so it stays put while the flow advances and while the
+ * workout scrolls, and so it never pushes a pose figure or a set row out of
+ * view. The collapsed bar is one tap tall (--tap) because it is used with
+ * sweaty hands mid-session.
+ *
+ * The embed is hidden with [hidden], never unmounted — see MusicPlayer.tsx.
+ * `display: none` on the wrapper is what keeps the iframe alive and silent-free
+ * while collapsed. */
+
+.music {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  padding: 0 var(--gutter) calc(var(--safe-bottom) + 6px);
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid var(--line, #262626);
+}
+
+.music-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+  min-height: var(--tap);
+}
+
+.music-toggle {
+  flex: 1 1 auto;
+  min-height: var(--tap);
+  text-align: left;
+  background: none;
+  border: 0;
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.95rem;
+  padding: 0;
+}
+
+.music-open {
+  flex: 0 0 auto;
+  color: var(--fg-dim, #a3a3a3);
+  font-size: 0.85rem;
+  text-decoration: underline;
+  min-height: var(--tap);
+  display: inline-flex;
+  align-items: center;
+}
+
+.music-embed[hidden] { display: none; }
+
+.music-embed {
+  padding-bottom: 8px;
+}
+
+.music-note {
+  font-size: 0.78rem;
+  padding-top: 4px;
+}
+
+/* The fixed bar would otherwise sit on top of the last row of content. */
+.flow-run,
+.flow-ready,
+.screen--workout {
+  padding-bottom: calc(var(--tap) + var(--safe-bottom) + 16px);
+}

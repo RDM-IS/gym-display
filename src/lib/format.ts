@@ -20,6 +20,8 @@ const SESSION_LABELS: Record<SessionType, string> = {
   rest_mobility: "Rest / Mobility",
   recovery_flow: "Recovery Flow",
   yoga_strength: "Yoga — Strength & Balance",
+  core: "Core (easy)",
+  mobility: "Mobility",
 };
 
 export function sessionLabel(plan: Plan | { session_type: SessionType }): string {
