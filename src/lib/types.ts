@@ -19,7 +19,16 @@ export type SessionType =
   // UNION is the fix, not the switches: a value missing here compiles cleanly and
   // only shows up at runtime, and adding it is what forces every Record and
   // never-default below to account for it.
-  | "yoga_strength";
+  | "yoga_strength"
+  // ENUM-EXPAND again (2026-09-28): artemis has emitted `core` and `mobility`
+  // from `_extra()` all along -- session_library offers both as launchable
+  // extras -- and neither was declared here. Nothing crashed, because
+  // SESSION_LABELS falls back to `?? plan.session_type`, so a launched Core
+  // extra simply displayed as the raw string "core". That is the quiet version
+  // of the rest-day crash: the union is the fix, and adding these two is what
+  // forced SESSION_LABELS to name them.
+  | "core"
+  | "mobility";
 
 export type ExerciseFormat = "reps" | "duration";
 
