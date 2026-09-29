@@ -172,3 +172,90 @@
   padding: 10px 4px;
   border-bottom: 1px solid var(--line);
 }
+
+/* ── STATUS-2 ─────────────────────────────────────────────────────────────
+ * Goal tiles first: the four numbers the program exists to move. */
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: var(--gap);
+  margin-bottom: 18px;
+}
+
+.tile {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: rgba(245, 245, 245, 0.03);
+  min-width: 0;                 /* so a long fact wraps instead of widening the grid */
+}
+
+.tile--unreadable { border-style: dashed; }
+
+.tile-title {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+
+.tile-big { font-size: 30px; line-height: 1.1; font-weight: 600; }
+.tile-of { font-size: 16px; font-weight: 400; color: var(--fg-dim); }
+.tile-sub { font-size: 12px; color: var(--fg-faint); margin-bottom: 8px; }
+
+.tile-facts { list-style: none; margin: 8px 0 0; padding: 0; font-size: 14px; }
+.tile-facts li { padding: 2px 0; overflow-wrap: anywhere; }
+.tile-facts .ok { color: var(--ok); }
+
+/* An unreadable section says so instead of showing a number. Dashed border and
+ * plain text, so it cannot be mistaken for data. */
+.tile-unreadable {
+  font-size: 14px;
+  color: var(--fg-faint);
+  font-style: italic;
+  padding: 6px 0 2px;
+}
+
+.tile-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(245, 245, 245, 0.12);
+  overflow: hidden;
+  margin: 6px 0 2px;
+}
+.tile-bar > span { display: block; height: 100%; background: var(--accent); }
+
+/* The strength table, collapsed by default. */
+.st-collapse > summary {
+  cursor: pointer;
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  font-size: 15px;
+  color: var(--fg-dim);
+}
+
+/* NO CLIPPED COLUMN. The table used to be `white-space: nowrap` with a
+ * min-width of 520px inside a horizontal scroller, so "Machine setup" -- the
+ * last column and the one he actually walks to the machine with -- sat off the
+ * right edge on a phone with nothing to show it was there. Cells wrap now and
+ * the table sizes to its container; the scroller stays as a backstop for very
+ * long exercise names. */
+.st-table { min-width: 0; }
+.st-table th, .st-table td { white-space: normal; overflow-wrap: anywhere; }
+.st-table th:first-child, .st-table td:first-child { min-width: 9ch; }
+
+
+/* The detail sections' bodies sit directly in .st-section, which has a border
+ * and no padding of its own -- "· 4 readings" was being clipped by the rounded
+ * corner. */
+.st-section > [data-testid$="-detail"],
+.st-section > [data-testid="cardio-detail"],
+.st-section > ul.st-facts,
+.st-section > div.muted {
+  padding: 0 14px 12px;
+}
+.st-section > .st-collapse { padding: 0 14px 6px; }

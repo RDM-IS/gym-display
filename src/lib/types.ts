@@ -745,6 +745,114 @@ export interface OverviewResponse {
   weight_30d: TrendPoint[];
   weight_summary: { first: TrendPoint; latest: TrendPoint; change: number } | null;
   previous_program_end: string | null;
+  // STATUS-2. Optional on the client even though the Lambda always sends them:
+  // a Pages build can be newer than the deployed Lambda (and has been), and a
+  // hard requirement here would blank the whole page over a missing key.
+  goals?: Goals | null;
+  cardio_detail?: CardioDetail | null;
+  nutrition_7d?: NutritionDetail | null;
+  sleep_recovery?: SleepRecovery | null;
+}
+
+// ---------------------------------------------------------------------------
+// STATUS-2 — goal tiles and detail sections.
+//
+// Every section carries its own `section.ok`. The screen must render "couldn't
+// read X" rather than a zero when it is false: "0 cardio minutes" is an answer
+// and "I could not read your cardio" is not, and showing 0 for both turns a
+// database problem into a training judgement.
+// ---------------------------------------------------------------------------
+
+export interface SectionStatus {
+  ok: boolean;
+  reason?: string | null;
+}
+
+export interface WeightGoal {
+  section: SectionStatus;
+  avg_7d: number | null;
+  change_since_start: number | null;
+  lb_per_week: number | null;
+  days_7d: number;
+}
+
+export interface CardioGoal {
+  section: SectionStatus;
+  minutes_this_week: number | null;
+  minutes_target: number;
+  /** Null (not 0) when no cardio log carries a heart rate at all. */
+  z2_minutes: number | null;
+  z4_minutes: number | null;
+  has_zone_data: boolean;
+  /** Read off the next cardio_intervals ROW — the one place the wake job
+   * writes the gate's answer. The client never evaluates the gate. */
+  interval_gate: "intervals" | "z2_variant" | "unresolved" | null;
+  interval_gate_reason: string | null;
+  interval_gate_date: string | null;
+}
+
+export interface StrengthGoal {
+  section: SectionStatus;
+  sessions_done: number | null;
+  sessions_planned: number | null;
+  lifts_progressed_14d: number | null;
+}
+
+export interface NutritionGoal {
+  section: SectionStatus;
+  days_logged: number | null;
+  days_window: number;
+  avg_protein_g: number | null;
+  avg_fiber_g: number | null;
+  /** Only ever a dietitian's number. Null means no target exists — never a
+   * target of zero, and never one Artemis invented. */
+  target_protein_g: number | null;
+  target_fiber_g: number | null;
+  target_set_by: string | null;
+}
+
+export interface Goals {
+  weight: WeightGoal;
+  cardio: CardioGoal;
+  strength: StrengthGoal;
+  nutrition: NutritionGoal;
+}
+
+export interface CardioWeek {
+  week_start: string;
+  minutes: number;
+  sessions: number;
+}
+
+export interface CardioDetail {
+  section: SectionStatus;
+  weeks: CardioWeek[];
+  resting_hr: TrendPoint[];
+}
+
+export interface NutritionDay {
+  day: string;
+  kcal: number | null;
+  protein_g: number | null;
+  fiber_g: number | null;
+  items: number;
+}
+
+export interface NutritionDetail {
+  section: SectionStatus;
+  days: NutritionDay[];
+}
+
+export interface SleepDay {
+  day: string;
+  sleep_hrs: number | null;
+  resting_hr: number | null;
+  energy: number | null;
+}
+
+export interface SleepRecovery {
+  section: SectionStatus;
+  days: SleepDay[];
 }
 
 // ---------------------------------------------------------------------------
