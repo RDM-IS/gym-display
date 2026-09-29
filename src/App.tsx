@@ -7,6 +7,7 @@ import RestDayScreen from "./screens/RestDayScreen";
 import StatusScreen from "./screens/StatusScreen";
 import FlowScreen from "./screens/FlowScreen";
 import LibraryScreen from "./screens/LibraryScreen";
+import PrepScreen from "./screens/PrepScreen";
 import { endAdhoc, startAdhoc } from "./lib/adhoc";
 import PeekScreen, { type PeekMode } from "./screens/PeekScreen";
 import type { BarTarget } from "./lib/bottom-bar";
@@ -361,6 +362,16 @@ export default function App() {
       <>
         {chrome}
         <StatusScreen key={`status-${statusVisit}`} onNavigate={onStatusNavigate} />
+      </>
+    );
+  }
+
+  // ---- /prep route (PREP-1) ----
+  if (route === "prep") {
+    return (
+      <>
+        {chrome}
+        <PrepScreen />
       </>
     );
   }

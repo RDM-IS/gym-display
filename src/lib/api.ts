@@ -11,6 +11,11 @@ import type {
   SessionsResponse,
   StatusResponse,
 } from "./types";
+import type {
+  MacrosResponse,
+  PantryResponse,
+  ShoppingResponse,
+} from "./prep";
 import {
   SessionExpiredError,
   isSessionExpiredResponse,
@@ -340,5 +345,112 @@ export async function postMakeup(missed_plan_id: number, rest_plan_id: number): 
     return { status: "ok", plan_id: j?.plan_id ?? rest_plan_id };
   } catch (err) {
     return { status: "error", message: err instanceof Error ? err.message : "Makeup failed." };
+  }
+}
+
+// ── PREP-1: shopping list + pantry ──────────────────────────────────────────
+//
+// Each of these follows the pattern above exactly: a discriminated result, no
+// throwing past the boundary, and a 404 distinguished from a failure. A 404 on
+// /api/prep/stay means the box has not proposed a stay yet, which is a STATE and
+// not an error — rendering it as "failed to load" would send Ryan looking for a
+// fault that isn't there.
+
+export type FetchShoppingResult =
+  | { status: "ok"; data: ShoppingResponse }
+  | { status: "no_stay"; message: string }
+  | { status: "error"; message: string };
+
+export async function fetchShopping(stayId?: number): Promise<FetchShoppingResult> {
+  try {
+    const q = stayId ? `?stay_id=${stayId}` : "";
+    const res = await apiFetch(`/api/prep/shopping${q}`);
+    if (res.status === 404) {
+      const body = (await res.json().catch(() => null)) as
+        { detail?: { message?: string } } | null;
+      return {
+        status: "no_stay",
+        message: body?.detail?.message ?? "No stay has been proposed yet.",
+      };
+    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return { status: "ok", data: (await res.json()) as ShoppingResponse };
+  } catch (err) {
+    return {
+      status: "error",
+      message: err instanceof Error ? err.message : "Failed to load the list.",
+    };
+  }
+}
+
+export type FetchPantryResult =
+  | { status: "ok"; data: PantryResponse }
+  | { status: "error"; message: string };
+
+export async function fetchPantry(): Promise<FetchPantryResult> {
+  try {
+    const res = await apiFetch("/api/prep/pantry");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return { status: "ok", data: (await res.json()) as PantryResponse };
+  } catch (err) {
+    return {
+      status: "error",
+      message: err instanceof Error ? err.message : "Failed to load the pantry.",
+    };
+  }
+}
+
+export type FetchMacrosResult =
+  | { status: "ok"; data: MacrosResponse }
+  | { status: "no_stay"; message: string }
+  | { status: "error"; message: string };
+
+export async function fetchPrepMacros(stayId?: number): Promise<FetchMacrosResult> {
+  try {
+    const q = stayId ? `?stay_id=${stayId}` : "";
+    const res = await apiFetch(`/api/prep/macros${q}`);
+    if (res.status === 404) return { status: "no_stay", message: "No stay yet." };
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return { status: "ok", data: (await res.json()) as MacrosResponse };
+  } catch (err) {
+    return {
+      status: "error",
+      message: err instanceof Error ? err.message : "Failed to load macros.",
+    };
+  }
+}
+
+export type PostCountResult =
+  | { status: "ok"; on_hand_base: number }
+  | { status: "refused"; message: string }
+  | { status: "error"; message: string };
+
+/** Record one pantry count.
+ *
+ * `refused` is its own outcome, not an error: the server rejects a PACKAGE count
+ * for an ingredient with no package size rather than storing the raw number as
+ * though it were grams. The screen shows the reason and offers base units. */
+export async function postPantryCount(
+  ingredient_id: string,
+  body: { packages: number } | { base: number },
+): Promise<PostCountResult> {
+  try {
+    const res = await apiFetch("/api/prep/pantry", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ingredient_id, ...body }),
+    });
+    const j = (await res.json().catch(() => null)) as
+      { on_hand_base?: number; detail?: { message?: string; error?: string } } | null;
+    if (res.status === 400) {
+      return { status: "refused", message: j?.detail?.message ?? "Refused." };
+    }
+    if (!res.ok) return { status: "error", message: j?.detail?.message ?? `HTTP ${res.status}` };
+    return { status: "ok", on_hand_base: j?.on_hand_base ?? 0 };
+  } catch (err) {
+    return {
+      status: "error",
+      message: err instanceof Error ? err.message : "Count failed.",
+    };
   }
 }
