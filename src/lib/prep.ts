@@ -201,6 +201,8 @@ export interface PrepStepRow {
   per_serving_min: number | null;
   temp_f: number | null;
   batch_key: string | null;
+  /** null = a BARRIER waiting for every chain in the recipe. */
+  chain_key: string | null;
   keep_separate: boolean;
   keep_separate_note: string | null;
   shortcut_key: string | null;
@@ -233,6 +235,7 @@ export interface PrepStepPayload {
   per_serving_min: number;
   temp_f: number | null;
   batch_key: string | null;
+  chain_key: string | null;
   keep_separate: boolean;
   keep_separate_note: string | null;
   shortcut_key: string | null;

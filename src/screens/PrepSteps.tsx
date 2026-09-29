@@ -141,6 +141,13 @@ function RecipeSteps({
                 <input value={r.batch_key ?? ""} placeholder="roast:veg"
                        onChange={(e) => update(i, { batch_key: e.target.value || null })} />
               </label>
+              {/* Steps sharing a chain run in order; different chains run in
+                  PARALLEL; blank is a barrier that waits for all of them. Leaving
+                  it blank throughout gives one queue, which is what it was. */}
+              <label>chain
+                <input value={r.chain_key ?? ""} placeholder="blank = barrier"
+                       onChange={(e) => update(i, { chain_key: e.target.value || null })} />
+              </label>
               <button aria-label="remove step"
                       onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}>✕</button>
             </div>
@@ -170,6 +177,7 @@ function toPayload(recipe: PrepStepRecipe): PrepStepPayload[] {
     per_serving_min: s.per_serving_min ?? 0,
     temp_f: s.temp_f,
     batch_key: s.batch_key,
+    chain_key: s.chain_key,
     keep_separate: s.keep_separate,
     keep_separate_note: s.keep_separate_note,
     shortcut_key: s.shortcut_key,
@@ -180,7 +188,7 @@ function toPayload(recipe: PrepStepRecipe): PrepStepPayload[] {
 function blankStep(stepNo: number): PrepStepPayload {
   return {
     step_no: stepNo, name: "", resource: "hands", mode: "active",
-    base_min: 0, per_serving_min: 0, temp_f: null, batch_key: null,
+    base_min: 0, per_serving_min: 0, temp_f: null, batch_key: null, chain_key: null,
     keep_separate: false, keep_separate_note: null, shortcut_key: null, notes: null,
   };
 }
