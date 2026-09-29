@@ -177,3 +177,64 @@ export function fmtPackages(packages: number | null, label: string | null): stri
   if (packages === null || packages === undefined) return "—";
   return label ? `${packages} × ${label}` : `${packages}`;
 }
+
+// ── PREP-2: the board and the steps editor ──────────────────────────────────
+
+import type { KitchenProfile, PrepRecipeInput } from "./prep-schedule";
+
+export interface PrepBoardResponse {
+  stay: { id: number; start_date: string; end_date: string };
+  recipes: PrepRecipeInput[];
+  /** recipes with servings to cook and NO steps. Named rather than dropped: that
+   * is work the board cannot show, and silence would read as nothing to do. */
+  stepless: string[];
+  kitchen: KitchenProfile;
+}
+
+export interface PrepStepRow {
+  step_id: number | null;
+  step_no: number;
+  name: string;
+  resource: string;
+  mode: string;
+  base_min: number | null;
+  per_serving_min: number | null;
+  temp_f: number | null;
+  batch_key: string | null;
+  keep_separate: boolean;
+  keep_separate_note: string | null;
+  shortcut_key: string | null;
+  notes: string | null;
+}
+
+export interface PrepStepRecipe {
+  recipe_id: string;
+  name: string | null;
+  slug: string | null;
+  servings: number | null;
+  plan_eligible: boolean;
+  steps: PrepStepRow[];
+}
+
+export interface PrepStepsResponse {
+  recipes: PrepStepRecipe[];
+  with_steps: number;
+  without_steps: number;
+  resources: string[];
+  modes: string[];
+}
+
+export interface PrepStepPayload {
+  step_no: number;
+  name: string;
+  resource: string;
+  mode: string;
+  base_min: number;
+  per_serving_min: number;
+  temp_f: number | null;
+  batch_key: string | null;
+  keep_separate: boolean;
+  keep_separate_note: string | null;
+  shortcut_key: string | null;
+  notes: string | null;
+}
