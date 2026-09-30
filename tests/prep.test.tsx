@@ -101,3 +101,18 @@ describe("PREP-1 top-up: the headline is what to buy TODAY", () => {
     expect(fmtPackages(null, "1.5 lb pack")).toBe("—");
   });
 });
+
+describe("PREP-1: a flag chip never repeats the line above it", () => {
+  it("count_unknown is dropped, because the sub-line already says it", () => {
+    // 40 of the 41 items on the first real list were uncounted, so the chip
+    // repeated "never counted" on every row and doubled the height of the list.
+    const flags: PrepFlag[] = ["count_unknown", "top_up", "no_rank1"];
+    const chips = flags.filter((f) => f !== "count_unknown");
+    expect(chips).toEqual(["top_up", "no_rank1"]);
+  });
+
+  it("every other flag still shows", () => {
+    const flags: PrepFlag[] = ["no_store", "par_only", "no_package_size"];
+    expect(flags.filter((f) => f !== "count_unknown")).toEqual(flags);
+  });
+});

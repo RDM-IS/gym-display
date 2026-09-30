@@ -21,6 +21,16 @@
   --tap-primary: 72px;
   --gap: 12px;
 
+  /* Vertical space a top-anchored screen must leave clear of .app-nav, which is
+     `position: fixed` at top-right and therefore covers anything laid out under
+     it. The nav's own box is `--top-inset + 10px` from the top and `--tap` tall,
+     so 84px leaves ~18px of clearance.
+
+     ONE NUMBER, because there were two: .status hard-coded 84 and .prep did not
+     reserve anything at all, which put the Prep sub-tabs UNDER the nav on the
+     real iPad — "Steps" sat behind SESSIONS. */
+  --nav-reserve: 84px;
+
   --bg: #0a0a0a;
   --fg: #f5f5f5;
   --fg-dim: rgba(245, 245, 245, 0.72);

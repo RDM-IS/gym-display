@@ -1,3 +1,4 @@
+import { macroLabel } from "../lib/macros";
 import type {
   CardioGoal,
   Goals,
@@ -166,7 +167,7 @@ export function NutritionTile({ g }: { g: NutritionGoal }) {
           {g.target_protein_g !== null && <span className="dim"> of {g.target_protein_g} g</span>}
         </li>
         <li data-testid="nutrition-fiber">
-          {num(g.avg_fiber_g, 0, " g")} fiber
+          {num(g.avg_fiber_g, 0, " g")} {macroLabel("fiber_g")}
           {g.target_fiber_g !== null && <span className="dim"> of {g.target_fiber_g} g</span>}
         </li>
         {hasTarget ? (
