@@ -3,18 +3,47 @@
    from base.css and nothing here declares a colour of its own except the flag
    chips, which need to be distinguishable at a glance in a shop. */
 
+/* THE PREP SCREEN SCROLLS, AND IT CLEARS THE NAV.
+   Neither was true on the real iPad: `.screen` is a fixed-height flex column with
+   no overflow, so everything below the fold — the whole shopping list — was
+   unreachable; and with no top reserve the sub-tabs sat under the fixed top-right
+   nav, with "Steps" hidden behind SESSIONS. This is the same shape `.status` uses,
+   now via the shared --nav-reserve rather than a second copy of the number.
+
+   I did not find these because my screenshots rendered the Prep screen ALONE
+   rather than inside the app shell. The e2e test added with this fix renders the
+   real shell, for every route. */
 .prep {
-  padding: 0 16px 96px;          /* 16px side gutter; room for the nav bar */
+  height: var(--vvh, 100dvh);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  /* No top reserve here: the sticky sub-tab bar below carries it, so that the
+     band the nav floats over is covered by something OPAQUE. With the reserve on
+     the screen instead, that band was empty and transparent, and scrolled content
+     slid up behind the nav — the pantry steppers ended up under it, invisible and
+     untappable. */
+  padding:
+    0
+    calc(var(--safe-right) + var(--gutter))
+    calc(var(--safe-bottom) + 96px)
+    calc(var(--safe-left) + var(--gutter));
 }
 
+/* Sticky BELOW the nav, not under it. At scroll 0 the tabs already sit at exactly
+   this offset because of the screen's top padding, so sticking is seamless — and
+   once scrolled they stop at the nav's lower edge instead of sliding beneath it. */
+/* The sub-tab bar IS the screen's header, and it reserves the nav's band itself.
+   Sticky at top 0 with the reserve as its own padding, so the bar is opaque from
+   the very top of the screen down past the tabs: the nav never has transparent
+   screen behind it, and nothing can scroll into the space it covers. */
 .prep-tabs {
   display: flex;
   gap: 8px;
-  padding: 12px 0;
+  padding: calc(var(--top-inset) + var(--nav-reserve)) 0 12px;
   position: sticky;
   top: 0;
   background: var(--bg);
-  z-index: 2;
+  z-index: 5;
 }
 
 .prep-tabs button {
@@ -76,14 +105,23 @@
 
 .prep-line-sub { font-size: 0.85rem; margin-top: 2px; }
 
-.prep-flags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.prep-flags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
 
+/* Height comes from the CONTENT and the text is centred in it.
+   As a plain inline box inside a `display:flex` row with the default
+   `align-items: stretch`, a chip grew to the tallest sibling's height and its text
+   sat at the top of an over-tall pill. */
 .chip {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
   font-size: 0.75rem;
-  padding: 2px 8px;
+  line-height: 1.5;
+  padding: 2px 10px;
   border-radius: 999px;
   border: 1px solid currentColor;
   opacity: 0.9;
+  white-space: nowrap;
 }
 
 /* A flag is a reason to look, not an error — so these are legible, not alarming.
@@ -154,6 +192,15 @@
   font-weight: 700;
 }
 
+/* An uncounted value reads "—", which sat between the "−" and "+" buttons at the
+   same size and weight and looked like a third control. Dimmed and lighter, it
+   reads as an absent value instead. */
+.prep-count.is-unset {
+  font-weight: 500;
+  font-size: 0.85rem;
+  opacity: 0.55;
+}
+
 .prep-pantry-row .prep-line-main { align-items: center; }
 
 @media (max-width: 420px) {
@@ -192,7 +239,9 @@
   overflow-x: auto;
   padding: 8px 0;
   position: sticky;
-  top: 56px;
+  /* Below the sub-tab bar, whose height is the nav reserve plus its own padding
+     and control height. 56px here was another guess at the nav's height. */
+  top: calc(var(--top-inset) + var(--nav-reserve) + 64px);
   background: var(--bg);
   z-index: 3;
   min-height: 64px;

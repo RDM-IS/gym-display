@@ -140,7 +140,13 @@ export interface MacroChip {
 export interface MacroDay {
   day: string;
   meals: number;
-  totals: Record<string, number>;
+  /** null when the day has no menu at all. NOT a set of zeroes: chips computed
+   * from zero would say "under every target", which is true of an empty day in
+   * the way that is useless. */
+  totals: Record<string, number> | null;
+  /** The day is in the stay and has no menu — a gap to fill, not a day that is
+   * fine. Sunday 10/04 was simply missing from the list before this. */
+  no_menu: boolean;
   chips: MacroChip[];
   /** Targets with no data source at all. Rendered as "no data", never as met:
    * Notion recipes carry no sugar figure, and a zero would read as "under". */
@@ -155,15 +161,10 @@ export interface MacrosResponse {
   detail?: string;
 }
 
-export const MACRO_LABELS: Record<string, string> = {
-  kcal: "kcal",
-  protein_g: "protein",
-  carb_g: "carbs",
-  fat_g: "fat",
-  fiber_g: "fibre",
-  sugar_g: "sugar",
-  plant_meals_min: "plant meals",
-};
+// Re-exported so existing importers keep working; the spellings live in
+// src/lib/macros.ts, which Status reads too. This file used to hold a SECOND copy
+// that said "fibre" while Status said "fiber".
+export { MACRO_LABELS, macroLabel } from "./macros";
 
 /** A quantity with its unit, or an explicit dash. Never a bare 0 for unknown. */
 export function fmtBase(value: number | null, unit: string | null): string {

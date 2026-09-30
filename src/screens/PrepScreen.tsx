@@ -324,6 +324,7 @@ function Line({ line }: { line: PrepLine }) {
   // rest of the split is spelled out underneath.
   const topUp = line.later_day !== null && line.packages_later !== null;
   const headline = topUp ? line.packages_now : line.packages;
+  const chips = line.flags.filter((f) => f !== "count_unknown");
   return (
     <li className="prep-line">
       <div className="prep-line-main">
@@ -339,9 +340,13 @@ function Line({ line }: { line: PrepLine }) {
           ? ` · ${line.packages_now ?? 0} now, ${line.packages_later} on ${fmtDay(line.later_day!)}`
           : ""}
       </div>
-      {line.flags.length > 0 && (
+      {/* `count_unknown` is already stated in the sub-line above as "never
+          counted", and with 40 of 41 items uncounted the chip repeated it on
+          every row — doubling the height of the list he is actually shopping
+          from. A flag that duplicates the line above it is noise, not emphasis. */}
+      {chips.length > 0 && (
         <div className="prep-flags">
-          {line.flags.map((f) => (
+          {chips.map((f) => (
             <span className={`chip chip--${f}`} key={f}>{FLAG_LABELS[f] ?? f}</span>
           ))}
         </div>
@@ -354,7 +359,8 @@ function Line({ line }: { line: PrepLine }) {
  * no data source renders as "no data" rather than as met. */
 function MacroStrip({ macros }: { macros: MacrosResponse }) {
   const flagged = macros.days.filter((d) => d.chips.length > 0);
-  if (flagged.length === 0) {
+  const noMenu = macros.days.filter((d) => d.no_menu);
+  if (flagged.length === 0 && noMenu.length === 0) {
     return (
       <p className="muted prep-note">
         Every planned day is inside the target.
@@ -368,6 +374,12 @@ function MacroStrip({ macros }: { macros: MacrosResponse }) {
   }
   return (
     <div className="prep-macros">
+      {noMenu.map((d) => (
+        <div className="prep-macro-day" key={d.day}>
+          <span className="prep-macro-date">{fmtDay(d.day)}</span>
+          <span className="chip chip--no_store">no menu</span>
+        </div>
+      ))}
       {flagged.map((d) => (
         <div className="prep-macro-day" key={d.day}>
           <span className="prep-macro-date">{fmtDay(d.day)}</span>
@@ -471,7 +483,9 @@ function PantryRow({ item, onCounted }: { item: PantryItem; onCounted: () => voi
         <span className="prep-name">{item.name ?? "(unnamed)"}</span>
         <span className="prep-stepper">
           <button aria-label="less" disabled={saving} onClick={() => step(-1)}>−</button>
-          <span className="prep-count">{pkgs === null ? "—" : pkgs}</span>
+          <span className={`prep-count${pkgs === null ? " is-unset" : ""}`}>
+            {pkgs === null ? "—" : pkgs}
+          </span>
           <button aria-label="more" disabled={saving} onClick={() => step(1)}>+</button>
         </span>
       </div>
