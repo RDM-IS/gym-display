@@ -105,6 +105,8 @@ export default function App() {
   const [serverLoggedCount, setServerLoggedCount] = useState<ServerLoggedCount>({});
   const [lastLogged, setLastLogged] = useState<Record<string, LastLoggedEntry>>({});
   const [logHasSummary, setLogHasSummary] = useState(false);
+  // GD-RESUME: WorkoutScreen waits for this before placing a resumed cursor.
+  const [hydrated, setHydrated] = useState(false);
 
   const handleLoggedSet = useCallback((exerciseName: string, set: SetEntry) => {
     setSessionSets((prev) => {
@@ -264,6 +266,7 @@ export default function App() {
     if (fin && Array.isArray(fin.exercises)) {
       for (const e of fin.exercises) names.push(e.name);
     }
+    setHydrated(false);
     const [loggedR, lastR] = await Promise.all([
       // An ad-hoc session starts from zero: today's logged counts belong to
       // today's plan row, not to this launch.
@@ -279,6 +282,7 @@ export default function App() {
     if (lastR.status === "ok") {
       setLastLogged(lastR.data.by_exercise);
     }
+    setHydrated(true);
   }, []);
 
   const onStart = useCallback(() => {
@@ -291,6 +295,7 @@ export default function App() {
     setInterrupted(false);
     setSessionSets({});         // fresh session — discard any stale entries
     setLogHasSummary(false);
+    setHydrated(false);
     setFlow("workout");
     void hydrateWorkoutState(plan);
   }, [plan, hydrateWorkoutState]);
@@ -322,6 +327,7 @@ export default function App() {
     if (!launched) return;
     void unlockAudio();
     void acquireWakeLock();
+    setHydrated(false);
     setFlow("workout");
     void hydrateWorkoutState(launched, { adhoc: true });
   }, [launched, hydrateWorkoutState]);
@@ -424,6 +430,7 @@ export default function App() {
             onSummaryLogged={handleSummaryLogged}
             onDone={(sec) => { setTotalElapsedSec(sec); setFlow("done"); }}
             onBackToHome={endLaunch}
+            hydrated={hydrated}
           />
         )}
         {flow === "done" && (
@@ -553,6 +560,7 @@ export default function App() {
           onSummaryLogged={handleSummaryLogged}
           onDone={onDone}
           onBackToHome={onBackToHome}
+          hydrated={hydrated}
         />
       )}
       {flow === "done" && (

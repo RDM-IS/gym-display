@@ -31,6 +31,7 @@ import {
   type Step,
 } from "../lib/timer";
 import { flattenBlocksToSteps, nextExerciseFor } from "../lib/steps";
+import { resumeCursor, setForVisit, visitIndexAt } from "../lib/resume";
 import {
   beepCountdown,
   beepEndOfRest,
@@ -46,7 +47,6 @@ import {
   lastShownFor,
   loggedCountFor,
   restAutoContinues,
-  nextSetNumFor,
   totalSetsFor,
   type SessionSets,
   type ServerLoggedCount,
@@ -80,6 +80,9 @@ interface Props {
   onSummaryLogged: () => void;
   onDone: (total_elapsed_sec: number) => void;
   onBackToHome: () => void;
+  /** GD-RESUME: today's logged counts have arrived (or failed to). Until then
+   * the cursor can't know where a resumed workout left off. */
+  hydrated?: boolean;
 }
 
 function haptic(ms = 30): void {
@@ -121,6 +124,7 @@ function WorkoutRun({
   onSummaryLogged,
   onDone,
   onBackToHome,
+  hydrated = true,
 }: Props) {
   const session: FlatSession = useMemo(() => flattenBlocksToSteps(plan.blocks), [plan]);
   const [state, dispatch] = useReducer(timerReducer, session, initTimer);
@@ -167,6 +171,22 @@ function WorkoutRun({
     };
   }, []);
 
+  // GD-RESUME: once the logged counts are in, a resumed workout picks up at
+  // its first unlogged set — but only if Ryan hasn't already moved off the
+  // first step himself. Once only.
+  const resumedRef = useRef(false);
+  useEffect(() => {
+    if (resumedRef.current || !hydrated || state.status === "idle") return;
+    resumedRef.current = true;
+    if (state.cursor.stepIndex !== 0 || state.cursor.currentRound !== 1) return;
+    const names = collectExerciseNames(plan);
+    const to = resumeCursor(state.steps, names,
+      (n) => loggedCountFor(n, sessionSets, serverLoggedCount));
+    if (!to || (to.stepIndex === 0 && to.currentRound === 1)) return;
+    suppressIndexAudioRef.current = true;
+    dispatch({ type: "JUMP", cursor: to, now_ms: performance.now() });
+  }, [hydrated, state.status, state.cursor, state.steps, plan, sessionSets, serverLoggedCount]);
+
   useEffect(() => {
     if (state.status !== "running") return;
     const id = window.setInterval(() => {
@@ -178,6 +198,15 @@ function WorkoutRun({
   }, [state.status]);
 
   const current = selectCurrentStep(state);
+  // GD-RESUME: which visit of its exercise this step is (the round, in a plain
+  // circuit). Set numbers and "already logged" are judged against this.
+  const visitName = current?.kind === "exercise"
+    ? current.exerciseRef?.name
+    : current?.kind === "rest" ? current.precedingExerciseRef?.name : undefined;
+  const visit = useMemo(
+    () => (visitName ? visitIndexAt(state.steps, state.cursor, visitName) : 1),
+    [state.steps, state.cursor, visitName],
+  );
   const upNext = selectNextStep(state);
   const remaining = selectRemainingSec(state, now);
   const elapsed = selectElapsedSec(state, now);
@@ -212,12 +241,12 @@ function WorkoutRun({
   // An unlogged rest still holds. Paused stays paused.
   useEffect(() => {
     if (!holding || state.status !== "running") return;
-    if (!restAutoContinues(current, state.cursor.currentRound, sessionSets, serverLoggedCount)) {
+    if (!restAutoContinues(current, visit, sessionSets, serverLoggedCount)) {
       return;
     }
     suppressIndexAudioRef.current = true;
     dispatch({ type: "NEXT_STEP", now_ms: performance.now() });
-  }, [holding, state.status, current, state.cursor.currentRound, sessionSets,
+  }, [holding, state.status, current, visit, sessionSets,
       serverLoggedCount]);
 
   // GD-STRENGTH-CUES: one spoken prompt per exercise per ROUND (GD-ROUND-CUES,
@@ -332,7 +361,8 @@ function WorkoutRun({
   if (restExercise && restEntryRef.current?.key !== stepKey) {
     restEntryRef.current = {
       key: stepKey,
-      setNum: nextSetNumFor(restExercise.name, sessionSets, serverLoggedCount),
+      setNum: setForVisit(visit,
+        loggedCountFor(restExercise.name, sessionSets, serverLoggedCount)).setNum,
     };
   }
 
@@ -410,6 +440,7 @@ function WorkoutRun({
                 stepElapsed={stepElapsed}
                 isPaused={isPaused}
                 planExerciseNames={planExerciseNames}
+                visit={visit}
                 sessionSets={sessionSets}
                 serverLoggedCount={serverLoggedCount}
                 lastLogged={lastLogged}
@@ -573,6 +604,7 @@ function Glance({
   stepElapsed,
   isPaused,
   planExerciseNames,
+  visit,
   sessionSets,
   serverLoggedCount,
   lastLogged,
@@ -584,6 +616,7 @@ function Glance({
   stepElapsed: number;
   isPaused: boolean;
   planExerciseNames: string[];
+  visit: number;
   sessionSets: SessionSets;
   serverLoggedCount: ServerLoggedCount;
   lastLogged: Record<string, LastLoggedEntry>;
@@ -619,7 +652,8 @@ function Glance({
   let setLabel: string | null = null;
   if (isPlanExercise) {
     const total = totalSetsFor(plan, name);
-    const setNum = Math.min(nextSetNumFor(name, sessionSets, serverLoggedCount), total);
+    const { setNum: n } = setForVisit(visit, loggedCountFor(name, sessionSets, serverLoggedCount));
+    const setNum = Math.min(n, total);
     setLabel = `Set ${setNum} of ${total}`;
   }
   const reps = ex?.format === "reps" && ex.target_reps != null ? `${ex.target_reps} reps` : null;
