@@ -1,0 +1,381 @@
+import type { LogExerciseIn } from "./types";
+
+// ---------------------------------------------------------------------------
+// ROW-CIRCUIT (Ryan, 2026-10-19) — rower intervals with floor work between.
+//
+//   round:  row at a stroke rate → 1 min easy (or stopped) → off the rower →
+//           push-ups → two core moves → RECORD → back on the rower
+//   end:    3 min easy row
+//
+// The prescription (which rates, how long) comes from the Lambda, computed in
+// Python from what he last logged. This file only turns it into a timeline and
+// runs it. Everything here is pure so it can be driven by fake timers.
+//
+// The record card is the ONE place the clock waits for him: once per round,
+// prefilled, one tap if nothing changed. Every other item advances on time.
+//
+// Every item stamps its own wall-clock window. That is what per-exercise heart
+// rate is computed over afterwards, so nothing has to stop after each exercise
+// and nothing depends on the watch's segment button.
+// ---------------------------------------------------------------------------
+
+export type Lever = "rate" | "time" | "repeat";
+export type RestMode = "easy" | "stopped";
+export type StationFormat = "reps" | "hold";
+
+export interface RcRound {
+  round: number;
+  work_sec: number;
+  spm: number;
+}
+
+export interface RcOption {
+  lever: Lever;
+  ok: boolean;
+  reason: string | null;
+  rounds: RcRound[];
+  row_sec: number;
+  label: string;
+}
+
+export interface RcStation {
+  name: string;
+  format: StationFormat;
+  duration_sec: number;
+  cue: string;
+}
+
+export interface RcPrescription {
+  available: true;
+  session_type: "row_circuit";
+  display_name: string;
+  rounds: number;
+  min_rounds: number;
+  max_rounds: number;
+  base: RcRound[];
+  has_history: boolean;
+  last_rounds: number;
+  options: Record<Lever, RcOption>;
+  default: Lever;
+  why: string;
+  rest: { sec: number; rate: number };
+  timing: {
+    station_sec: number;
+    off_rower_sec: number;
+    between_moves_sec: number;
+    back_on_rower_sec: number;
+    cooldown_sec: number;
+  };
+  stations: RcStation[][];
+  /** {round: {move: reps}} from the last session, for prefilling. */
+  last_reps: Record<string, Record<string, number>>;
+}
+
+export type RcPrescriptionResponse = RcPrescription | { available: false; reason: string };
+
+export type RcItemKind = "get_set" | "row" | "rest" | "move" | "station" | "record" | "cooldown";
+
+export interface RcItem {
+  kind: RcItemKind;
+  round: number | null;
+  name: string;
+  /** Seconds, or null for the record card, which waits for Save. */
+  sec: number | null;
+  spm: number | null;
+  format: StationFormat | null;
+  cue: string | null;
+  /** Spoken as the item starts. */
+  say: string;
+}
+
+export const GET_SET_SEC = 10;
+export const WARN_SEC = 5;
+export const ROW_EXERCISE = "Row";
+export const SESSION_TYPE = "row_circuit";
+
+function clock(sec: number): string {
+  return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+}
+
+function minutesWords(sec: number): string {
+  if (sec % 60 === 0) return `${sec / 60} minute${sec === 60 ? "" : "s"}`;
+  return `${Math.floor(sec / 60)} minutes ${sec % 60} seconds`;
+}
+
+export function buildTimeline(rx: RcPrescription, lever: Lever, restMode: RestMode): RcItem[] {
+  const rounds = rx.options[lever].rounds;
+  const t = rx.timing;
+  const items: RcItem[] = [];
+  const push = (it: Omit<RcItem, "spm" | "format" | "cue"> & Partial<RcItem>) =>
+    items.push({ spm: null, format: null, cue: null, ...it } as RcItem);
+
+  rounds.forEach((r, i) => {
+    const n = r.round;
+    if (i === 0) {
+      push({ kind: "get_set", round: n, name: "Get on the rower", sec: GET_SET_SEC,
+             say: `Round 1. Row at ${r.spm} for ${minutesWords(r.work_sec)}.` });
+    } else {
+      push({ kind: "move", round: n, name: "Back on the rower", sec: t.back_on_rower_sec,
+             say: `Round ${n}. Back on the rower. ${r.spm} for ${minutesWords(r.work_sec)}.` });
+    }
+    push({ kind: "row", round: n, name: `Row at ${r.spm}`, sec: r.work_sec, spm: r.spm,
+           cue: "Strong drive, easy recovery.", say: `Row. ${r.spm}.` });
+    const easy = restMode === "easy";
+    push({ kind: "rest", round: n, name: easy ? `Easy at ${rx.rest.rate}` : "Stop — rest",
+           sec: rx.rest.sec, spm: easy ? rx.rest.rate : null,
+           say: easy ? `Easy. ${rx.rest.rate}.` : "Stop. Rest." });
+    const stations = rx.stations[i] ?? rx.stations[rx.stations.length - 1];
+    stations.forEach((s, k) => {
+      push({ kind: "move", round: n, sec: k === 0 ? t.off_rower_sec : t.between_moves_sec,
+             name: k === 0 ? `Off the rower — ${s.name}` : `Next: ${s.name}`,
+             say: k === 0 ? `Off the rower. ${s.name} next.` : `${s.name} next.` });
+      push({ kind: "station", round: n, name: s.name, sec: s.duration_sec, format: s.format,
+             cue: s.cue, say: s.name });
+    });
+    push({ kind: "record", round: n, name: `Record round ${n}`, sec: null,
+           say: `Record round ${n}.` });
+  });
+  push({ kind: "move", round: null, name: "Back on the rower — cool-down", sec: t.back_on_rower_sec,
+         say: "Back on the rower for the cool-down." });
+  push({ kind: "cooldown", round: null, name: `Cool-down at ${rx.rest.rate}`, sec: t.cooldown_sec,
+         spm: rx.rest.rate, say: `Easy. ${rx.rest.rate}. ${minutesWords(t.cooldown_sec)}.` });
+  return items;
+}
+
+/** Planned seconds, the record cards excluded (they take as long as they take). */
+export function plannedSec(items: RcItem[]): number {
+  return items.reduce((a, i) => a + (i.sec ?? 0), 0);
+}
+
+export function summaryLine(opt: RcOption): string {
+  const rates = opt.rounds.map((r) => r.spm).join("/");
+  const lens = [...new Set(opt.rounds.map((r) => r.work_sec))];
+  const len = lens.length === 1 ? clock(lens[0]) : opt.rounds.map((r) => clock(r.work_sec)).join("/");
+  return `${rates} spm · ${len}`;
+}
+
+// ---------------------------------------------------------------------------
+// Engine
+// ---------------------------------------------------------------------------
+
+export interface RcWindow {
+  /** Epoch ms. */
+  start: number;
+  end: number | null;
+  /** ms actually run (paused time excluded). */
+  activeMs: number;
+}
+
+export interface RcState {
+  index: number;
+  stageMs: number;
+  elapsedMs: number;
+  paused: boolean;
+  done: boolean;
+  warned: boolean;
+  windows: RcWindow[];
+}
+
+export type RcEvent =
+  | { type: "start"; index: number }
+  | { type: "warn"; index: number }
+  | { type: "done" };
+
+export function initialState(startEpoch: number): RcState {
+  return { index: 0, stageMs: 0, elapsedMs: 0, paused: false, done: false, warned: false,
+           windows: [{ start: startEpoch, end: null, activeMs: 0 }] };
+}
+
+function advance(items: RcItem[], s: RcState, atEpoch: number, events: RcEvent[]): void {
+  s.windows[s.index] = { ...s.windows[s.index], end: atEpoch };
+  if (s.index + 1 >= items.length) {
+    s.done = true;
+    events.push({ type: "done" });
+    return;
+  }
+  s.index += 1;
+  s.stageMs = 0;
+  s.warned = false;
+  s.windows[s.index] = { start: atEpoch, end: null, activeMs: 0 };
+  events.push({ type: "start", index: s.index });
+}
+
+/** Advance by dtMs, ending at `nowEpoch`. A record card never advances here. */
+export function tick(items: RcItem[], state: RcState, dtMs: number, nowEpoch: number): { state: RcState; events: RcEvent[] } {
+  if (state.paused || state.done || dtMs <= 0) return { state, events: [] };
+  const s: RcState = { ...state, windows: [...state.windows] };
+  const events: RcEvent[] = [];
+  let left = dtMs;
+  while (!s.done && left > 0) {
+    const it = items[s.index];
+    const w = s.windows[s.index];
+    if (it.sec == null) {
+      // Record card: time runs, the item does not end.
+      s.stageMs += left;
+      s.elapsedMs += left;
+      s.windows[s.index] = { ...w, activeMs: w.activeMs + left };
+      left = 0;
+      break;
+    }
+    const dur = it.sec * 1000;
+    const step = Math.min(left, dur - s.stageMs);
+    s.stageMs += step;
+    s.elapsedMs += step;
+    s.windows[s.index] = { ...w, activeMs: w.activeMs + step };
+    left -= step;
+    const warnAt = dur - WARN_SEC * 1000;
+    if (!s.warned && (it.kind === "row" || it.kind === "station") && warnAt > 0 && s.stageMs >= warnAt) {
+      s.warned = true;
+      events.push({ type: "warn", index: s.index });
+    }
+    if (s.stageMs >= dur) advance(items, s, nowEpoch - left, events);
+  }
+  return { state: s, events };
+}
+
+/** The record card was saved: end it and move on. */
+export function saveRecord(items: RcItem[], state: RcState, nowEpoch: number): { state: RcState; events: RcEvent[] } {
+  if (state.done || items[state.index].kind !== "record") return { state, events: [] };
+  const s: RcState = { ...state, windows: [...state.windows] };
+  const events: RcEvent[] = [];
+  advance(items, s, nowEpoch, events);
+  return { state: s, events };
+}
+
+/** Skip forward to the next item. Never past a record card: a round is not
+ * over until it is recorded, and skipping it would lose the round's numbers. */
+export function skip(items: RcItem[], state: RcState, nowEpoch: number): { state: RcState; events: RcEvent[] } {
+  if (state.done || items[state.index].kind === "record") return { state, events: [] };
+  const s: RcState = { ...state, windows: [...state.windows] };
+  const events: RcEvent[] = [];
+  advance(items, s, nowEpoch, events);
+  return { state: s, events };
+}
+
+export function remainingSec(items: RcItem[], state: RcState): number | null {
+  if (state.done) return 0;
+  const it = items[state.index];
+  if (it.sec == null) return null;
+  return Math.max(0, Math.ceil((it.sec * 1000 - state.stageMs) / 1000));
+}
+
+/** The next item that isn't a transition, for the "Next" strip. */
+export function nextUp(items: RcItem[], index: number): RcItem | null {
+  for (let i = index + 1; i < items.length; i++) {
+    if (items[i].kind !== "move") return items[i];
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Logging — one round's rows, built from its windows and the record card.
+// ---------------------------------------------------------------------------
+
+export interface RecordEntry {
+  /** Strokes/min held. Prefilled with the target. */
+  spm: number;
+  /** The rower monitor's running total at the end of this round, if read. */
+  metersTotal: number | null;
+  /** Reps per `reps` station, by name. */
+  reps: Record<string, number | null>;
+}
+
+function iso(ms: number | null | undefined): string | null {
+  return ms == null ? null : new Date(ms).toISOString();
+}
+
+/** Round meters from the running total: this reading less the last one. A
+ * reading below the previous one means the monitor was reset or misread —
+ * no distance rather than a negative one. */
+export function roundMeters(total: number | null, previousTotal: number | null): number | null {
+  if (total == null) return null;
+  const prev = previousTotal ?? 0;
+  return total >= prev ? total - prev : null;
+}
+
+export function roundLogs(
+  items: RcItem[],
+  state: RcState,
+  round: number,
+  entry: RecordEntry,
+  meters: number | null,
+  target: RcRound,
+): LogExerciseIn[] {
+  const out: LogExerciseIn[] = [];
+  items.forEach((it, i) => {
+    if (it.round !== round) return;
+    const w = state.windows[i];
+    if (!w) return;
+    const base = {
+      adhoc_session_type: SESSION_TYPE,
+      plan_id: null,
+    } as const;
+    if (it.kind === "row") {
+      out.push({
+        ...base,
+        exercise: ROW_EXERCISE,
+        log_type: "cardio_block",
+        modality: "row",
+        device: "water",
+        sets: [{
+          set_num: round,
+          duration_sec: Math.round(w.activeMs / 1000),
+          distance_m: meters,
+          stroke_rate: entry.spm,
+          started_at: iso(w.start),
+          ended_at: iso(w.end),
+          notes: `row_circuit target ${target.spm} spm ${clock(target.work_sec)}` +
+                 (meters != null ? " · meters include the rest minute" : ""),
+        }],
+      });
+    } else if (it.kind === "station") {
+      const reps = it.format === "reps" ? (entry.reps[it.name] ?? null) : null;
+      out.push({
+        ...base,
+        exercise: it.name,
+        log_type: "strength_set",
+        sets: [{
+          set_num: round,
+          reps_done: reps,
+          duration_sec: Math.round(w.activeMs / 1000),
+          started_at: iso(w.start),
+          ended_at: iso(w.end),
+        }],
+      });
+    }
+  });
+  return out;
+}
+
+export function summaryLog(state: RcState, rounds: number, lever: Lever, recorded: number): LogExerciseIn {
+  const min = Math.floor(state.elapsedMs / 60000);
+  return {
+    adhoc_session_type: SESSION_TYPE,
+    plan_id: null,
+    exercise: null,
+    log_type: "session_summary",
+    sets: [{
+      duration_sec: Math.round(state.elapsedMs / 1000),
+      started_at: iso(state.windows[0]?.start),
+      ended_at: iso(state.windows[state.index]?.end ?? null),
+      notes: `row_circuit: ${state.done ? "complete" : "partial"} ${min} min · ` +
+             `${recorded} of ${rounds} rounds recorded · ${lever}`,
+      is_skipped: false,
+    }],
+  };
+}
+
+/** Prefill for a reps station: last session's same round, else this session's
+ * previous round of the same move, else nothing. */
+export function prefillReps(
+  rx: RcPrescription, round: number, name: string,
+  thisSession: Record<number, Record<string, number | null>>,
+): number | null {
+  const last = rx.last_reps?.[String(round)]?.[name];
+  if (typeof last === "number") return last;
+  for (let r = round - 1; r >= 1; r--) {
+    const v = thisSession[r]?.[name];
+    if (typeof v === "number") return v;
+  }
+  return null;
+}

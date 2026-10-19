@@ -4,13 +4,15 @@ import { useEffect, useState } from "react";
 // place that has to handle it. A `never` default only narrows over what the union
 // declares, so adding the route to a switch without adding it here would compile
 // cleanly and throw at runtime — the 2026-09-25 rest-day crash exactly.
-export type Route = "today" | "status" | "library" | "prep";
+// ROW-CIRCUIT (2026-10-19): "row" is the rower circuit, opened from Sessions.
+export type Route = "today" | "status" | "library" | "prep" | "row";
 
 export function pathToRoute(pathname: string): Route {
   const p = pathname.replace(/\/$/, "");
   if (p.endsWith("/status")) return "status";
   if (p.endsWith("/library")) return "library";
   if (p.endsWith("/prep")) return "prep";
+  if (p.endsWith("/row")) return "row";
   return "today";
 }
 
@@ -19,6 +21,7 @@ const ROUTE_PATHS: Record<Route, string> = {
   status: "/status",
   library: "/library",
   prep: "/prep",
+  row: "/row",
 };
 
 export function routeToPath(route: Route): string {

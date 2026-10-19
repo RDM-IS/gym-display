@@ -1,0 +1,55 @@
+/* ROW-CIRCUIT (2026-10-19). Read from the rower seat and the floor, so the
+   stroke rate and the clock are the biggest things on the screen, and every
+   control is >= var(--tap). */
+
+.rc-ready { padding-top: calc(var(--top-inset) + var(--nav-reserve)); display: flex;
+  flex-direction: column; gap: var(--gap); }
+.rc-rounds { max-width: 420px; }
+.rc-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--gap); }
+.rc-option { display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+  min-height: 112px; padding: 16px; text-align: left; border: 2px solid var(--line); }
+.rc-option--on { border-color: var(--accent); }
+.rc-option-head { font-size: 22px; font-weight: 700; display: flex; gap: 8px; align-items: center; }
+.rc-option-body { font-size: 18px; color: var(--fg-dim); }
+.rc-option-why { font-size: 15px; color: var(--fg-faint); }
+.rc-default { font-size: 13px; padding: 2px 8px; }
+.rc-repeat { min-height: var(--tap); border: 2px solid var(--line); text-align: left; }
+.rc-restmode { min-height: var(--tap); align-self: flex-start; }
+.rc-plan { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.rc-plan li { display: grid; grid-template-columns: 44px 160px 1fr; gap: 8px; font-size: 18px; }
+.rc-start { min-height: var(--tap-primary); font-size: 24px; }
+
+.rc-run { position: relative; display: flex; flex-direction: column;
+  height: var(--vvh, 100dvh);
+  padding: calc(var(--safe-top) + 16px) var(--gutter) calc(var(--safe-bottom) + 16px);
+  user-select: none; -webkit-user-select: none;
+  background: linear-gradient(180deg, #0f2233 0%, #0a0a0a 70%); }
+.rc-run--station, .rc-run--move { background: linear-gradient(180deg, #2a1f0c 0%, #0a0a0a 70%); }
+.rc-run--record { background: var(--bg); }
+.rc-head { display: flex; align-items: center; justify-content: space-between; gap: var(--gap);
+  font-size: 20px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.rc-head > span:first-child { color: var(--accent); }
+.rc-body { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; text-align: center; }
+.rc-name { font-size: 40px; font-weight: 700; }
+.rc-spm { font-size: 160px; line-height: 1; color: var(--accent); }
+.rc-spm-unit { font-size: 32px; margin-left: 8px; color: var(--fg-dim); }
+.rc-clock { font-size: 110px; line-height: 1; }
+.rc-run--row .rc-clock { font-size: 72px; color: var(--fg-dim); }
+.rc-cue { font-size: 22px; color: var(--fg-dim); max-width: 34ch; }
+.rc-skip { margin-top: 12px; min-height: var(--tap); min-width: 120px; }
+.rc-next { font-size: 20px; color: var(--fg-dim); text-align: center; padding: 8px 0; }
+
+.rc-record { flex: 1; display: flex; flex-direction: column; gap: var(--gap); overflow-y: auto;
+  padding-top: 8px; }
+.rc-record-head { display: flex; justify-content: space-between; align-items: baseline; }
+.rc-record-late { color: var(--accent); }
+.rc-record-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--gap); }
+.rc-save { min-height: var(--tap-primary); font-size: 24px; margin-top: auto; }
+
+@media (max-width: 600px) {
+  .rc-spm { font-size: 112px; }
+  .rc-clock { font-size: 80px; }
+  .rc-plan li { grid-template-columns: 36px 1fr; }
+  .rc-plan li > :last-child { grid-column: 2; }
+}
