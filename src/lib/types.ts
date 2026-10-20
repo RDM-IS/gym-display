@@ -462,6 +462,11 @@ export interface LogSetIn {
    * time and cannot bound an exercise saved minutes later on a record card. */
   started_at?: string | null;
   ended_at?: string | null;
+  /** ROW-DNF (artemis migration 056): what the round was prescribed, and
+   * whether he finished it at that target. Progression reads these. */
+  target_spm?: number | null;
+  target_sec?: number | null;
+  dnf?: boolean | null;
 }
 
 /** CARDIO-LOC: what a cardio session runs on, resolved by artemis from the
