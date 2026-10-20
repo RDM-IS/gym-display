@@ -391,3 +391,40 @@ describe("did not finish (ROW-DNF)", () => {
     expect(row.sets[0].dnf).toBe(false);
   });
 });
+
+describe("heart-rate ladders (QUICK-START)", () => {
+  const ride = (): RcPrescription => ({ ...rx(), kind: "ride", session_type: "ride_ladder",
+    display_name: "Ride ladder", row_exercise: "Ride ladder", unit: "bpm", step: 5,
+    modality: "bike", device: "indoor trainer", stations: [[], []], last_reps: {} });
+
+  it("names the machine and the bpm, and the easy minute has no number", () => {
+    const items = buildTimeline(ride(), "repeat", "easy");
+    expect(items[0].name).toBe("Get on the bike");
+    expect(items.find((i) => i.kind === "row")!.name).toBe("Ride at 11 bpm");
+    const rest = items.find((i) => i.kind === "rest")!;
+    expect(rest.name).toBe("Easy");
+    expect(rest.spm).toBeNull();
+  });
+
+  it("logs held as hr_avg and the target as target_bpm, never stroke rate", () => {
+    const items = buildTimeline(ride(), "repeat", "easy");
+    const s = runUntil(items, initialState(T0), (x) => items[x.index].kind === "record");
+    const [row] = roundLogs(items, s, 1, { spm: 11, metersTotal: null, reps: {} }, null,
+                            { round: 1, work_sec: 20, spm: 11 }, ownerOf(ride()));
+    expect(row.exercise).toBe("Ride ladder");
+    expect(row.modality).toBe("bike");
+    expect(row.sets[0].hr_avg).toBe(11);
+    expect(row.sets[0].target_bpm).toBe(11);
+    expect(row.sets[0].stroke_rate).toBeNull();
+    expect(row.sets[0].target_spm).toBeNull();
+  });
+
+  it("a row ladder still logs stroke rate", () => {
+    const items = buildTimeline(rx(), "repeat", "easy");
+    const s = runUntil(items, initialState(T0), (x) => items[x.index].kind === "record");
+    const [row] = roundLogs(items, s, 1, { spm: 11, metersTotal: null, reps: {} }, null,
+                            { round: 1, work_sec: 20, spm: 11 }, ownerOf(rx()));
+    expect(row.sets[0].stroke_rate).toBe(11);
+    expect(row.sets[0].target_bpm).toBeUndefined();
+  });
+});

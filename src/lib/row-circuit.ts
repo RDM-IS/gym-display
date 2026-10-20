@@ -68,13 +68,32 @@ export interface RcStation {
 /** ROW-LADDER: the rower-only climb — same progression, no floor work, one
  * record card at the end. Each kind has its own history (artemis
  * knowledge/row_circuit.py KINDS), keyed by `row_exercise`. */
-export type RcKind = "circuit" | "ladder";
+/** QUICK-START (2026-10-20): `ride` (Richfield, the bike) and `run` (Brown
+ * Deer, the treadmill) are the same ladder climbing a HEART-RATE target. The
+ * round value is still carried as `spm`; `unit` says what it is. */
+export type RcKind = "circuit" | "ladder" | "ride" | "run";
+export type RcUnit = "spm" | "bpm";
+
+/** Words for the machine, by kind. */
+export const VERB: Record<RcKind, { act: string; machine: string; on: string }> = {
+  circuit: { act: "Row", machine: "rower", on: "on the rower" },
+  ladder: { act: "Row", machine: "rower", on: "on the rower" },
+  ride: { act: "Ride", machine: "bike", on: "on the bike" },
+  run: { act: "Run", machine: "treadmill", on: "on the treadmill" },
+};
 
 export interface RcPrescription {
   available: true;
   kind: RcKind;
-  session_type: "row_circuit" | "row_ladder";
+  session_type: string;
   display_name: string;
+  /** "spm" for the row, "bpm" for ride and run. Absent from an older Lambda = spm. */
+  unit?: RcUnit;
+  step?: number;
+  value_min?: number;
+  value_max?: number;
+  modality?: string;
+  device?: string;
   /** The exercise name its Row blocks are logged under — the history key. */
   row_exercise: string;
   rounds: number;
@@ -138,21 +157,29 @@ export function buildTimeline(rx: RcPrescription, lever: Lever, restMode: RestMo
   const push = (it: Omit<RcItem, "spm" | "format" | "cue"> & Partial<RcItem>) =>
     items.push({ spm: null, format: null, cue: null, ...it } as RcItem);
 
+  const v = VERB[rx.kind] ?? VERB.ladder;
+  const hr = unitOf(rx) === "bpm";
+  // A heart-rate ladder's easy minute has no number to hold: "easy" is the
+  // instruction. The row's easy minute is a stroke rate.
+  const easyName = hr ? "Easy" : `Easy at ${rx.rest.rate}`;
+  const easySay = hr ? "Easy." : `Easy. ${rx.rest.rate}.`;
+  const at = (x: number) => (hr ? `${x} bpm` : `${x}`);
   rounds.forEach((r, i) => {
     const n = r.round;
     if (i === 0) {
-      push({ kind: "get_set", round: n, name: "Get on the rower", sec: GET_SET_SEC,
-             say: `Round 1. Row at ${r.spm} for ${minutesWords(r.work_sec)}.` });
+      push({ kind: "get_set", round: n, name: `Get ${v.on}`, sec: GET_SET_SEC,
+             say: `Round 1. ${v.act} at ${at(r.spm)} for ${minutesWords(r.work_sec)}.` });
     } else {
-      push({ kind: "move", round: n, name: "Back on the rower", sec: t.back_on_rower_sec,
-             say: `Round ${n}. Back on the rower. ${r.spm} for ${minutesWords(r.work_sec)}.` });
+      push({ kind: "move", round: n, name: `Back ${v.on}`, sec: t.back_on_rower_sec,
+             say: `Round ${n}. Back ${v.on}. ${at(r.spm)} for ${minutesWords(r.work_sec)}.` });
     }
-    push({ kind: "row", round: n, name: `Row at ${r.spm}`, sec: r.work_sec, spm: r.spm,
-           cue: "Strong drive, easy recovery.", say: `Row. ${r.spm}.` });
+    push({ kind: "row", round: n, name: `${v.act} at ${at(r.spm)}`, sec: r.work_sec, spm: r.spm,
+           cue: hr ? "Build into it. Hold the number on your watch." : "Strong drive, easy recovery.",
+           say: `${v.act}. ${at(r.spm)}.` });
     const easy = restMode === "easy";
-    push({ kind: "rest", round: n, name: easy ? `Easy at ${rx.rest.rate}` : "Stop — rest",
-           sec: rx.rest.sec, spm: easy ? rx.rest.rate : null,
-           say: easy ? `Easy. ${rx.rest.rate}.` : "Stop. Rest." });
+    push({ kind: "rest", round: n, name: easy ? easyName : "Stop — rest",
+           sec: rx.rest.sec, spm: easy && !hr ? rx.rest.rate : null,
+           say: easy ? easySay : "Stop. Rest." });
     // The ladder has no floor work and no per-round card: rows and rest
     // minutes only, then one card at the end.
     const stations = rx.stations[i] ?? [];
@@ -172,12 +199,13 @@ export function buildTimeline(rx: RcPrescription, lever: Lever, restMode: RestMo
     push({ kind: "move", round: null, name: "Back on the rower — cool-down", sec: t.back_on_rower_sec,
            say: "Back on the rower for the cool-down." });
   }
-  push({ kind: "cooldown", round: null, name: `Cool-down at ${rx.rest.rate}`, sec: t.cooldown_sec,
-         spm: rx.rest.rate, say: `Easy. ${rx.rest.rate}. ${minutesWords(t.cooldown_sec)}.` });
+  push({ kind: "cooldown", round: null, name: hr ? "Cool-down — easy" : `Cool-down at ${rx.rest.rate}`,
+         sec: t.cooldown_sec, spm: hr ? null : rx.rest.rate,
+         say: `${easySay} ${minutesWords(t.cooldown_sec)}.` });
   if (!floor) {
     // round null = the FINAL card: every round's rate on one screen.
     push({ kind: "record", round: null, name: "Record the session", sec: null,
-           say: "Done rowing. Record the session." });
+           say: "Done. Record the session." });
   }
   return items;
 }
@@ -407,10 +435,18 @@ export interface LogOwner {
   sessionType: string;
   rowExercise: string;
   planId: number | null;
+  unit?: RcUnit;
+  modality?: string;
+  device?: string;
+}
+
+export function unitOf(rx: RcPrescription): RcUnit {
+  return rx.unit === "bpm" ? "bpm" : "spm";
 }
 
 export function ownerOf(rx: RcPrescription, planId: number | null = null): LogOwner {
-  return { sessionType: rx.session_type, rowExercise: rx.row_exercise, planId };
+  return { sessionType: rx.session_type, rowExercise: rx.row_exercise, planId,
+           unit: unitOf(rx), modality: rx.modality ?? "row", device: rx.device ?? "water" };
 }
 
 function ownerFields(o: LogOwner): Pick<LogExerciseIn, "plan_id" | "adhoc_session_type"> {
@@ -439,19 +475,22 @@ export function roundLogs(
         ...base,
         exercise: owner.rowExercise,
         log_type: "cardio_block",
-        modality: "row",
-        device: "water",
+        modality: owner.modality ?? "row",
+        device: owner.device ?? "water",
         sets: [{
           set_num: round,
           duration_sec: Math.round(w.activeMs / 1000),
           distance_m: meters,
-          stroke_rate: entry.spm,
+          // QUICK-START: a heart-rate ladder's held value is hr_avg and its
+          // target target_bpm (artemis 057); the stroke-rate columns stay empty.
+          ...(owner.unit === "bpm"
+            ? { hr_avg: entry.spm, target_bpm: target.spm, stroke_rate: null, target_spm: null }
+            : { stroke_rate: entry.spm, target_spm: target.spm }),
           started_at: iso(w.start),
           ended_at: iso(w.end),
-          target_spm: target.spm,
           target_sec: target.work_sec,
           dnf: !!entry.dnf,
-          notes: `${owner.sessionType} target ${target.spm} spm ${clock(target.work_sec)}` +
+          notes: `${owner.sessionType} target ${target.spm} ${owner.unit ?? "spm"} ${clock(target.work_sec)}` +
                  (entry.dnf ? ` · DNF${entry.heldSec != null ? `, held ${entry.heldSec} s` : ""}` : "") +
                  (meters != null ? " · meters include the rest minute" : ""),
         }],

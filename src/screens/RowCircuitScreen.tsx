@@ -27,6 +27,8 @@ import {
   type Lever,
   type LogOwner,
   type RcKind,
+  unitOf,
+  VERB,
   type RcEvent,
   type RcItem,
   type RcPrescription,
@@ -64,19 +66,25 @@ const TICK_MS = 250;
 /** Which figure an item shows. Anything on the rower is the rowing machine; a
  * transition previews the move it leads into, so he sees it before he gets
  * there; a station is itself. */
-function figureFor(items: RcItem[], index: number): string | null {
+function figureFor(items: RcItem[], index: number, machine: string | null = "Rowing machine"): string | null {
   const it = items[index];
   if (it.kind === "row" || it.kind === "rest" || it.kind === "cooldown" || it.kind === "get_set") {
-    return "Rowing machine";
+    return machine;
   }
   if (it.kind === "station") return it.name;
   if (it.kind === "move") {
     const next = nextUp(items, index);
     if (!next) return null;
-    return next.kind === "station" ? next.name : "Rowing machine";
+    return next.kind === "station" ? next.name : machine;
   }
   return null;
 }
+
+/** QUICK-START: the figure for the machine. The treadmill borrows the jog;
+ * there is no bike figure yet, so a ride shows none rather than a wrong one. */
+const MACHINE_FIGURE: Record<RcKind, string | null> = {
+  circuit: "Rowing machine", ladder: "Rowing machine", ride: null, run: "Jog in place",
+};
 type Phase = "ready" | "running" | "done";
 type Load =
   | { state: "loading" }
@@ -90,7 +98,9 @@ function clock(sec: number): string {
   return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
 }
 
-const TITLES: Record<RcKind, string> = { circuit: "Row circuit", ladder: "Row ladder" };
+const TITLES: Record<RcKind, string> = {
+  circuit: "Row circuit", ladder: "Row ladder", ride: "Ride ladder", run: "Run ladder",
+};
 
 export default function RowCircuitScreen({ kind = "circuit", planId = null, onRunningChange, onExit }: Props) {
   const [rounds, setRounds] = useState<number | null>(null);
@@ -185,7 +195,9 @@ function ReadyScreen({ rx, lever, restMode, onRounds, onLever, onRestMode, onSta
               className={`btn rc-option${lever === lv ? " rc-option--on" : ""}`}
               disabled={!o.ok} onClick={() => onLever(lv)}>
               <span className="rc-option-head">
-                {lv === "rate" ? "+1 stroke/min" : "+1:00 each round"}
+                {lv === "rate"
+                  ? (unitOf(rx) === "bpm" ? `+${rx.step ?? 5} bpm` : "+1 stroke/min")
+                  : "+1:00 each round"}
                 {rx.default === lv && <span className="chip rc-default">default</span>}
               </span>
               <span className="rc-option-body mono">{summaryLine(o)}</span>
@@ -210,7 +222,7 @@ function ReadyScreen({ rx, lever, restMode, onRounds, onLever, onRestMode, onSta
         {chosen.rounds.map((r, i) => (
           <li key={r.round}>
             <span className="mono">R{r.round}</span>
-            <span>Row {clock(r.work_sec)} @ {r.spm}</span>
+            <span>{VERB[rx.kind].act} {clock(r.work_sec)} @ {r.spm}{unitOf(rx) === "bpm" ? " bpm" : ""}</span>
             {(rx.stations[i] ?? []).length > 0 && (
               <span className="dim">{(rx.stations[i] ?? []).map((s) => s.name).join(" · ")}</span>
             )}
@@ -218,7 +230,9 @@ function ReadyScreen({ rx, lever, restMode, onRounds, onLever, onRestMode, onSta
         ))}
       </ol>
       <p className="desc">
-        Reset the rower's monitor and start a Rowing workout on your watch, then Start.
+        {unitOf(rx) === "bpm"
+          ? `Start a ${rx.kind === "ride" ? "Cycling" : "Running"} workout on your watch — the target is your heart rate — then Start.`
+          : "Reset the rower's monitor and start a Rowing workout on your watch, then Start."}
         {rx.kind === "ladder"
           ? " One record card at the end, prefilled — tap Save if you held every rate."
           : " One record card per round, prefilled — tap Save if nothing changed."}
@@ -453,13 +467,13 @@ function RunScreen({ rx, lever, restMode, owner, onDone, done, onExit }: {
       ) : (
         <div className="rc-body">
           {(() => {
-            const fig = figureFor(items, state.index);
+            const fig = figureFor(items, state.index, MACHINE_FIGURE[rx.kind]);
             return fig ? <MoveFigure name={fig} className="rc-figure" /> : null;
           })()}
           <div className="rc-name" data-testid="rc-name">{item.name}</div>
           {item.spm != null && (
             <div className="rc-spm mono" data-testid="rc-spm">
-              {item.spm}<span className="rc-spm-unit">spm</span>
+              {item.spm}<span className="rc-spm-unit">{unitOf(rx)}</span>
             </div>
           )}
           <div className="rc-clock mono" data-testid="rc-clock">{left != null ? clock(left) : ""}</div>
@@ -522,7 +536,8 @@ function RecordCard({ rx, round, target, stations, entries, elapsedSec, onSave, 
         <span className={`mono${elapsedSec > 10 ? " rc-record-late" : " dim"}`}>{elapsedSec}s</span>
       </div>
       <div className="rc-record-grid">
-        <Stepper label="Row" unit="spm" value={spm} step={1} min={10} max={60}
+        <Stepper label={VERB[rx.kind].act} unit={unitOf(rx)} value={spm} step={1}
+          min={rx.value_min ?? 10} max={rx.value_max ?? 60}
           onChange={(v) => { if (v != null) setSpm(v); }}
           sub={spm !== target.spm ? `target ${target.spm}` : undefined} />
         <DnfToggle dnf={dnf} onChange={setDnf} heldSec={heldSec} onHeld={setHeldSec}
@@ -575,7 +590,8 @@ function FinalCard({ rx, target, rounds, elapsedSec, onSave, suggested }: {
       <div className="rc-record-grid">
         {rounds.map((r) => (
           <div key={r} className="rc-final-round">
-            <Stepper label={`Round ${r}`} unit="spm" value={spms[r]} step={1} min={10} max={60}
+            <Stepper label={`Round ${r}`} unit={unitOf(rx)} value={spms[r]} step={1}
+              min={unitOf(rx) === "bpm" ? 60 : 10} max={unitOf(rx) === "bpm" ? 220 : 60}
               onChange={(v) => { if (v != null) setSpms((cur) => ({ ...cur, [r]: v })); }}
               sub={spms[r] !== target[r - 1].spm ? `target ${target[r - 1].spm}` : undefined} />
             <DnfToggle dnf={dnfs[r]?.dnf ?? false} heldSec={dnfs[r]?.heldSec ?? null}

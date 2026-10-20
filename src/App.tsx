@@ -350,7 +350,7 @@ export default function App() {
 
   // The workout screen is full-immersive — it carries its own header.
   const immersive = (route === "today" && (flow === "workout" || flowRunning))
-    || ((route === "row" || route === "ladder") && rowRunning);
+    || ((route === "row" || route === "ladder" || route === "ride" || route === "run") && rowRunning);
   const chrome = immersive ? null : (
     <>
       <Nav route={route} onNavigate={(r) => {
@@ -397,6 +397,17 @@ export default function App() {
     );
   }
 
+  // ---- /ride and /run (QUICK-START) ----
+  if (route === "ride" || route === "run") {
+    return (
+      <>
+        {chrome}
+        <RowCircuitScreen key={route} kind={route} onRunningChange={setRowRunning}
+          onExit={() => navigate("library")} />
+      </>
+    );
+  }
+
   // ---- /row-ladder route (ROW-LADDER) ----
   if (route === "ladder") {
     return (
@@ -416,6 +427,7 @@ export default function App() {
           onLaunch={onLaunch}
           onOpenRowCircuit={() => navigate("row")}
           onOpenRowLadder={() => navigate("ladder")}
+          onOpenLadder={(k) => navigate(k)}
           dayOff={isDayOff(plan)}
           onMadeUp={() => {
             // Today's row is now the session: reload it and go run it as planned work.

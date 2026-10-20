@@ -467,6 +467,8 @@ export interface LogSetIn {
   target_spm?: number | null;
   target_sec?: number | null;
   dnf?: boolean | null;
+  /** QUICK-START (artemis 057): a ride or run ladder round's heart-rate target. */
+  target_bpm?: number | null;
 }
 
 /** CARDIO-LOC: what a cardio session runs on, resolved by artemis from the
