@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchLibrary, fetchStrengthNext, postMakeup } from "../lib/api";
+import { fetchLibrary, fetchRecommend, fetchStrengthNext, postMakeup, type Recommendation } from "../lib/api";
 import { ADHOC_PLAN_ID } from "../lib/adhoc";
 import type { LibraryLocation, LibraryResponse, LibrarySession, Plan } from "../lib/types";
 
@@ -69,6 +69,12 @@ export default function LibraryScreen({ onLaunch, onMadeUp, dayOff = false, onOp
                                        onOpenLadder }: Props) {
   const [nextStrength, setNextStrength] = useState<string | null>(null);
   const [strengthErr, setStrengthErr] = useState<string | null>(null);
+  const [rec, setRec] = useState<Recommendation | null>(null);
+  useEffect(() => {
+    let live = true;
+    void fetchRecommend().then((r) => { if (live) setRec(r); });
+    return () => { live = false; };
+  }, []);
   useEffect(() => {
     let live = true;
     void fetchStrengthNext().then((r) => {
@@ -193,6 +199,10 @@ export default function LibraryScreen({ onLaunch, onMadeUp, dayOff = false, onOp
       )}
       {location && !dayOff && (
         <QuickStart
+          // RECOMMEND: only for TODAY'S room -- a highlight on a room he has
+          // picked for this launch only would be a recommendation for a day
+          // that isn't happening.
+          rec={isToday && rec?.available ? rec : null}
           location={location} today={data.today} nextStrength={nextStrength} strengthErr={strengthErr}
           onLaunch={onLaunch} onOpenRowCircuit={onOpenRowCircuit} onOpenRowLadder={onOpenRowLadder}
           onOpenLadder={onOpenLadder}
@@ -211,7 +221,8 @@ export default function LibraryScreen({ onLaunch, onMadeUp, dayOff = false, onOp
             <button
               key={s.session_type}
               type="button"
-              className="btn btn--block library-item"
+              data-recommended={isToday && rec?.available && rec.more?.includes(s.session_type) ? "true" : undefined}
+              className={`btn btn--block library-item${isToday && rec?.available && rec.more?.includes(s.session_type) ? " quick-btn--rec" : ""}`}
               onClick={() => onLaunch(planFromLibrary(s, data.today), s.session_type)}
             >
               <span className="library-name">{s.display_name}</span>
@@ -241,8 +252,9 @@ export default function LibraryScreen({ onLaunch, onMadeUp, dayOff = false, onOp
 // standing next to the machine.
 // ---------------------------------------------------------------------------
 
-function QuickStart({ location, today, nextStrength, strengthErr, onLaunch, onOpenRowCircuit,
+function QuickStart({ rec, location, today, nextStrength, strengthErr, onLaunch, onOpenRowCircuit,
                       onOpenRowLadder, onOpenLadder }: {
+  rec: Recommendation | null;
   location: LibraryLocation; today: string; nextStrength: string | null; strengthErr: string | null;
   onLaunch: Props["onLaunch"]; onOpenRowCircuit?: () => void; onOpenRowLadder?: () => void;
   onOpenLadder?: (kind: "ride" | "run") => void;
@@ -253,35 +265,42 @@ function QuickStart({ location, today, nextStrength, strengthErr, onLaunch, onOp
   const yoga = find("yoga_strength");
   const recovery = find("recovery_flow");
   const launch = (s: LibrarySession) => onLaunch(planFromLibrary(s, today), s.session_type);
+  const on = (b: NonNullable<Recommendation["primary"]>) => rec?.primary === b;
+  const cls = (b: NonNullable<Recommendation["primary"]>) => `btn quick-btn${on(b) ? " quick-btn--rec" : ""}`;
+  const tag = (b: NonNullable<Recommendation["primary"]>) =>
+    on(b) ? <span className="quick-rec-tag" data-testid="quick-rec-tag">Recommended</span> : null;
   return (
     <section className="quick-start" data-testid="quick-start" aria-label="Start a workout">
       <h2 className="section-title">Start</h2>
+      {rec?.reason && (
+        <p className="desc dim quick-rec-reason" data-testid="quick-rec-reason">Recommended: {rec.label} — {rec.reason}</p>
+      )}
       <div className="quick-row" role="group" aria-label="Cardio">
         {onOpenRowLadder && (
-          <button type="button" className="btn quick-btn" data-testid="quick-row" onClick={onOpenRowLadder}>
-            <span className="quick-name">Row</span><span className="quick-sub">ladder · spm</span>
+          <button type="button" className={cls("row")} data-testid="quick-row" onClick={onOpenRowLadder}>
+            <span className="quick-name">Row</span>{tag("row")}<span className="quick-sub">ladder · spm</span>
           </button>
         )}
         {onOpenRowCircuit && (
-          <button type="button" className="btn quick-btn" data-testid="quick-row-circuit" onClick={onOpenRowCircuit}>
-            <span className="quick-name">Row + floor</span><span className="quick-sub">circuit</span>
+          <button type="button" className={cls("row_circuit")} data-testid="quick-row-circuit" onClick={onOpenRowCircuit}>
+            <span className="quick-name">Row + floor</span>{tag("row_circuit")}<span className="quick-sub">circuit</span>
           </button>
         )}
         {onOpenLadder && (
           <>
-            <button type="button" className="btn quick-btn" data-testid="quick-ride" onClick={() => onOpenLadder("ride")}>
-              <span className="quick-name">Ride</span><span className="quick-sub">ladder · bpm</span>
+            <button type="button" className={cls("ride")} data-testid="quick-ride" onClick={() => onOpenLadder("ride")}>
+              <span className="quick-name">Ride</span>{tag("ride")}<span className="quick-sub">ladder · bpm</span>
             </button>
-            <button type="button" className="btn quick-btn" data-testid="quick-run" onClick={() => onOpenLadder("run")}>
-              <span className="quick-name">Run</span><span className="quick-sub">ladder · bpm</span>
+            <button type="button" className={cls("run")} data-testid="quick-run" onClick={() => onOpenLadder("run")}>
+              <span className="quick-name">Run</span>{tag("run")}<span className="quick-sub">ladder · bpm</span>
             </button>
           </>
         )}
       </div>
       <div className="quick-row" role="group" aria-label="Strength, yoga and recovery">
         {strength ? (
-          <button type="button" className="btn quick-btn" data-testid="quick-strength" onClick={() => launch(strength)}>
-            <span className="quick-name">Strength {STRENGTH_LETTER[strength.session_type]}</span>
+          <button type="button" className={cls("strength")} data-testid="quick-strength" onClick={() => launch(strength)}>
+            <span className="quick-name">Strength {STRENGTH_LETTER[strength.session_type]}</span>{tag("strength")}
             <span className="quick-sub">next · {location.display}</span>
           </button>
         ) : hasAnyStrength && strengthErr ? (
@@ -290,14 +309,14 @@ function QuickStart({ location, today, nextStrength, strengthErr, onLaunch, onOp
           </p>
         ) : null}
         {yoga && (
-          <button type="button" className="btn quick-btn" data-testid="quick-yoga" onClick={() => launch(yoga)}>
-            <span className="quick-name">Yoga — Intense</span>
+          <button type="button" className={cls("yoga")} data-testid="quick-yoga" onClick={() => launch(yoga)}>
+            <span className="quick-name">Yoga — Intense</span>{tag("yoga")}
             <span className="quick-sub">{yoga.est_duration_min ? `${yoga.est_duration_min} min` : "strength & balance"}</span>
           </button>
         )}
         {recovery && (
-          <button type="button" className="btn quick-btn" data-testid="quick-recovery" onClick={() => launch(recovery)}>
-            <span className="quick-name">Recovery</span>
+          <button type="button" className={cls("recovery")} data-testid="quick-recovery" onClick={() => launch(recovery)}>
+            <span className="quick-name">Recovery</span>{tag("recovery")}
             <span className="quick-sub">{recovery.est_duration_min ? `${recovery.est_duration_min} min` : "flow"}</span>
           </button>
         )}

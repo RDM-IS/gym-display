@@ -370,6 +370,27 @@ export async function fetchStrengthNext(): Promise<FetchStrengthNextResult> {
   }
 }
 
+/** RECOMMEND (artemis knowledge/recommend.py): which Start button to
+ * highlight. `available: false` = highlight nothing — never a guess. */
+export interface Recommendation {
+  available: boolean;
+  primary?: "row" | "row_circuit" | "ride" | "run" | "strength" | "yoga" | "recovery";
+  label?: string;
+  strength?: string | null;
+  reason?: string;
+  more?: string[];
+}
+
+export async function fetchRecommend(): Promise<Recommendation> {
+  try {
+    const res = await apiFetch("/api/health/recommend");
+    if (!res.ok) return { available: false, reason: `HTTP ${res.status}` };
+    return (await res.json()) as Recommendation;
+  } catch (err) {
+    return { available: false, reason: err instanceof Error ? err.message : "unavailable" };
+  }
+}
+
 export type PostMakeupResult =
   | { status: "ok"; plan_id: number }
   | { status: "error"; message: string };

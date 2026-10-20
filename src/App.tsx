@@ -372,7 +372,8 @@ export default function App() {
     return (
       <>
         {chrome}
-        <StatusScreen key={`status-${statusVisit}`} onNavigate={onStatusNavigate} />
+        <StatusScreen key={`status-${statusVisit}`} onNavigate={onStatusNavigate}
+          onOpenSessions={() => { autoRedirectedRef.current = true; navigate("library"); }} />
       </>
     );
   }
