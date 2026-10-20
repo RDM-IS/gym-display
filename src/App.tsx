@@ -8,7 +8,7 @@ import StatusScreen from "./screens/StatusScreen";
 import FlowScreen from "./screens/FlowScreen";
 import LibraryScreen from "./screens/LibraryScreen";
 import RowCircuitScreen from "./screens/RowCircuitScreen";
-import { isPlannedRowLadder } from "./lib/row-circuit";
+import { plannedRowKind } from "./lib/row-circuit";
 import PrepScreen from "./screens/PrepScreen";
 import { endAdhoc, startAdhoc } from "./lib/adhoc";
 import PeekScreen, { type PeekMode } from "./screens/PeekScreen";
@@ -520,13 +520,15 @@ export default function App() {
   // ROW-LADDER: a planned rower cardio day runs as the ladder (replacing
   // ROW-BUILD #269), logged against this plan row. Gate-passed Zone 4 days
   // keep the interval screen.
-  if (isPlannedRowLadder(result.plan)) {
+  // ROW-SCHEDULE: the row says ladder or circuit.
+  const rowKind = plannedRowKind(result.plan);
+  if (rowKind) {
     return (
       <>
         {chrome}
         <RowCircuitScreen
-          key={`ladder-${result.plan.plan_id}`}
-          kind="ladder" planId={result.plan.plan_id} onRunningChange={setFlowRunning}
+          key={`${rowKind}-${result.plan.plan_id}`}
+          kind={rowKind} planId={result.plan.plan_id} onRunningChange={setFlowRunning}
         />
       </>
     );

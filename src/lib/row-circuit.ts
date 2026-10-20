@@ -5,11 +5,19 @@ import type { LogExerciseIn, Plan } from "./types";
  * Zone 4 intervals. Those keep the interval screen -- the gate's call, same
  * rule #269 had. Skipped days never qualify. */
 export function isPlannedRowLadder(plan: Plan | null | undefined): boolean {
-  if (!plan || plan.is_skipped) return false;
+  return plannedRowKind(plan) === "ladder";
+}
+
+/** ROW-SCHEDULE: which row screen a planned day opens, or null for none.
+ * `blocks.row_kind` decides when the row carries it (every MSP morning from
+ * 2026-10-20); an older rower cardio day without it runs as the ladder. */
+export function plannedRowKind(plan: Plan | null | undefined): RcKind | null {
+  if (!plan || plan.is_skipped) return null;
   const b = plan.blocks;
-  if (b.type !== "steady" && b.type !== "intervals") return false;
-  if (b.cardio?.modality !== "row") return false;
-  return b.type === "steady" || b.ran_as !== "intervals";
+  if (b.type !== "steady" && b.type !== "intervals") return null;
+  if (b.cardio?.modality !== "row") return null;
+  if (b.row_kind === "ladder" || b.row_kind === "circuit") return b.row_kind;
+  return b.type === "steady" || b.ran_as !== "intervals" ? "ladder" : null;
 }
 
 // ---------------------------------------------------------------------------

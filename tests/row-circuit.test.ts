@@ -3,6 +3,7 @@ import {
   buildTimeline,
   initialState,
   isPlannedRowLadder,
+  plannedRowKind,
   jumpToFinal,
   nextUp,
   ownerOf,
@@ -320,5 +321,25 @@ describe("planned rower day", () => {
     expect(isPlannedRowLadder(plan({ type: "steady", duration_min: 40, cardio: { modality: "row" } },
                                    { is_skipped: true }))).toBe(false);
     expect(isPlannedRowLadder(plan({ type: "circuit", rounds: 1, exercises: [] }))).toBe(false);
+  });
+});
+
+describe("planned row kind (ROW-SCHEDULE)", () => {
+  const plan = (blocks: Record<string, unknown>) =>
+    ({ plan_id: 1, plan_date: "2031-03-10", phase: 1, week_num: 1, session_type: "cardio_z2",
+       target_rpe: 5, est_duration_min: 40, is_skipped: false, blocks }) as never;
+
+  it("the row's own row_kind decides", () => {
+    expect(plannedRowKind(plan({ type: "steady", duration_min: 40, cardio: { modality: "row" },
+                                 row_kind: "circuit" }))).toBe("circuit");
+    expect(plannedRowKind(plan({ type: "steady", duration_min: 40, cardio: { modality: "row" },
+                                 row_kind: "ladder" }))).toBe("ladder");
+  });
+  it("an older rower day without one is the ladder", () => {
+    expect(plannedRowKind(plan({ type: "steady", duration_min: 40, cardio: { modality: "row" } }))).toBe("ladder");
+  });
+  it("a row_kind on a bike day opens nothing", () => {
+    expect(plannedRowKind(plan({ type: "steady", duration_min: 40, cardio: { modality: "bike" },
+                                 row_kind: "circuit" }))).toBeNull();
   });
 });

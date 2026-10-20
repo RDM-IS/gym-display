@@ -205,6 +205,9 @@ interface CardioCommon {
    * today" is the first thing he will ask. */
   ran_as?: "intervals" | "z2_variant" | null;
   z2_variant_reason?: string | null;
+  /** ROW-SCHEDULE (artemis, 2026-10-19): the planned MSP-morning row says which
+   * screen it is. Absent on a rower day planned before the schedule = ladder. */
+  row_kind?: "ladder" | "circuit" | null;
   intensity?: string | null;
 }
 
