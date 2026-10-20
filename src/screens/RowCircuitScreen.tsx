@@ -7,18 +7,23 @@ import { acquireWakeLock, releaseWakeLock } from "../lib/wake-lock";
 import {
   buildTimeline,
   initialState,
+  jumpToFinal,
   nextUp,
+  ownerOf,
   plannedSec,
   prefillReps,
   remainingSec,
   roundLogs,
   roundMeters,
+  rowedRounds,
   saveRecord,
   skip,
   summaryLine,
   summaryLog,
   tick,
   type Lever,
+  type LogOwner,
+  type RcKind,
   type RcEvent,
   type RcItem,
   type RcPrescription,
@@ -35,9 +40,18 @@ import {
 // record card per round, prefilled, saved with one tap when nothing changed.
 // Each round is logged as soon as its card is saved, so stopping early still
 // keeps every finished round.
+//
+// ROW-LADDER (kind "ladder"): the same start screen and progression, rows and
+// rest minutes only, and ONE card at the end — a card every round would stop
+// the rowing. "End early" goes straight to that card, so rounds already rowed
+// are recorded rather than lost. Launched from Sessions, or as the day's
+// planned rower cardio (then `planId` is set and every log attaches to it).
 // ---------------------------------------------------------------------------
 
 interface Props {
+  kind?: RcKind;
+  /** The day's planned row this session IS, when launched from Today. */
+  planId?: number | null;
   onRunningChange?: (running: boolean) => void;
   onExit?: () => void;
 }
@@ -56,7 +70,9 @@ function clock(sec: number): string {
   return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
 }
 
-export default function RowCircuitScreen({ onRunningChange, onExit }: Props) {
+const TITLES: Record<RcKind, string> = { circuit: "Row circuit", ladder: "Row ladder" };
+
+export default function RowCircuitScreen({ kind = "circuit", planId = null, onRunningChange, onExit }: Props) {
   const [rounds, setRounds] = useState<number | null>(null);
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [lever, setLever] = useState<Lever | null>(null);
@@ -66,7 +82,7 @@ export default function RowCircuitScreen({ onRunningChange, onExit }: Props) {
   useEffect(() => {
     let live = true;
     setLoad({ state: "loading" });
-    void fetchRowCircuit(rounds ?? 4).then((r) => {
+    void fetchRowCircuit(rounds, kind).then((r) => {
       if (!live) return;
       if (r.status === "error") return setLoad({ state: "error", message: r.message });
       if (!r.data.available) return setLoad({ state: "unavailable", reason: r.data.reason });
@@ -75,18 +91,18 @@ export default function RowCircuitScreen({ onRunningChange, onExit }: Props) {
       setLever(r.data.default);
     });
     return () => { live = false; };
-  }, [rounds]);
+  }, [rounds, kind]);
 
   useEffect(() => { onRunningChange?.(phase === "running"); }, [phase, onRunningChange]);
   useEffect(() => () => onRunningChange?.(false), [onRunningChange]);
 
   if (load.state === "loading" && phase === "ready") {
-    return <div className="screen screen--center"><div className="h2 dim">Loading the row circuit…</div></div>;
+    return <div className="screen screen--center"><div className="h2 dim">Loading the {TITLES[kind].toLowerCase()}…</div></div>;
   }
   if (load.state === "error" || load.state === "unavailable") {
     return (
       <div className="screen screen--center" data-testid="rc-unavailable">
-        <div className="h1">Row circuit</div>
+        <div className="h1">{TITLES[kind]}</div>
         <div className="desc">
           {load.state === "error" ? `Couldn't load today's rounds: ${load.message}` : load.reason}
         </div>
@@ -114,7 +130,7 @@ export default function RowCircuitScreen({ onRunningChange, onExit }: Props) {
     );
   }
   return (
-    <RunScreen rx={rx} lever={lever} restMode={restMode}
+    <RunScreen rx={rx} lever={lever} restMode={restMode} owner={ownerOf(rx, planId)}
       onDone={() => setPhase("done")} done={phase === "done"} onExit={onExit} />
   );
 }
@@ -130,7 +146,7 @@ function ReadyScreen({ rx, lever, restMode, onRounds, onLever, onRestMode, onSta
   const chosen = rx.options[lever];
   return (
     <div className="screen screen--scroll rc-ready" data-testid="rc-ready">
-      <div className="h1">Row circuit</div>
+      <div className="h1">{rx.display_name}</div>
       <div className="h2 dim">
         ~{Math.round(plannedSec(items) / 60)} min · {rx.rounds} rounds · {Math.round(chosen.row_sec / 60)} min rowing
       </div>
@@ -175,13 +191,17 @@ function ReadyScreen({ rx, lever, restMode, onRounds, onLever, onRestMode, onSta
           <li key={r.round}>
             <span className="mono">R{r.round}</span>
             <span>Row {clock(r.work_sec)} @ {r.spm}</span>
-            <span className="dim">{(rx.stations[i] ?? []).map((s) => s.name).join(" · ")}</span>
+            {(rx.stations[i] ?? []).length > 0 && (
+              <span className="dim">{(rx.stations[i] ?? []).map((s) => s.name).join(" · ")}</span>
+            )}
           </li>
         ))}
       </ol>
       <p className="desc">
         Reset the rower's monitor and start a Rowing workout on your watch, then Start.
-        One record card per round, prefilled — tap Save if nothing changed.
+        {rx.kind === "ladder"
+          ? " One record card at the end, prefilled — tap Save if you held every rate."
+          : " One record card per round, prefilled — tap Save if nothing changed."}
       </p>
       <button type="button" className="btn btn--primary btn--block rc-start" data-testid="rc-start"
         onClick={onStart}>Start</button>
@@ -193,8 +213,8 @@ function ReadyScreen({ rx, lever, restMode, onRounds, onLever, onRestMode, onSta
 
 type LogStatus = "idle" | "ok" | "queued" | "error";
 
-function RunScreen({ rx, lever, restMode, onDone, done, onExit }: {
-  rx: RcPrescription; lever: Lever; restMode: RestMode;
+function RunScreen({ rx, lever, restMode, owner, onDone, done, onExit }: {
+  rx: RcPrescription; lever: Lever; restMode: RestMode; owner: LogOwner;
   onDone: () => void; done: boolean; onExit?: () => void;
 }) {
   const items = useMemo(() => buildTimeline(rx, lever, restMode), [rx, lever, restMode]);
@@ -207,7 +227,11 @@ function RunScreen({ rx, lever, restMode, onDone, done, onExit }: {
   const [entries, setEntries] = useState<Record<number, RecordEntry>>({});
   const entriesRef = useRef(entries);
   entriesRef.current = entries;
+  const recordedRef = useRef(0);
   const [logStatus, setLogStatus] = useState<LogStatus>("idle");
+  /** Ladder: the monitor's total from the final card, for the summary row. */
+  const totalMetersRef = useRef<number | null>(null);
+  const [ladderSaved, setLadderSaved] = useState<number | null>(null);
   const audio = useSyncExternalStore(subscribeAudio, audioStatus, audioStatus);
 
   const commit = useCallback((s: RcState) => { stateRef.current = s; setState(s); }, []);
@@ -217,23 +241,23 @@ function RunScreen({ rx, lever, restMode, onDone, done, onExit }: {
     if (stateRef.current.elapsedMs < 1000) return;
     summaryLoggedRef.current = true;
     const r = await submitLog(
-      summaryLog(stateRef.current, target.length, lever, Object.keys(entriesRef.current).length),
+      summaryLog(stateRef.current, target.length, lever, recordedRef.current, owner, totalMetersRef.current),
       { keepalive });
     if (!keepalive) setLogStatus((cur) => (cur === "error" ? cur : r.status === "error" ? "error" : r.status));
-  }, [target.length, lever]);
+  }, [target.length, lever, owner]);
 
   const handle = useCallback((events: RcEvent[]) => {
     for (const e of events) {
       if (e.type === "start") speak(items[e.index].say);
       else if (e.type === "warn") speak("Five seconds.");
       else if (e.type === "done") {
-        speak("Circuit complete.");
+        speak(`${rx.display_name} complete.`);
         void releaseWakeLock();
         void logSummary(false);
         onDone();
       }
     }
-  }, [items, logSummary, onDone]);
+  }, [items, logSummary, onDone, rx.display_name]);
 
   // Audio was unlocked by the Start tap (see RowCircuitScreen); this only
   // stamps the real start time and says the first line.
@@ -295,8 +319,32 @@ function RunScreen({ rx, lever, restMode, onDone, done, onExit }: {
     const { state: next, events } = saveRecord(items, s, Date.now());
     commit(next);
     setEntries((cur) => ({ ...cur, [round]: entry }));
+    recordedRef.current += 1;
     handle(events);
-    for (const body of roundLogs(items, s, round, entry, meters, tgt)) {
+    for (const body of roundLogs(items, s, round, entry, meters, tgt, owner)) {
+      const r = await submitLog(body);
+      if (r.status === "error") setLogStatus("error");
+      else setLogStatus((cur) => (cur === "error" ? cur : r.status));
+    }
+  }
+
+  /** Ladder: the one card at the end — every rowed round's rate, and the
+   * monitor's total. Logs first, then ends the card, so the summary that the
+   * done event writes already knows the total and the round count. */
+  async function onSaveFinal(spms: Record<number, number>, metersTotal: number | null) {
+    const s = stateRef.current;
+    if (items[s.index].kind !== "record" || items[s.index].round != null) return;
+    const rounds = rowedRounds(items, s);
+    totalMetersRef.current = metersTotal;
+    recordedRef.current = rounds.length;
+    setLadderSaved(rounds.length);
+    const bodies = rounds.flatMap((r) => roundLogs(
+      items, s, r, { spm: spms[r] ?? target[r - 1].spm, metersTotal: null, reps: {} }, null,
+      target[r - 1], owner));
+    const { state: next, events } = saveRecord(items, s, Date.now());
+    commit(next);
+    handle(events);
+    for (const body of bodies) {
       const r = await submitLog(body);
       if (r.status === "error") setLogStatus("error");
       else setLogStatus((cur) => (cur === "error" ? cur : r.status));
@@ -309,12 +357,14 @@ function RunScreen({ rx, lever, restMode, onDone, done, onExit }: {
     for (const [, e] of recs) {
       for (const [k, v] of Object.entries(e.reps)) if (v != null) totals[k] = (totals[k] ?? 0) + v;
     }
-    const lastTotal = recs.map(([, e]) => e.metersTotal).filter((m): m is number => m != null).pop();
+    const lastTotal = totalMetersRef.current
+      ?? recs.map(([, e]) => e.metersTotal).filter((m): m is number => m != null).pop();
+    const recorded = ladderSaved ?? recs.length;
     return (
       <div className="screen screen--center rc-done" data-testid="rc-done">
-        <div className="h1">Row circuit complete</div>
+        <div className="h1">{rx.display_name} complete</div>
         <div className="h2 dim">
-          {Math.floor(state.elapsedMs / 60000)} min · {recs.length} of {target.length} rounds recorded
+          {Math.floor(state.elapsedMs / 60000)} min · {recorded} of {target.length} rounds recorded
           {lastTotal != null ? ` · ${lastTotal} m` : ""}
         </div>
         <ul className="list">
@@ -335,7 +385,8 @@ function RunScreen({ rx, lever, restMode, onDone, done, onExit }: {
   const item: RcItem = items[state.index];
   const left = remainingSec(items, state);
   const next = nextUp(items, state.index);
-  const roundLabel = item.round != null ? `Round ${item.round}/${target.length}` : "Cool-down";
+  const roundLabel = item.round != null ? `Round ${item.round}/${target.length}`
+    : item.kind === "record" ? "Record" : "Cool-down";
 
   return (
     <div className={`screen rc-run rc-run--${item.kind}${state.paused ? " rc-run--paused" : ""}`}
@@ -359,7 +410,13 @@ function RunScreen({ rx, lever, restMode, onDone, done, onExit }: {
         )}
       </div>
 
-      {item.kind === "record" && item.round != null ? (
+      {item.kind === "record" && item.round == null ? (
+        <FinalCard
+          rx={rx} target={target} rounds={rowedRounds(items, state)}
+          elapsedSec={Math.floor(state.stageMs / 1000)}
+          onSave={(spms, total) => void onSaveFinal(spms, total)}
+        />
+      ) : item.kind === "record" && item.round != null ? (
         <RecordCard
           key={item.round}
           rx={rx} round={item.round} target={target[item.round - 1]}
@@ -382,6 +439,13 @@ function RunScreen({ rx, lever, restMode, onDone, done, onExit }: {
               const { state: s2, events } = skip(items, stateRef.current, Date.now());
               commit(s2); handle(events);
             }}>Skip ›</button>
+          {rx.kind === "ladder" && (
+            <button type="button" className="btn rc-skip rc-end" data-no-tap data-testid="rc-end-early"
+              onClick={() => {
+                const { state: s2, events } = jumpToFinal(items, stateRef.current, Date.now());
+                commit(s2); handle(events);
+              }}>End early — record</button>
+          )}
         </div>
       )}
 
@@ -441,6 +505,43 @@ function RecordCard({ rx, round, target, stations, entries, elapsedSec, onSave }
       <button type="button" className="btn btn--primary btn--block rc-save" data-testid="rc-save"
         onClick={() => onSave({ spm, metersTotal, reps })}>
         Save · next round
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+function FinalCard({ rx, target, rounds, elapsedSec, onSave }: {
+  rx: RcPrescription; target: { round: number; spm: number; work_sec: number }[];
+  rounds: number[]; elapsedSec: number;
+  onSave: (spms: Record<number, number>, metersTotal: number | null) => void;
+}) {
+  const [spms, setSpms] = useState<Record<number, number>>(() => {
+    const o: Record<number, number> = {};
+    for (const r of rounds) o[r] = target[r - 1].spm;
+    return o;
+  });
+  const [metersTotal, setMetersTotal] = useState<number | null>(null);
+  return (
+    <div className="rc-record" data-testid="rc-final" data-no-tap>
+      <div className="rc-record-head">
+        <span className="h2">Record the {rx.display_name.toLowerCase()}</span>
+        <span className="mono dim">{elapsedSec}s</span>
+      </div>
+      {rounds.length === 0 && <p className="desc">No round was finished, so there is nothing to record.</p>}
+      <div className="rc-record-grid">
+        {rounds.map((r) => (
+          <Stepper key={r} label={`Round ${r}`} unit="spm" value={spms[r]} step={1} min={10} max={60}
+            onChange={(v) => { if (v != null) setSpms((cur) => ({ ...cur, [r]: v })); }}
+            sub={spms[r] !== target[r - 1].spm ? `target ${target[r - 1].spm}` : undefined} />
+        ))}
+        <Stepper label="Monitor total" unit="m" value={metersTotal} step={10} min={0} max={99999}
+          blankStart={0} onChange={setMetersTotal} sub="optional — tap to type" />
+      </div>
+      <button type="button" className="btn btn--primary btn--block rc-save" data-testid="rc-save-final"
+        onClick={() => onSave(spms, metersTotal)}>
+        Save
       </button>
     </div>
   );

@@ -8,7 +8,8 @@ import { pathToRoute, routeToPath } from "../src/lib/routing";
 const ROUNDS = [{ round: 1, work_sec: 20, spm: 11 }];
 const opt = (lever: string, rs = ROUNDS) => ({ lever, ok: true, reason: null, rounds: rs, row_sec: 20, label: lever });
 const RX = {
-  available: true, session_type: "row_circuit", display_name: "Row circuit",
+  available: true, kind: "circuit", session_type: "row_circuit", display_name: "Row circuit",
+  row_exercise: "Row",
   rounds: 1, min_rounds: 1, max_rounds: 8, base: ROUNDS, has_history: true, last_rounds: 1,
   options: {
     rate: opt("rate", [{ round: 1, work_sec: 20, spm: 12 }]),
@@ -93,5 +94,42 @@ describe("running", () => {
     expect(row.sets[0].started_at).toBeTruthy();
     const push = logs.find((b) => b.exercise === "Push-up")!;
     expect(push.sets[0].reps_done).toBe(4);        // prefilled from last time
+  });
+});
+
+describe("ladder", () => {
+  const LADDER = { ...RX, kind: "ladder", session_type: "row_ladder", display_name: "Row ladder",
+                   row_exercise: "Row ladder", stations: [[]], last_reps: {} };
+
+  it("asks for the ladder kind and shows its own title", async () => {
+    const calls = stub(LADDER);
+    render(<RowCircuitScreen kind="ladder" />);
+    await waitFor(() => expect(screen.getByTestId("rc-ready")).toBeDefined());
+    expect(calls[0].url).toContain("kind=ladder");
+    expect(calls[0].url).not.toContain("rounds=");
+    expect(screen.getByText("Row ladder")).toBeDefined();
+  });
+
+  it("rows to one final card and logs to the planned row", async () => {
+    const calls = stub(LADDER);
+    render(<RowCircuitScreen kind="ladder" planId={9001} />);
+    await waitFor(() => expect(screen.getByTestId("rc-start")).toBeDefined());
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date", "performance"] });
+    fireEvent.click(screen.getByTestId("rc-start"));
+    // get set 10 + row 20 + rest 3 + cool-down 2 = 35 s
+    await act(async () => { vi.advanceTimersByTime(40_000); });
+    expect(screen.getByTestId("rc-final")).toBeDefined();
+    vi.useRealTimers();
+    fireEvent.click(screen.getByTestId("rc-save-final"));
+    await waitFor(() => expect(screen.getByTestId("rc-done")).toBeDefined());
+    await waitFor(() => {
+      const logs = calls.filter((c) => c.url.includes("/log")).map((c) => c.body as Record<string, any>);
+      expect(logs.some((b) => b.log_type === "session_summary")).toBe(true);
+      expect(logs.some((b) => b.exercise === "Row ladder")).toBe(true);
+    });
+    const logs = calls.filter((c) => c.url.includes("/log")).map((c) => c.body as Record<string, any>);
+    const row = logs.find((b) => b.exercise === "Row ladder")!;
+    expect(row.plan_id).toBe(9001);
+    expect(row.sets[0].stroke_rate).toBe(12);
   });
 });

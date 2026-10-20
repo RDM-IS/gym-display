@@ -336,9 +336,14 @@ export type FetchRowCircuitResult =
 
 /** ROW-CIRCUIT: today's prescription for `rounds` rounds, computed by the
  * Lambda from the last logged session. */
-export async function fetchRowCircuit(rounds: number): Promise<FetchRowCircuitResult> {
+export async function fetchRowCircuit(
+  rounds: number | null, kind: "circuit" | "ladder" = "circuit",
+): Promise<FetchRowCircuitResult> {
   try {
-    const res = await apiFetch(`/api/health/row-circuit?rounds=${encodeURIComponent(String(rounds))}`);
+    // No `rounds` = the kind's own default (4 for the circuit, 6 for the ladder).
+    const q = new URLSearchParams({ kind });
+    if (rounds != null) q.set("rounds", String(rounds));
+    const res = await apiFetch(`/api/health/row-circuit?${q.toString()}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return { status: "ok", data: (await res.json()) as RcPrescriptionResponse };
   } catch (err) {

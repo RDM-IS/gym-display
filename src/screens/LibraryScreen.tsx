@@ -24,6 +24,8 @@ interface Props {
   dayOff?: boolean;
   /** ROW-CIRCUIT: open the rower circuit. Absent = not offered. */
   onOpenRowCircuit?: () => void;
+  /** ROW-LADDER: open the rower-only ladder. */
+  onOpenRowLadder?: () => void;
 }
 
 /** On a pain day off, only these extras. */
@@ -54,7 +56,7 @@ export function planFromLibrary(s: LibrarySession, today: string): Plan {
   };
 }
 
-export default function LibraryScreen({ onLaunch, onMadeUp, dayOff = false, onOpenRowCircuit }: Props) {
+export default function LibraryScreen({ onLaunch, onMadeUp, dayOff = false, onOpenRowCircuit, onOpenRowLadder }: Props) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [makeup, setMakeup] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
   const [locKey, setLocKey] = useState<string | null>(null);   // null = today's
@@ -145,6 +147,13 @@ export default function LibraryScreen({ onLaunch, onMadeUp, dayOff = false, onOp
             <span className="library-name">Row circuit</span>
             <span className="library-min mono">rower + floor</span>
           </button>
+          {onOpenRowLadder && (
+            <button type="button" className="btn btn--block library-item" data-testid="library-row-ladder"
+              onClick={onOpenRowLadder}>
+              <span className="library-name">Row ladder</span>
+              <span className="library-min mono">rower only</span>
+            </button>
+          )}
         </div>
       )}
       <h2 className="section-title">Extras</h2>

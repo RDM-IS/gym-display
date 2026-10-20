@@ -1,4 +1,16 @@
-import type { LogExerciseIn } from "./types";
+import type { LogExerciseIn, Plan } from "./types";
+
+/** ROW-LADDER replaces ROW-BUILD (#269) on the planned rower cardio days: a
+ * cardio row whose machine is the rower and which is NOT running gate-passed
+ * Zone 4 intervals. Those keep the interval screen -- the gate's call, same
+ * rule #269 had. Skipped days never qualify. */
+export function isPlannedRowLadder(plan: Plan | null | undefined): boolean {
+  if (!plan || plan.is_skipped) return false;
+  const b = plan.blocks;
+  if (b.type !== "steady" && b.type !== "intervals") return false;
+  if (b.cardio?.modality !== "row") return false;
+  return b.type === "steady" || b.ran_as !== "intervals";
+}
 
 // ---------------------------------------------------------------------------
 // ROW-CIRCUIT (Ryan, 2026-10-19) — rower intervals with floor work between.
@@ -45,10 +57,18 @@ export interface RcStation {
   cue: string;
 }
 
+/** ROW-LADDER: the rower-only climb — same progression, no floor work, one
+ * record card at the end. Each kind has its own history (artemis
+ * knowledge/row_circuit.py KINDS), keyed by `row_exercise`. */
+export type RcKind = "circuit" | "ladder";
+
 export interface RcPrescription {
   available: true;
-  session_type: "row_circuit";
+  kind: RcKind;
+  session_type: "row_circuit" | "row_ladder";
   display_name: string;
+  /** The exercise name its Row blocks are logged under — the history key. */
+  row_exercise: string;
   rounds: number;
   min_rounds: number;
   max_rounds: number;
@@ -90,8 +110,6 @@ export interface RcItem {
 
 export const GET_SET_SEC = 10;
 export const WARN_SEC = 5;
-export const ROW_EXERCISE = "Row";
-export const SESSION_TYPE = "row_circuit";
 
 function clock(sec: number): string {
   return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
@@ -124,7 +142,10 @@ export function buildTimeline(rx: RcPrescription, lever: Lever, restMode: RestMo
     push({ kind: "rest", round: n, name: easy ? `Easy at ${rx.rest.rate}` : "Stop — rest",
            sec: rx.rest.sec, spm: easy ? rx.rest.rate : null,
            say: easy ? `Easy. ${rx.rest.rate}.` : "Stop. Rest." });
-    const stations = rx.stations[i] ?? rx.stations[rx.stations.length - 1];
+    // The ladder has no floor work and no per-round card: rows and rest
+    // minutes only, then one card at the end.
+    const stations = rx.stations[i] ?? [];
+    if (stations.length === 0) return;
     stations.forEach((s, k) => {
       push({ kind: "move", round: n, sec: k === 0 ? t.off_rower_sec : t.between_moves_sec,
              name: k === 0 ? `Off the rower — ${s.name}` : `Next: ${s.name}`,
@@ -135,10 +156,18 @@ export function buildTimeline(rx: RcPrescription, lever: Lever, restMode: RestMo
     push({ kind: "record", round: n, name: `Record round ${n}`, sec: null,
            say: `Record round ${n}.` });
   });
-  push({ kind: "move", round: null, name: "Back on the rower — cool-down", sec: t.back_on_rower_sec,
-         say: "Back on the rower for the cool-down." });
+  const floor = rx.stations.some((st) => st.length > 0);
+  if (floor) {
+    push({ kind: "move", round: null, name: "Back on the rower — cool-down", sec: t.back_on_rower_sec,
+           say: "Back on the rower for the cool-down." });
+  }
   push({ kind: "cooldown", round: null, name: `Cool-down at ${rx.rest.rate}`, sec: t.cooldown_sec,
          spm: rx.rest.rate, say: `Easy. ${rx.rest.rate}. ${minutesWords(t.cooldown_sec)}.` });
+  if (!floor) {
+    // round null = the FINAL card: every round's rate on one screen.
+    push({ kind: "record", round: null, name: "Record the session", sec: null,
+           say: "Done rowing. Record the session." });
+  }
   return items;
 }
 
@@ -242,6 +271,31 @@ export function saveRecord(items: RcItem[], state: RcState, nowEpoch: number): {
   return { state: s, events };
 }
 
+/** ROW-LADDER "End early": close the current item and go straight to the
+ * final record card, so the rounds already rowed are recorded rather than
+ * lost. A no-op when there is no final card (the circuit records per round). */
+export function jumpToFinal(items: RcItem[], state: RcState, nowEpoch: number): { state: RcState; events: RcEvent[] } {
+  const target = items.findIndex((i, k) => k > state.index && i.kind === "record" && i.round == null);
+  if (state.done || target < 0) return { state, events: [] };
+  const s: RcState = { ...state, windows: [...state.windows] };
+  s.windows[s.index] = { ...s.windows[s.index], end: nowEpoch };
+  s.index = target;
+  s.stageMs = 0;
+  s.warned = false;
+  s.windows[target] = { start: nowEpoch, end: null, activeMs: 0 };
+  return { state: s, events: [{ type: "start", index: target }] };
+}
+
+/** Rounds whose row actually started and ended — what a final card can record. */
+export function rowedRounds(items: RcItem[], state: RcState): number[] {
+  const out: number[] = [];
+  items.forEach((it, i) => {
+    const w = state.windows[i];
+    if (it.kind === "row" && it.round != null && w?.end != null) out.push(it.round);
+  });
+  return out;
+}
+
 /** Skip forward to the next item. Never past a record card: a round is not
  * over until it is recorded, and skipping it would lose the round's numbers. */
 export function skip(items: RcItem[], state: RcState, nowEpoch: number): { state: RcState; events: RcEvent[] } {
@@ -293,6 +347,25 @@ export function roundMeters(total: number | null, previousTotal: number | null):
   return total >= prev ? total - prev : null;
 }
 
+/** Who a log belongs to: the day's planned row when launched from Today
+ * (`planId`), else an ad-hoc session of this kind. Never both — the Lambda
+ * refuses that. */
+export interface LogOwner {
+  sessionType: string;
+  rowExercise: string;
+  planId: number | null;
+}
+
+export function ownerOf(rx: RcPrescription, planId: number | null = null): LogOwner {
+  return { sessionType: rx.session_type, rowExercise: rx.row_exercise, planId };
+}
+
+function ownerFields(o: LogOwner): Pick<LogExerciseIn, "plan_id" | "adhoc_session_type"> {
+  return o.planId != null
+    ? { plan_id: o.planId, adhoc_session_type: null }
+    : { plan_id: null, adhoc_session_type: o.sessionType };
+}
+
 export function roundLogs(
   items: RcItem[],
   state: RcState,
@@ -300,20 +373,18 @@ export function roundLogs(
   entry: RecordEntry,
   meters: number | null,
   target: RcRound,
+  owner: LogOwner,
 ): LogExerciseIn[] {
   const out: LogExerciseIn[] = [];
   items.forEach((it, i) => {
     if (it.round !== round) return;
     const w = state.windows[i];
-    if (!w) return;
-    const base = {
-      adhoc_session_type: SESSION_TYPE,
-      plan_id: null,
-    } as const;
+    if (!w || w.end == null) return;
+    const base = ownerFields(owner);
     if (it.kind === "row") {
       out.push({
         ...base,
-        exercise: ROW_EXERCISE,
+        exercise: owner.rowExercise,
         log_type: "cardio_block",
         modality: "row",
         device: "water",
@@ -324,7 +395,7 @@ export function roundLogs(
           stroke_rate: entry.spm,
           started_at: iso(w.start),
           ended_at: iso(w.end),
-          notes: `row_circuit target ${target.spm} spm ${clock(target.work_sec)}` +
+          notes: `${owner.sessionType} target ${target.spm} spm ${clock(target.work_sec)}` +
                  (meters != null ? " · meters include the rest minute" : ""),
         }],
       });
@@ -347,18 +418,21 @@ export function roundLogs(
   return out;
 }
 
-export function summaryLog(state: RcState, rounds: number, lever: Lever, recorded: number): LogExerciseIn {
+export function summaryLog(
+  state: RcState, rounds: number, lever: Lever, recorded: number, owner: LogOwner,
+  totalMeters: number | null = null,
+): LogExerciseIn {
   const min = Math.floor(state.elapsedMs / 60000);
   return {
-    adhoc_session_type: SESSION_TYPE,
-    plan_id: null,
+    ...ownerFields(owner),
     exercise: null,
     log_type: "session_summary",
     sets: [{
       duration_sec: Math.round(state.elapsedMs / 1000),
+      distance_m: totalMeters,
       started_at: iso(state.windows[0]?.start),
       ended_at: iso(state.windows[state.index]?.end ?? null),
-      notes: `row_circuit: ${state.done ? "complete" : "partial"} ${min} min · ` +
+      notes: `${owner.sessionType}: ${state.done ? "complete" : "partial"} ${min} min · ` +
              `${recorded} of ${rounds} rounds recorded · ${lever}`,
       is_skipped: false,
     }],

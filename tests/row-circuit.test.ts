@@ -2,11 +2,15 @@ import { describe, expect, it } from "vitest";
 import {
   buildTimeline,
   initialState,
+  isPlannedRowLadder,
+  jumpToFinal,
   nextUp,
+  ownerOf,
   prefillReps,
   remainingSec,
   roundLogs,
   roundMeters,
+  rowedRounds,
   saveRecord,
   skip,
   summaryLog,
@@ -32,8 +36,10 @@ function rx(): RcPrescription {
   });
   return {
     available: true,
+    kind: "circuit",
     session_type: "row_circuit",
     display_name: "Row circuit",
+    row_exercise: "Row",
     rounds: 2, min_rounds: 1, max_rounds: 8,
     base: rounds, has_history: true, last_rounds: 2,
     options: {
@@ -183,7 +189,7 @@ describe("logging", () => {
   it("one Row block and one row per station, all carrying their windows", () => {
     const { items, s } = roundOne();
     const logs = roundLogs(items, s, 1, { spm: 11, metersTotal: 90, reps: { "Push-up": 4, "Dead bug": 5 } }, 90,
-                           { round: 1, work_sec: 20, spm: 11 });
+                           { round: 1, work_sec: 20, spm: 11 }, ownerOf(rx()));
     expect(logs.map((l) => l.exercise)).toEqual(["Row", "Push-up", "Dead bug", "Side plank"]);
     for (const l of logs) {
       expect(l.adhoc_session_type).toBe("row_circuit");
@@ -203,7 +209,7 @@ describe("logging", () => {
   it("a hold records no reps; a reps move records its count", () => {
     const { items, s } = roundOne();
     const logs = roundLogs(items, s, 1, { spm: 11, metersTotal: null, reps: { "Push-up": 4 } }, null,
-                           { round: 1, work_sec: 20, spm: 11 });
+                           { round: 1, work_sec: 20, spm: 11 }, ownerOf(rx()));
     expect(logs.find((l) => l.exercise === "Side plank")!.sets[0].reps_done).toBeNull();
     expect(logs.find((l) => l.exercise === "Push-up")!.sets[0].reps_done).toBe(4);
     expect(logs[0].sets[0].distance_m).toBeNull();
@@ -225,9 +231,94 @@ describe("logging", () => {
 
   it("the summary says partial until the session is done", () => {
     const { s } = roundOne();
-    const body = summaryLog(s, 2, "rate", 0);
+    const body = summaryLog(s, 2, "rate", 0, ownerOf(rx()));
     expect(body.log_type).toBe("session_summary");
     expect(body.sets[0].notes).toMatch(/^row_circuit: partial/);
     expect(body.sets[0].notes).toMatch(/0 of 2 rounds/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ROW-LADDER
+// ---------------------------------------------------------------------------
+
+function ladderRx(): RcPrescription {
+  const r = rx();
+  return { ...r, kind: "ladder", session_type: "row_ladder", display_name: "Row ladder",
+           row_exercise: "Row ladder", stations: [[], []], last_reps: {} };
+}
+
+describe("ladder", () => {
+  it("is rows and rest minutes only, then a cool-down and ONE final card", () => {
+    const items = buildTimeline(ladderRx(), "repeat", "easy");
+    expect(items.map((i) => i.kind)).toEqual(
+      ["get_set", "row", "rest", "move", "row", "rest", "cooldown", "record"]);
+    expect(items.at(-1)?.round).toBeNull();
+  });
+
+  it("runs straight through to the final card and records every rowed round", () => {
+    const items = buildTimeline(ladderRx(), "repeat", "easy");
+    const s = runUntil(items, initialState(T0), (x) => items[x.index].kind === "record");
+    expect(items[s.index].round).toBeNull();
+    expect(rowedRounds(items, s)).toEqual([1, 2]);
+    expect(saveRecord(items, s, T0 + s.elapsedMs).state.done).toBe(true);
+  });
+
+  it("End early jumps to the final card with only the finished rounds", () => {
+    const items = buildTimeline(ladderRx(), "repeat", "easy");
+    let s = runUntil(items, initialState(T0), (x) => items[x.index].kind === "row" && x.index > 2);
+    s = jumpToFinal(items, s, T0 + s.elapsedMs).state;
+    expect(items[s.index].kind).toBe("record");
+    // Round 2's row was cut short: its window is closed, so it counts as rowed.
+    expect(rowedRounds(items, s)).toEqual([1, 2]);
+  });
+
+  it("End early does nothing on the circuit, which records per round", () => {
+    const items = buildTimeline(rx(), "repeat", "easy");
+    const s = initialState(T0);
+    expect(jumpToFinal(items, s, T0).state).toBe(s);
+  });
+
+  it("logs under its own exercise and session type", () => {
+    const items = buildTimeline(ladderRx(), "repeat", "easy");
+    const s = runUntil(items, initialState(T0), (x) => items[x.index].kind === "record");
+    const [row] = roundLogs(items, s, 1, { spm: 11, metersTotal: null, reps: {} }, null,
+                            { round: 1, work_sec: 20, spm: 11 }, ownerOf(ladderRx()));
+    expect(row.exercise).toBe("Row ladder");
+    expect(row.adhoc_session_type).toBe("row_ladder");
+  });
+
+  it("a planned day logs to its plan row and never as ad hoc", () => {
+    const items = buildTimeline(ladderRx(), "repeat", "easy");
+    const s = runUntil(items, initialState(T0), (x) => items[x.index].kind === "record");
+    const [row] = roundLogs(items, s, 1, { spm: 11, metersTotal: null, reps: {} }, null,
+                            { round: 1, work_sec: 20, spm: 11 }, ownerOf(ladderRx(), 9001));
+    expect(row.plan_id).toBe(9001);
+    expect(row.adhoc_session_type).toBeNull();
+    const sum = summaryLog(s, 2, "time", 2, ownerOf(ladderRx(), 9001), 4321);
+    expect(sum.plan_id).toBe(9001);
+    expect(sum.sets[0].distance_m).toBe(4321);
+  });
+});
+
+describe("planned rower day", () => {
+  const plan = (blocks: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
+    ({ plan_id: 1, plan_date: "2031-03-10", phase: 1, week_num: 1, session_type: "cardio_z2",
+       target_rpe: 5, est_duration_min: 40, is_skipped: false, blocks, ...extra }) as never;
+
+  it("a steady row runs as the ladder", () => {
+    expect(isPlannedRowLadder(plan({ type: "steady", duration_min: 40, cardio: { modality: "row" } }))).toBe(true);
+  });
+  it("a Zone-2 variant interval row runs as the ladder", () => {
+    expect(isPlannedRowLadder(plan({ type: "intervals", ran_as: "z2_variant", cardio: { modality: "row" } }))).toBe(true);
+  });
+  it("gate-passed Zone 4 intervals keep the interval screen", () => {
+    expect(isPlannedRowLadder(plan({ type: "intervals", ran_as: "intervals", cardio: { modality: "row" } }))).toBe(false);
+  });
+  it("the bike, a skipped day and a lift do not", () => {
+    expect(isPlannedRowLadder(plan({ type: "steady", duration_min: 40, cardio: { modality: "bike" } }))).toBe(false);
+    expect(isPlannedRowLadder(plan({ type: "steady", duration_min: 40, cardio: { modality: "row" } },
+                                   { is_skipped: true }))).toBe(false);
+    expect(isPlannedRowLadder(plan({ type: "circuit", rounds: 1, exercises: [] }))).toBe(false);
   });
 });
