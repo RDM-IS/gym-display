@@ -208,7 +208,9 @@ export function lastShownFor(
 
 /** Should this rest advance itself now that its timer has run out?
  * Only a logging rest (holdAtEnd) whose own exercise has its set in for the
- * round being walked. An unlogged rest still waits, as it always did. */
+ * round being walked. An unlogged rest still waits, as it always did.
+ * `round` is the VISIT of the exercise (lib/resume.ts) — the round, in a plain
+ * circuit. */
 export function restAutoContinues(
   step: Step | null | undefined,
   round: number,

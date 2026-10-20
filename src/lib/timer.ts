@@ -49,6 +49,8 @@ export type TimerAction =
   | { type: "PREV_STEP"; now_ms: number }
   | { type: "NEXT_STEP"; now_ms: number }
   | { type: "RESTART_WORKOUT"; now_ms: number }
+  /** GD-RESUME: put the cursor on a resumed workout's first unlogged set. */
+  | { type: "JUMP"; cursor: Cursor; now_ms: number }
   /** The current exercise's machine is busy: swap it with the next one. */
   | { type: "DEFER_CURRENT"; now_ms: number }
   /** From a rest: the upcoming exercise's machine is busy. */
@@ -239,6 +241,17 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
         workout_started_at_ms: action.now_ms,
         step_started_at_ms: action.now_ms,
         paused_at_ms: null,
+      };
+    }
+    case "JUMP": {
+      if (state.status === "idle" || state.status === "done") return state;
+      if (!state.planSteps[action.cursor.stepIndex]) return state;
+      return {
+        ...state,
+        ...restored(state),
+        cursor: action.cursor,
+        step_started_at_ms: action.now_ms,
+        paused_at_ms: state.status === "paused" ? action.now_ms : null,
       };
     }
     case "END_WORKOUT":
