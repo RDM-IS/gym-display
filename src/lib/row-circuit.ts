@@ -95,6 +95,9 @@ export interface RcPrescription {
     cooldown_sec: number;
   };
   stations: RcStation[][];
+  /** ROW-DNF: last session's rounds that weren't finished at their target.
+   * Non-empty = both levers are off and today repeats. */
+  unfinished?: RcRound[];
   /** {round: {move: reps}} from the last session, for prefilling. */
   last_reps: Record<string, Record<string, number>>;
 }
@@ -201,6 +204,11 @@ export interface RcWindow {
   end: number | null;
   /** ms actually run (paused time excluded). */
   activeMs: number;
+  /** ROW-DNF: activeMs at the first pause during this item — "how long he
+   * held it" when he stopped for a break. Null = never paused. */
+  breakAtMs?: number | null;
+  /** ROW-DNF: ended by Skip or End early before its time was up. */
+  cut?: boolean;
 }
 
 export interface RcState {
@@ -286,6 +294,7 @@ export function jumpToFinal(items: RcItem[], state: RcState, nowEpoch: number): 
   const target = items.findIndex((i, k) => k > state.index && i.kind === "record" && i.round == null);
   if (state.done || target < 0) return { state, events: [] };
   const s: RcState = { ...state, windows: [...state.windows] };
+  markCut(items, s);
   s.windows[s.index] = { ...s.windows[s.index], end: nowEpoch };
   s.index = target;
   s.stageMs = 0;
@@ -295,6 +304,37 @@ export function jumpToFinal(items: RcItem[], state: RcState, nowEpoch: number): 
 }
 
 /** Rounds whose row actually started and ended — what a final card can record. */
+/** ROW-DNF: pause or resume. Pausing during a row records how far in he was
+ * the first time, which is what "held 60-75 s" means on the card. */
+export function togglePause(items: RcItem[], state: RcState): RcState {
+  if (state.done) return state;
+  const s: RcState = { ...state, windows: [...state.windows], paused: !state.paused };
+  const w = s.windows[s.index];
+  if (s.paused && items[s.index].kind === "row" && w && w.breakAtMs == null) {
+    s.windows[s.index] = { ...w, breakAtMs: w.activeMs };
+  }
+  return s;
+}
+
+/** A row ended before its time by Skip or End early. */
+function markCut(items: RcItem[], s: RcState): void {
+  const it = items[s.index];
+  if (it.kind === "row" && it.sec != null && s.stageMs < it.sec * 1000) {
+    s.windows[s.index] = { ...s.windows[s.index], cut: true };
+  }
+}
+
+/** ROW-DNF prefill for a round's card: a row he paused in, or cut short, was
+ * probably not finished. He confirms or clears it — the app only suggests. */
+export function suggestDnf(items: RcItem[], state: RcState, round: number): { dnf: boolean; heldSec: number | null } {
+  const i = items.findIndex((it) => it.kind === "row" && it.round === round);
+  const w = i >= 0 ? state.windows[i] : undefined;
+  if (!w) return { dnf: false, heldSec: null };
+  const broke = w.breakAtMs != null;
+  if (!broke && !w.cut) return { dnf: false, heldSec: null };
+  return { dnf: true, heldSec: Math.round((broke ? w.breakAtMs! : w.activeMs) / 1000) };
+}
+
 export function rowedRounds(items: RcItem[], state: RcState): number[] {
   const out: number[] = [];
   items.forEach((it, i) => {
@@ -310,6 +350,7 @@ export function skip(items: RcItem[], state: RcState, nowEpoch: number): { state
   if (state.done || items[state.index].kind === "record") return { state, events: [] };
   const s: RcState = { ...state, windows: [...state.windows] };
   const events: RcEvent[] = [];
+  markCut(items, s);
   advance(items, s, nowEpoch, events);
   return { state: s, events };
 }
@@ -340,6 +381,10 @@ export interface RecordEntry {
   metersTotal: number | null;
   /** Reps per `reps` station, by name. */
   reps: Record<string, number | null>;
+  /** ROW-DNF: he did not finish the row at its target. Blocks advancing. */
+  dnf?: boolean;
+  /** How long he held the target before stopping, when he knows. */
+  heldSec?: number | null;
 }
 
 function iso(ms: number | null | undefined): string | null {
@@ -403,7 +448,11 @@ export function roundLogs(
           stroke_rate: entry.spm,
           started_at: iso(w.start),
           ended_at: iso(w.end),
+          target_spm: target.spm,
+          target_sec: target.work_sec,
+          dnf: !!entry.dnf,
           notes: `${owner.sessionType} target ${target.spm} spm ${clock(target.work_sec)}` +
+                 (entry.dnf ? ` · DNF${entry.heldSec != null ? `, held ${entry.heldSec} s` : ""}` : "") +
                  (meters != null ? " · meters include the rest minute" : ""),
         }],
       });

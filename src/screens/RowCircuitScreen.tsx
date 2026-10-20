@@ -19,9 +19,11 @@ import {
   rowedRounds,
   saveRecord,
   skip,
+  suggestDnf,
   summaryLine,
   summaryLog,
   tick,
+  togglePause,
   type Lever,
   type LogOwner,
   type RcKind,
@@ -349,7 +351,10 @@ function RunScreen({ rx, lever, restMode, owner, onDone, done, onExit }: {
   /** Ladder: the one card at the end — every rowed round's rate, and the
    * monitor's total. Logs first, then ends the card, so the summary that the
    * done event writes already knows the total and the round count. */
-  async function onSaveFinal(spms: Record<number, number>, metersTotal: number | null) {
+  async function onSaveFinal(
+    spms: Record<number, number>, metersTotal: number | null,
+    dnfs: Record<number, { dnf: boolean; heldSec: number | null }> = {},
+  ) {
     const s = stateRef.current;
     if (items[s.index].kind !== "record" || items[s.index].round != null) return;
     const rounds = rowedRounds(items, s);
@@ -357,7 +362,8 @@ function RunScreen({ rx, lever, restMode, owner, onDone, done, onExit }: {
     recordedRef.current = rounds.length;
     setLadderSaved(rounds.length);
     const bodies = rounds.flatMap((r) => roundLogs(
-      items, s, r, { spm: spms[r] ?? target[r - 1].spm, metersTotal: null, reps: {} }, null,
+      items, s, r, { spm: spms[r] ?? target[r - 1].spm, metersTotal: null, reps: {},
+                     dnf: dnfs[r]?.dnf ?? false, heldSec: dnfs[r]?.heldSec ?? null }, null,
       target[r - 1], owner));
     const { state: next, events } = saveRecord(items, s, Date.now());
     commit(next);
@@ -412,7 +418,7 @@ function RunScreen({ rx, lever, restMode, owner, onDone, done, onExit }: {
       onClick={(e) => {
         if (item.kind === "record") return;
         if ((e.target as HTMLElement).closest("[data-no-tap]")) return;
-        commit({ ...stateRef.current, paused: !stateRef.current.paused });
+        commit(togglePause(items, stateRef.current));
         lastRef.current = performance.now();
         if (!stateRef.current.paused) stopSpeech();
       }}>
@@ -431,14 +437,16 @@ function RunScreen({ rx, lever, restMode, owner, onDone, done, onExit }: {
       {item.kind === "record" && item.round == null ? (
         <FinalCard
           rx={rx} target={target} rounds={rowedRounds(items, state)}
+          suggested={Object.fromEntries(rowedRounds(items, state).map((r) => [r, suggestDnf(items, state, r)]))}
           elapsedSec={Math.floor(state.stageMs / 1000)}
-          onSave={(spms, total) => void onSaveFinal(spms, total)}
+          onSave={(spms, total, dnfs) => void onSaveFinal(spms, total, dnfs)}
         />
       ) : item.kind === "record" && item.round != null ? (
         <RecordCard
           key={item.round}
           rx={rx} round={item.round} target={target[item.round - 1]}
           stations={rx.stations[item.round - 1] ?? []}
+          suggested={suggestDnf(items, state, item.round)}
           entries={entries} elapsedSec={Math.floor(state.stageMs / 1000)}
           onSave={(e) => void onSave(e)}
         />
@@ -481,12 +489,15 @@ function RunScreen({ rx, lever, restMode, owner, onDone, done, onExit }: {
 
 // ---------------------------------------------------------------------------
 
-function RecordCard({ rx, round, target, stations, entries, elapsedSec, onSave }: {
+function RecordCard({ rx, round, target, stations, entries, elapsedSec, onSave, suggested }: {
   rx: RcPrescription; round: number; target: { spm: number; work_sec: number };
   stations: RcPrescription["stations"][number];
   entries: Record<number, RecordEntry>; elapsedSec: number;
   onSave: (e: RecordEntry) => void;
+  suggested: { dnf: boolean; heldSec: number | null };
 }) {
+  const [dnf, setDnf] = useState<boolean>(suggested.dnf);
+  const [heldSec, setHeldSec] = useState<number | null>(suggested.heldSec);
   const thisSession = useMemo(() => {
     const out: Record<number, Record<string, number | null>> = {};
     for (const [r, e] of Object.entries(entries)) out[Number(r)] = e.reps;
@@ -514,6 +525,8 @@ function RecordCard({ rx, round, target, stations, entries, elapsedSec, onSave }
         <Stepper label="Row" unit="spm" value={spm} step={1} min={10} max={60}
           onChange={(v) => { if (v != null) setSpm(v); }}
           sub={spm !== target.spm ? `target ${target.spm}` : undefined} />
+        <DnfToggle dnf={dnf} onChange={setDnf} heldSec={heldSec} onHeld={setHeldSec}
+          targetSec={target.work_sec} />
         <Stepper label="Monitor total" unit="m" value={metersTotal} step={10} min={0} max={99999}
           blankStart={prevTotal ?? 0} onChange={setMetersTotal}
           sub={below ? "below last round's total — not counted"
@@ -525,7 +538,7 @@ function RecordCard({ rx, round, target, stations, entries, elapsedSec, onSave }
         ))}
       </div>
       <button type="button" className="btn btn--primary btn--block rc-save" data-testid="rc-save"
-        onClick={() => onSave({ spm, metersTotal, reps })}>
+        onClick={() => onSave({ spm, metersTotal, reps, dnf, heldSec: dnf ? heldSec : null })}>
         Save · next round
       </button>
     </div>
@@ -534,11 +547,18 @@ function RecordCard({ rx, round, target, stations, entries, elapsedSec, onSave }
 
 // ---------------------------------------------------------------------------
 
-function FinalCard({ rx, target, rounds, elapsedSec, onSave }: {
+function FinalCard({ rx, target, rounds, elapsedSec, onSave, suggested }: {
   rx: RcPrescription; target: { round: number; spm: number; work_sec: number }[];
   rounds: number[]; elapsedSec: number;
-  onSave: (spms: Record<number, number>, metersTotal: number | null) => void;
+  onSave: (spms: Record<number, number>, metersTotal: number | null,
+           dnfs: Record<number, { dnf: boolean; heldSec: number | null }>) => void;
+  suggested: Record<number, { dnf: boolean; heldSec: number | null }>;
 }) {
+  const [dnfs, setDnfs] = useState<Record<number, { dnf: boolean; heldSec: number | null }>>(() => {
+    const o: Record<number, { dnf: boolean; heldSec: number | null }> = {};
+    for (const r of rounds) o[r] = suggested[r] ?? { dnf: false, heldSec: null };
+    return o;
+  });
   const [spms, setSpms] = useState<Record<number, number>>(() => {
     const o: Record<number, number> = {};
     for (const r of rounds) o[r] = target[r - 1].spm;
@@ -554,17 +574,49 @@ function FinalCard({ rx, target, rounds, elapsedSec, onSave }: {
       {rounds.length === 0 && <p className="desc">No round was finished, so there is nothing to record.</p>}
       <div className="rc-record-grid">
         {rounds.map((r) => (
-          <Stepper key={r} label={`Round ${r}`} unit="spm" value={spms[r]} step={1} min={10} max={60}
-            onChange={(v) => { if (v != null) setSpms((cur) => ({ ...cur, [r]: v })); }}
-            sub={spms[r] !== target[r - 1].spm ? `target ${target[r - 1].spm}` : undefined} />
+          <div key={r} className="rc-final-round">
+            <Stepper label={`Round ${r}`} unit="spm" value={spms[r]} step={1} min={10} max={60}
+              onChange={(v) => { if (v != null) setSpms((cur) => ({ ...cur, [r]: v })); }}
+              sub={spms[r] !== target[r - 1].spm ? `target ${target[r - 1].spm}` : undefined} />
+            <DnfToggle dnf={dnfs[r]?.dnf ?? false} heldSec={dnfs[r]?.heldSec ?? null}
+              targetSec={target[r - 1].work_sec} testId={`rc-dnf-${r}`}
+              onChange={(v) => setDnfs((cur) => ({ ...cur, [r]: { ...(cur[r] ?? { heldSec: null }), dnf: v } }))}
+              onHeld={(v) => setDnfs((cur) => ({ ...cur, [r]: { ...(cur[r] ?? { dnf: true }), heldSec: v } }))} />
+          </div>
         ))}
         <Stepper label="Monitor total" unit="m" value={metersTotal} step={10} min={0} max={99999}
           blankStart={0} onChange={setMetersTotal} sub="optional — tap to type" />
       </div>
       <button type="button" className="btn btn--primary btn--block rc-save" data-testid="rc-save-final"
-        onClick={() => onSave(spms, metersTotal)}>
+        onClick={() => onSave(spms, metersTotal, dnfs)}>
         Save
       </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+/** ROW-DNF: one tap. "Finished" by default; tapping it says he didn't finish
+ * the row at its target, which holds the next session at the same targets.
+ * Prefilled when he paused in the row or cut it short. */
+function DnfToggle({ dnf, onChange, heldSec, onHeld, targetSec, testId = "rc-dnf" }: {
+  dnf: boolean; onChange: (v: boolean) => void;
+  heldSec: number | null; onHeld: (v: number | null) => void;
+  targetSec: number; testId?: string;
+}) {
+  return (
+    <div className="rc-dnf">
+      <button type="button" data-testid={testId} aria-pressed={dnf}
+        className={`btn rc-dnf-btn${dnf ? " rc-dnf-btn--on" : ""}`}
+        onClick={() => onChange(!dnf)}>
+        {dnf ? "Didn't finish" : "Finished ✓"}
+      </button>
+      {dnf && (
+        <Stepper label="Held for" unit="s" value={heldSec} step={5} min={0} max={targetSec}
+          blankStart={Math.min(60, targetSec)} onChange={onHeld}
+          sub="optional — next time repeats this target" />
+      )}
     </div>
   );
 }

@@ -133,3 +133,40 @@ describe("ladder", () => {
     expect(row.sets[0].stroke_rate).toBe(12);
   });
 });
+
+describe("did not finish on the cards", () => {
+  const LADDER = { ...RX, kind: "ladder", session_type: "row_ladder", display_name: "Row ladder",
+                   row_exercise: "Row ladder", stations: [[]], last_reps: {} };
+
+  it("the ladder's final card sends dnf for a round marked Didn't finish", async () => {
+    const calls = stub(LADDER);
+    render(<RowCircuitScreen kind="ladder" />);
+    await waitFor(() => expect(screen.getByTestId("rc-start")).toBeDefined());
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date", "performance"] });
+    fireEvent.click(screen.getByTestId("rc-start"));
+    await act(async () => { vi.advanceTimersByTime(40_000); });
+    vi.useRealTimers();
+    expect(screen.getByTestId("rc-dnf-1").textContent).toContain("Finished");
+    fireEvent.click(screen.getByTestId("rc-dnf-1"));
+    expect(screen.getByTestId("rc-dnf-1").textContent).toContain("Didn't finish");
+    fireEvent.click(screen.getByTestId("rc-save-final"));
+    await waitFor(() => {
+      const row = calls.filter((c) => c.url.includes("/log")).map((c) => c.body as Record<string, any>)
+        .find((b) => b.exercise === "Row ladder");
+      expect(row?.sets[0].dnf).toBe(true);
+      expect(row?.sets[0].target_spm).toBe(12);
+    });
+  });
+
+  it("an unfinished last session shows why the levers are off", async () => {
+    stub({ ...RX, default: "repeat", why: "Round 1 didn't finish last time, so today repeats the same targets",
+           options: { ...RX.options,
+             rate: { ...RX.options.rate, ok: false, reason: "last time round 1 (11 spm, 0:20) wasn't finished — repeat it first" } },
+           unfinished: [{ round: 1, work_sec: 20, spm: 11 }] });
+    render(<RowCircuitScreen />);
+    await waitFor(() => expect(screen.getByTestId("rc-ready")).toBeDefined());
+    expect((screen.getByTestId("rc-option-rate") as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByTestId("rc-option-repeat").className).toContain("rc-option--on");
+    expect(screen.getByTestId("rc-why").textContent).toContain("didn't finish");
+  });
+});

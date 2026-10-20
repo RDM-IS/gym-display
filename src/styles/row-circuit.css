@@ -59,3 +59,9 @@
 .rc-figure { max-width: 300px; max-height: 26vh; }
 .rc-run--row .rc-figure, .rc-run--rest .rc-figure { max-width: 220px; max-height: 18vh; }
 @media (max-width: 600px) { .rc-figure { max-height: 20vh; } }
+
+/* ROW-DNF */
+.rc-dnf { display: flex; flex-direction: column; gap: 8px; }
+.rc-dnf-btn { min-height: var(--tap); border: 2px solid var(--line); font-size: 20px; }
+.rc-dnf-btn--on { border-color: var(--accent); color: var(--accent); }
+.rc-final-round { display: flex; flex-direction: column; gap: 8px; }

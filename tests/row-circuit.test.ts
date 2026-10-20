@@ -3,6 +3,8 @@ import {
   buildTimeline,
   initialState,
   isPlannedRowLadder,
+  suggestDnf,
+  togglePause,
   plannedRowKind,
   jumpToFinal,
   nextUp,
@@ -341,5 +343,51 @@ describe("planned row kind (ROW-SCHEDULE)", () => {
   it("a row_kind on a bike day opens nothing", () => {
     expect(plannedRowKind(plan({ type: "steady", duration_min: 40, cardio: { modality: "bike" },
                                  row_kind: "circuit" }))).toBeNull();
+  });
+});
+
+describe("did not finish (ROW-DNF)", () => {
+  it("a pause during a row is suggested as DNF, with how long it was held", () => {
+    const items = buildTimeline(rx(), "repeat", "easy");
+    let s = runUntil(items, initialState(T0), (x) => items[x.index].kind === "row");
+    s = tick(items, s, 7000, T0 + s.elapsedMs + 7000).state;      // 7 s into a 20 s row
+    s = togglePause(items, s);
+    expect(s.paused).toBe(true);
+    s = togglePause(items, s);
+    s = runUntil(items, s, (x) => items[x.index].kind === "record");
+    expect(suggestDnf(items, s, 1)).toEqual({ dnf: true, heldSec: 7 });
+  });
+
+  it("a row skipped before its end is suggested as DNF", () => {
+    const items = buildTimeline(rx(), "repeat", "easy");
+    let s = runUntil(items, initialState(T0), (x) => items[x.index].kind === "row");
+    s = tick(items, s, 4000, T0 + s.elapsedMs + 4000).state;
+    s = skip(items, s, T0 + s.elapsedMs).state;
+    expect(suggestDnf(items, s, 1)).toEqual({ dnf: true, heldSec: 4 });
+  });
+
+  it("a row run to its end without a pause is finished", () => {
+    const items = buildTimeline(rx(), "repeat", "easy");
+    const s = runUntil(items, initialState(T0), (x) => items[x.index].kind === "record");
+    expect(suggestDnf(items, s, 1)).toEqual({ dnf: false, heldSec: null });
+  });
+
+  it("the Row block carries its targets and the DNF flag", () => {
+    const items = buildTimeline(rx(), "repeat", "easy");
+    const s = runUntil(items, initialState(T0), (x) => items[x.index].kind === "record");
+    const [row] = roundLogs(items, s, 1, { spm: 11, metersTotal: null, reps: {}, dnf: true, heldSec: 7 },
+                            null, { round: 1, work_sec: 20, spm: 11 }, ownerOf(rx()));
+    expect(row.sets[0].target_spm).toBe(11);
+    expect(row.sets[0].target_sec).toBe(20);
+    expect(row.sets[0].dnf).toBe(true);
+    expect(row.sets[0].notes).toContain("DNF, held 7 s");
+  });
+
+  it("a finished round is logged dnf false, never missing", () => {
+    const items = buildTimeline(rx(), "repeat", "easy");
+    const s = runUntil(items, initialState(T0), (x) => items[x.index].kind === "record");
+    const [row] = roundLogs(items, s, 1, { spm: 11, metersTotal: null, reps: {} }, null,
+                            { round: 1, work_sec: 20, spm: 11 }, ownerOf(rx()));
+    expect(row.sets[0].dnf).toBe(false);
   });
 });
