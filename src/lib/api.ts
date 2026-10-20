@@ -337,7 +337,7 @@ export type FetchRowCircuitResult =
 /** ROW-CIRCUIT: today's prescription for `rounds` rounds, computed by the
  * Lambda from the last logged session. */
 export async function fetchRowCircuit(
-  rounds: number | null, kind: "circuit" | "ladder" = "circuit",
+  rounds: number | null, kind: "circuit" | "ladder" | "ride" | "run" = "circuit",
 ): Promise<FetchRowCircuitResult> {
   try {
     // No `rounds` = the kind's own default (4 for the circuit, 6 for the ladder).
@@ -348,6 +348,25 @@ export async function fetchRowCircuit(
     return { status: "ok", data: (await res.json()) as RcPrescriptionResponse };
   } catch (err) {
     return { status: "error", message: err instanceof Error ? err.message : "Failed to load the row circuit." };
+  }
+}
+
+export type FetchStrengthNextResult =
+  | { status: "ok"; session_type: string; after: string | null }
+  | { status: "error"; message: string };
+
+/** QUICK-START: the next strength session in the A → B → C rotation, after the
+ * last one logged. An unreadable history is an error, never "A". */
+export async function fetchStrengthNext(): Promise<FetchStrengthNextResult> {
+  try {
+    const res = await apiFetch("/api/health/strength-next");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const j = (await res.json()) as { available: boolean; reason?: string;
+                                      session_type?: string; after?: string | null };
+    if (!j.available || !j.session_type) return { status: "error", message: j.reason ?? "unavailable" };
+    return { status: "ok", session_type: j.session_type, after: j.after ?? null };
+  } catch (err) {
+    return { status: "error", message: err instanceof Error ? err.message : "Failed to load." };
   }
 }
 

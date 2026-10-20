@@ -66,7 +66,8 @@ describe("LibraryScreen", () => {
     fireEvent.click(screen.getByLabelText("Change location for this session"));
     fireEvent.click(screen.getByRole("button", { name: "home" }));
     expect(screen.queryByText("Test Core")).toBeNull();       // absent, not greyed
-    expect(screen.getByText("Test Flow")).toBeDefined();
+    // QUICK-START: the recovery flow is the Recovery button now, not a list item.
+    expect(screen.getByTestId("quick-recovery")).toBeDefined();
     expect(screen.getByText(/home · this session only/)).toBeDefined();
   });
 
@@ -230,5 +231,72 @@ describe("no session name carries a location", () => {
     for (const place of PLACES) {
       expect(block, `${place} is in a session label`).not.toContain(place);
     }
+  });
+});
+
+describe("Quick start (QUICK-START)", () => {
+  const STRENGTH = (t: string) => ({ ...SESSION, session_type: t, display_name: `Test ${t}`,
+                                    blocks: { type: "circuit", rounds: 1, exercises: [] } });
+  const QLIB: LibraryResponse = {
+    ...LIB,
+    locations: [
+      { key: "office", display: "office gym", sessions: [
+        SESSION as never,
+        { ...SESSION, session_type: "recovery_flow", display_name: "Test Flow", blocks: { type: "recovery_flow" } } as never,
+        { ...SESSION, session_type: "yoga_strength", display_name: "Test Yoga", blocks: { type: "recovery_flow" } } as never,
+        STRENGTH("strength_a") as never, STRENGTH("strength_b") as never, STRENGTH("strength_c") as never,
+      ] },
+      { key: "msp_home", display: "home", sessions: [
+        { ...SESSION, session_type: "recovery_flow", display_name: "Test Flow", blocks: { type: "recovery_flow" } } as never,
+      ] },
+    ],
+  };
+  function stubBoth(next: unknown) {
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      const body = String(url).includes("strength-next") ? next : QLIB;
+      return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+    }));
+  }
+
+  it("Strength launches the next in rotation for the room picked", async () => {
+    stubBoth({ available: true, session_type: "strength_b", after: "strength_a" });
+    const onLaunch = vi.fn();
+    render(<LibraryScreen onLaunch={onLaunch} onOpenRowLadder={() => {}} onOpenRowCircuit={() => {}}
+                          onOpenLadder={() => {}} />);
+    await waitFor(() => expect(screen.getByTestId("quick-strength").textContent).toContain("Strength B"));
+    fireEvent.click(screen.getByTestId("quick-strength"));
+    expect(onLaunch.mock.calls[0][1]).toBe("strength_b");
+    // Strength is never in the More list.
+    expect(screen.queryByText("Test strength_a")).toBeNull();
+  });
+
+  it("a room with no strength has no Strength button, and the cardio buttons are always there", async () => {
+    stubBoth({ available: true, session_type: "strength_a", after: null });
+    render(<LibraryScreen onLaunch={() => {}} onOpenRowLadder={() => {}} onOpenRowCircuit={() => {}}
+                          onOpenLadder={() => {}} />);
+    await waitFor(() => screen.getByTestId("quick-start"));
+    fireEvent.click(screen.getByLabelText("Change location for this session"));
+    fireEvent.click(screen.getByRole("button", { name: "home" }));
+    expect(screen.queryByTestId("quick-strength")).toBeNull();
+    for (const id of ["quick-row", "quick-row-circuit", "quick-ride", "quick-run", "quick-recovery"]) {
+      expect(screen.getByTestId(id), id).toBeDefined();
+    }
+  });
+
+  it("Ride and Run open their ladders", async () => {
+    stubBoth({ available: true, session_type: "strength_a", after: null });
+    const onOpen = vi.fn();
+    render(<LibraryScreen onLaunch={() => {}} onOpenLadder={onOpen} />);
+    await waitFor(() => screen.getByTestId("quick-ride"));
+    fireEvent.click(screen.getByTestId("quick-ride"));
+    fireEvent.click(screen.getByTestId("quick-run"));
+    expect(onOpen.mock.calls.map((c) => c[0])).toEqual(["ride", "run"]);
+  });
+
+  it("an unreadable rotation says so instead of guessing A", async () => {
+    stubBoth({ available: false, reason: "down" });
+    render(<LibraryScreen onLaunch={() => {}} />);
+    await waitFor(() => screen.getByTestId("quick-strength-error"));
+    expect(screen.queryByTestId("quick-strength")).toBeNull();
   });
 });

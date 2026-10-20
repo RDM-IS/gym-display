@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchLibrary, postMakeup } from "../lib/api";
+import { fetchLibrary, fetchStrengthNext, postMakeup } from "../lib/api";
 import { ADHOC_PLAN_ID } from "../lib/adhoc";
 import type { LibraryLocation, LibraryResponse, LibrarySession, Plan } from "../lib/types";
 
@@ -26,7 +26,16 @@ interface Props {
   onOpenRowCircuit?: () => void;
   /** ROW-LADDER: open the rower-only ladder. */
   onOpenRowLadder?: () => void;
+  /** QUICK-START: open a ride or run ladder. */
+  onOpenLadder?: (kind: "ride" | "run") => void;
 }
+
+/** QUICK-START buttons for these library session types; the Extras list below
+ * leaves out strength, which only the Strength button opens. */
+const STRENGTH_TYPES = new Set(["strength_a", "strength_b", "strength_c"]);
+/** On a Start button, so not repeated under More. */
+const ON_A_BUTTON = new Set(["recovery_flow", "yoga_strength"]);
+const STRENGTH_LETTER: Record<string, string> = { strength_a: "A", strength_b: "B", strength_c: "C" };
 
 /** On a pain day off, only these extras. */
 const DAY_OFF_TYPES = new Set(["mobility"]);
@@ -56,7 +65,19 @@ export function planFromLibrary(s: LibrarySession, today: string): Plan {
   };
 }
 
-export default function LibraryScreen({ onLaunch, onMadeUp, dayOff = false, onOpenRowCircuit, onOpenRowLadder }: Props) {
+export default function LibraryScreen({ onLaunch, onMadeUp, dayOff = false, onOpenRowCircuit, onOpenRowLadder,
+                                       onOpenLadder }: Props) {
+  const [nextStrength, setNextStrength] = useState<string | null>(null);
+  const [strengthErr, setStrengthErr] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    void fetchStrengthNext().then((r) => {
+      if (!live) return;
+      if (r.status === "ok") setNextStrength(r.session_type);
+      else setStrengthErr(r.message);
+    });
+    return () => { live = false; };
+  }, []);
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [makeup, setMakeup] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
   const [locKey, setLocKey] = useState<string | null>(null);   // null = today's
@@ -137,26 +158,6 @@ export default function LibraryScreen({ onLaunch, onMadeUp, dayOff = false, onOp
           The week repeats — Artemis will ask you to confirm.
         </p>
       )}
-      {onOpenRowCircuit && !dayOff && (
-        <div className="library-list">
-          {/* ROW-CIRCUIT. Not location-gated: the room is declared by being in
-              it (program redesign, 2026-10-02), and the rower is wherever he is
-              standing when he taps this. */}
-          <button type="button" className="btn btn--block library-item" data-testid="library-row-circuit"
-            onClick={onOpenRowCircuit}>
-            <span className="library-name">Row circuit</span>
-            <span className="library-min mono">rower + floor</span>
-          </button>
-          {onOpenRowLadder && (
-            <button type="button" className="btn btn--block library-item" data-testid="library-row-ladder"
-              onClick={onOpenRowLadder}>
-              <span className="library-name">Row ladder</span>
-              <span className="library-min mono">rower only</span>
-            </button>
-          )}
-        </div>
-      )}
-      <h2 className="section-title">Extras</h2>
       {dayOff && (
         <p className="desc">Day off from the check-in — gentle mobility only today.</p>
       )}
@@ -190,13 +191,23 @@ export default function LibraryScreen({ onLaunch, onMadeUp, dayOff = false, onOp
           Built for {data.generated_on}, not today — the program week may have moved.
         </p>
       )}
+      {location && !dayOff && (
+        <QuickStart
+          location={location} today={data.today} nextStrength={nextStrength} strengthErr={strengthErr}
+          onLaunch={onLaunch} onOpenRowCircuit={onOpenRowCircuit} onOpenRowLadder={onOpenRowLadder}
+          onOpenLadder={onOpenLadder}
+        />
+      )}
+      <h3 className="section-title library-extras-title">More</h3>
       {!location ? (
         <p className="desc">Today's location isn't in the library.</p>
       ) : location.sessions.length === 0 ? (
         <p className="desc">No extras can be run at {location.display} yet.</p>
       ) : (
         <div className="library-list">
-          {location.sessions.filter((s) => !dayOff || DAY_OFF_TYPES.has(s.session_type)).map((s) => (
+          {location.sessions.filter((s) => !STRENGTH_TYPES.has(s.session_type)
+                                  && (dayOff || !ON_A_BUTTON.has(s.session_type)))
+            .filter((s) => !dayOff || DAY_OFF_TYPES.has(s.session_type)).map((s) => (
             <button
               key={s.session_type}
               type="button"
@@ -214,5 +225,83 @@ export default function LibraryScreen({ onLaunch, onMadeUp, dayOff = false, onOp
         history, never against it.
       </p>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// QUICK-START (Ryan, 2026-10-20): "avoid overly complicated automation. Give me
+// buttons to decide what I want to do and when."
+//
+//   Cardio:   Row (+ floor) · Ride · Run   — the same ladder, spm or bpm
+//   Strength: next in the A → B → C rotation, built for the room picked above
+//   Yoga — Intense · Recovery
+//
+// A button whose session the room can't hold is absent, not greyed — the
+// library's own rule. The cardio buttons are always offered: he is the one
+// standing next to the machine.
+// ---------------------------------------------------------------------------
+
+function QuickStart({ location, today, nextStrength, strengthErr, onLaunch, onOpenRowCircuit,
+                      onOpenRowLadder, onOpenLadder }: {
+  location: LibraryLocation; today: string; nextStrength: string | null; strengthErr: string | null;
+  onLaunch: Props["onLaunch"]; onOpenRowCircuit?: () => void; onOpenRowLadder?: () => void;
+  onOpenLadder?: (kind: "ride" | "run") => void;
+}) {
+  const find = (t: string) => location.sessions.find((s) => s.session_type === t) ?? null;
+  const strength = nextStrength ? find(nextStrength) : null;
+  const hasAnyStrength = location.sessions.some((s) => STRENGTH_TYPES.has(s.session_type));
+  const yoga = find("yoga_strength");
+  const recovery = find("recovery_flow");
+  const launch = (s: LibrarySession) => onLaunch(planFromLibrary(s, today), s.session_type);
+  return (
+    <section className="quick-start" data-testid="quick-start" aria-label="Start a workout">
+      <h2 className="section-title">Start</h2>
+      <div className="quick-row" role="group" aria-label="Cardio">
+        {onOpenRowLadder && (
+          <button type="button" className="btn quick-btn" data-testid="quick-row" onClick={onOpenRowLadder}>
+            <span className="quick-name">Row</span><span className="quick-sub">ladder · spm</span>
+          </button>
+        )}
+        {onOpenRowCircuit && (
+          <button type="button" className="btn quick-btn" data-testid="quick-row-circuit" onClick={onOpenRowCircuit}>
+            <span className="quick-name">Row + floor</span><span className="quick-sub">circuit</span>
+          </button>
+        )}
+        {onOpenLadder && (
+          <>
+            <button type="button" className="btn quick-btn" data-testid="quick-ride" onClick={() => onOpenLadder("ride")}>
+              <span className="quick-name">Ride</span><span className="quick-sub">ladder · bpm</span>
+            </button>
+            <button type="button" className="btn quick-btn" data-testid="quick-run" onClick={() => onOpenLadder("run")}>
+              <span className="quick-name">Run</span><span className="quick-sub">ladder · bpm</span>
+            </button>
+          </>
+        )}
+      </div>
+      <div className="quick-row" role="group" aria-label="Strength, yoga and recovery">
+        {strength ? (
+          <button type="button" className="btn quick-btn" data-testid="quick-strength" onClick={() => launch(strength)}>
+            <span className="quick-name">Strength {STRENGTH_LETTER[strength.session_type]}</span>
+            <span className="quick-sub">next · {location.display}</span>
+          </button>
+        ) : hasAnyStrength && strengthErr ? (
+          <p className="desc dim" data-testid="quick-strength-error">
+            Strength: couldn't tell which session is next ({strengthErr}).
+          </p>
+        ) : null}
+        {yoga && (
+          <button type="button" className="btn quick-btn" data-testid="quick-yoga" onClick={() => launch(yoga)}>
+            <span className="quick-name">Yoga — Intense</span>
+            <span className="quick-sub">{yoga.est_duration_min ? `${yoga.est_duration_min} min` : "strength & balance"}</span>
+          </button>
+        )}
+        {recovery && (
+          <button type="button" className="btn quick-btn" data-testid="quick-recovery" onClick={() => launch(recovery)}>
+            <span className="quick-name">Recovery</span>
+            <span className="quick-sub">{recovery.est_duration_min ? `${recovery.est_duration_min} min` : "flow"}</span>
+          </button>
+        )}
+      </div>
+    </section>
   );
 }
