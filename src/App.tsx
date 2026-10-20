@@ -7,6 +7,8 @@ import RestDayScreen from "./screens/RestDayScreen";
 import StatusScreen from "./screens/StatusScreen";
 import FlowScreen from "./screens/FlowScreen";
 import LibraryScreen from "./screens/LibraryScreen";
+import RowCircuitScreen from "./screens/RowCircuitScreen";
+import { isPlannedRowLadder } from "./lib/row-circuit";
 import PrepScreen from "./screens/PrepScreen";
 import { endAdhoc, startAdhoc } from "./lib/adhoc";
 import PeekScreen, { type PeekMode } from "./screens/PeekScreen";
@@ -74,6 +76,8 @@ export default function App() {
   const [statusLoad, setStatusLoad] = useState<StatusLoad>({ loading: true, result: null });
   const [flow, setFlow] = useState<WorkoutFlow>("setup");
   const [flowRunning, setFlowRunning] = useState(false);
+  // ROW-CIRCUIT: the rower circuit runs full-screen, like a flow.
+  const [rowRunning, setRowRunning] = useState(false);
   // GD-WEEK: read-only Tomorrow / Week, opened from Setup — never mid-workout.
   const [peek, setPeek] = useState<PeekMode | null>(null);
   const onBarNavigate = useCallback((target: BarTarget) => {
@@ -339,7 +343,8 @@ export default function App() {
   // Render --------------------------------------------------------------
 
   // The workout screen is full-immersive — it carries its own header.
-  const immersive = route === "today" && (flow === "workout" || flowRunning);
+  const immersive = (route === "today" && (flow === "workout" || flowRunning))
+    || ((route === "row" || route === "ladder") && rowRunning);
   const chrome = immersive ? null : (
     <>
       <Nav route={route} onNavigate={(r) => {
@@ -376,6 +381,26 @@ export default function App() {
     );
   }
 
+  // ---- /row route (ROW-CIRCUIT) ----
+  if (route === "row") {
+    return (
+      <>
+        {chrome}
+        <RowCircuitScreen onRunningChange={setRowRunning} onExit={() => navigate("library")} />
+      </>
+    );
+  }
+
+  // ---- /row-ladder route (ROW-LADDER) ----
+  if (route === "ladder") {
+    return (
+      <>
+        {chrome}
+        <RowCircuitScreen kind="ladder" onRunningChange={setRowRunning} onExit={() => navigate("library")} />
+      </>
+    );
+  }
+
   // ---- /library route (SESSION-LIB) ----
   if (route === "library") {
     return (
@@ -383,6 +408,8 @@ export default function App() {
         {chrome}
         <LibraryScreen
           onLaunch={onLaunch}
+          onOpenRowCircuit={() => navigate("row")}
+          onOpenRowLadder={() => navigate("ladder")}
           dayOff={isDayOff(plan)}
           onMadeUp={() => {
             // Today's row is now the session: reload it and go run it as planned work.
@@ -486,6 +513,21 @@ export default function App() {
       <>
         {chrome}
         <PeekScreen key={peek} mode={peek} onNavigate={onBarNavigate} />
+      </>
+    );
+  }
+
+  // ROW-LADDER: a planned rower cardio day runs as the ladder (replacing
+  // ROW-BUILD #269), logged against this plan row. Gate-passed Zone 4 days
+  // keep the interval screen.
+  if (isPlannedRowLadder(result.plan)) {
+    return (
+      <>
+        {chrome}
+        <RowCircuitScreen
+          key={`ladder-${result.plan.plan_id}`}
+          kind="ladder" planId={result.plan.plan_id} onRunningChange={setFlowRunning}
+        />
       </>
     );
   }

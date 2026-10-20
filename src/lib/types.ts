@@ -453,6 +453,12 @@ export interface LogSetIn {
   hr_peak?: number | null;
   is_skipped?: boolean;
   notes?: string | null;
+  /** ROW-CIRCUIT (artemis migration 055): strokes/min held in a rowing block. */
+  stroke_rate?: number | null;
+  /** ROW-CIRCUIT: this block's own window, ISO 8601. `logged_at` is insert
+   * time and cannot bound an exercise saved minutes later on a record card. */
+  started_at?: string | null;
+  ended_at?: string | null;
 }
 
 /** CARDIO-LOC: what a cardio session runs on, resolved by artemis from the

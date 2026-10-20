@@ -13,6 +13,7 @@ import "./styles/status2.css";
 import "./styles/music.css";
 import "./styles/circuit.css";
 import "./styles/prep.css";
+import "./styles/row-circuit.css";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("#root not found");

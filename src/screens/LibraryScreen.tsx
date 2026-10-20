@@ -22,6 +22,10 @@ interface Props {
    * Read live from today's row: the library is built at 00:20, before the
    * check-in could have made the day a day off. */
   dayOff?: boolean;
+  /** ROW-CIRCUIT: open the rower circuit. Absent = not offered. */
+  onOpenRowCircuit?: () => void;
+  /** ROW-LADDER: open the rower-only ladder. */
+  onOpenRowLadder?: () => void;
 }
 
 /** On a pain day off, only these extras. */
@@ -52,7 +56,7 @@ export function planFromLibrary(s: LibrarySession, today: string): Plan {
   };
 }
 
-export default function LibraryScreen({ onLaunch, onMadeUp, dayOff = false }: Props) {
+export default function LibraryScreen({ onLaunch, onMadeUp, dayOff = false, onOpenRowCircuit, onOpenRowLadder }: Props) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [makeup, setMakeup] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
   const [locKey, setLocKey] = useState<string | null>(null);   // null = today's
@@ -132,6 +136,25 @@ export default function LibraryScreen({ onLaunch, onMadeUp, dayOff = false }: Pr
           ({data.makeup.not_done.map((m) => `${dayName(m.plan_date)} ${m.display_name}`).join(", ")}).
           The week repeats — Artemis will ask you to confirm.
         </p>
+      )}
+      {onOpenRowCircuit && !dayOff && (
+        <div className="library-list">
+          {/* ROW-CIRCUIT. Not location-gated: the room is declared by being in
+              it (program redesign, 2026-10-02), and the rower is wherever he is
+              standing when he taps this. */}
+          <button type="button" className="btn btn--block library-item" data-testid="library-row-circuit"
+            onClick={onOpenRowCircuit}>
+            <span className="library-name">Row circuit</span>
+            <span className="library-min mono">rower + floor</span>
+          </button>
+          {onOpenRowLadder && (
+            <button type="button" className="btn btn--block library-item" data-testid="library-row-ladder"
+              onClick={onOpenRowLadder}>
+              <span className="library-name">Row ladder</span>
+              <span className="library-min mono">rower only</span>
+            </button>
+          )}
+        </div>
       )}
       <h2 className="section-title">Extras</h2>
       {dayOff && (

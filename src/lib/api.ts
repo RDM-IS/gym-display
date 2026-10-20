@@ -19,6 +19,7 @@ import type {
   PrepStepsResponse,
   ShoppingResponse,
 } from "./prep";
+import type { RcPrescriptionResponse } from "./row-circuit";
 import {
   SessionExpiredError,
   isSessionExpiredResponse,
@@ -326,6 +327,27 @@ export async function fetchLibrary(): Promise<FetchLibraryResult> {
     return { status: "ok", data: (await res.json()) as LibraryResponse };
   } catch (err) {
     return { status: "error", message: err instanceof Error ? err.message : "Failed to load sessions." };
+  }
+}
+
+export type FetchRowCircuitResult =
+  | { status: "ok"; data: RcPrescriptionResponse }
+  | { status: "error"; message: string };
+
+/** ROW-CIRCUIT: today's prescription for `rounds` rounds, computed by the
+ * Lambda from the last logged session. */
+export async function fetchRowCircuit(
+  rounds: number | null, kind: "circuit" | "ladder" = "circuit",
+): Promise<FetchRowCircuitResult> {
+  try {
+    // No `rounds` = the kind's own default (4 for the circuit, 6 for the ladder).
+    const q = new URLSearchParams({ kind });
+    if (rounds != null) q.set("rounds", String(rounds));
+    const res = await apiFetch(`/api/health/row-circuit?${q.toString()}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return { status: "ok", data: (await res.json()) as RcPrescriptionResponse };
+  } catch (err) {
+    return { status: "error", message: err instanceof Error ? err.message : "Failed to load the row circuit." };
   }
 }
 

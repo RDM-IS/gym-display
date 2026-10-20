@@ -54,3 +54,27 @@ describe("BW-CIRCUIT movement figures", () => {
 });
 
 import { readFileSync } from "node:fs";
+
+describe("ROW-CIRCUIT figures", () => {
+  it("every floor move the circuit builds and the rower resolve to their OWN figure", async () => {
+    const { ROW_CIRCUIT_MOVES } = await import("../src/assets/circuit/moves");
+    const names = ["Rowing machine", "Push-up", "Dead bug", "Plank shoulder taps", "Russian twist",
+                   "Side plank", "Bird dog", "Forearm plank", "Flutter kicks", "Glute bridge"];
+    for (const n of names) expect(moveFor(n), n).not.toBeNull();
+    // The rower must not borrow the TRX row, nor the dead bug the mountain climber.
+    expect(moveFor("Rowing machine")).toBe(ROW_CIRCUIT_MOVES["rowing machine"]);
+    expect(moveFor("Dead bug")).toBe(ROW_CIRCUIT_MOVES["dead bug"]);
+    expect(moveFor("TRX row")).toBe(MOVES["row"]);
+    expect(moveFor("Plank shoulder taps")).not.toBe(MOVES["push-up"]);
+  });
+
+  it("an alternating move's two frames differ; a still hold may repeat", async () => {
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { ROW_CIRCUIT_MOVES } = await import("../src/assets/circuit/moves");
+    for (const [name, m] of Object.entries(ROW_CIRCUIT_MOVES)) {
+      const [a, b] = m.frames.map((f) => renderToStaticMarkup(f() as never));
+      if (name === "forearm plank") expect(a).toBe(b);
+      else expect(a, name).not.toBe(b);
+    }
+  });
+});
