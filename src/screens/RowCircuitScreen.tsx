@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Stepper from "../components/Stepper";
+import MoveFigure from "../assets/circuit/MoveFigure";
 import { fetchRowCircuit } from "../lib/api";
 import { audioStatus, isMuted, speak, stopSpeech, subscribeAudio, toggleMuted, unlockAudio, unlockSpeech } from "../lib/audio";
 import { submitLog } from "../lib/log-queue";
@@ -57,6 +58,23 @@ interface Props {
 }
 
 const TICK_MS = 250;
+
+/** Which figure an item shows. Anything on the rower is the rowing machine; a
+ * transition previews the move it leads into, so he sees it before he gets
+ * there; a station is itself. */
+function figureFor(items: RcItem[], index: number): string | null {
+  const it = items[index];
+  if (it.kind === "row" || it.kind === "rest" || it.kind === "cooldown" || it.kind === "get_set") {
+    return "Rowing machine";
+  }
+  if (it.kind === "station") return it.name;
+  if (it.kind === "move") {
+    const next = nextUp(items, index);
+    if (!next) return null;
+    return next.kind === "station" ? next.name : "Rowing machine";
+  }
+  return null;
+}
 type Phase = "ready" | "running" | "done";
 type Load =
   | { state: "loading" }
@@ -426,6 +444,10 @@ function RunScreen({ rx, lever, restMode, owner, onDone, done, onExit }: {
         />
       ) : (
         <div className="rc-body">
+          {(() => {
+            const fig = figureFor(items, state.index);
+            return fig ? <MoveFigure name={fig} className="rc-figure" /> : null;
+          })()}
           <div className="rc-name" data-testid="rc-name">{item.name}</div>
           {item.spm != null && (
             <div className="rc-spm mono" data-testid="rc-spm">

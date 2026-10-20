@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Floor, Head, Limb, Torso } from "../poses/figure";
+import { ArcArrow, Floor, Head, Limb, Torso } from "../poses/figure";
 
 // ---------------------------------------------------------------------------
 // BW-CIRCUIT movement figures — ORIGINAL line drawings for gym-display, built
@@ -261,13 +261,305 @@ export const MOVES: Record<string, Move> = {
   },
 };
 
+
+// ---------------------------------------------------------------------------
+// ROW-CIRCUIT (2026-10-19): the rowing machine and the circuit's floor moves.
+// Same primitives, same two-key-frame rule. A HOLD (side plank, forearm plank)
+// has nothing to alternate, so its two frames are the hold and its one honest
+// variation (side plank: top arm on the hip, then reaching up) or the same
+// picture twice (forearm plank), which renders as a still.
+// ---------------------------------------------------------------------------
+
+/** The rail, seat track, foot stretcher and the water tank at the front. */
+function Erg({ seat }: { seat: number }) {
+  return (
+    <g>
+      <line x1={50} y1={252} x2={340} y2={252} stroke="currentColor" strokeWidth={6}
+            strokeLinecap="round" opacity={0.35} />
+      <rect x={seat - 22} y={238} width={44} height={10} rx={4} fill="currentColor" opacity={0.5} />
+      <line x1={322} y1={208} x2={330} y2={250} stroke="currentColor" strokeWidth={8}
+            strokeLinecap="round" opacity={0.5} />
+      <circle cx={362} cy={226} r={26} fill="none" stroke="currentColor" strokeWidth={5} opacity={0.35} />
+    </g>
+  );
+}
+
+/** Chain from the handle to the tank. */
+function Chain({ from }: { from: readonly [number, number] }) {
+  return <line x1={from[0]} y1={from[1]} x2={350} y2={214} stroke="currentColor"
+               strokeWidth={3} opacity={0.45} />;
+}
+
+/** Lying on the back, head left. */
+function Mat() {
+  return <Floor from={40} to={370} />;
+}
+
+export const ROW_CIRCUIT_MOVES: Record<string, Move> = {
+  // ── the rower: catch, then finish ───────────────────────────────────────
+  "rowing machine": {
+    cycle: 2.6,
+    frames: [
+      // catch: shins vertical, body forward from the hips, arms long
+      () => (
+        <g>
+          <Erg seat={196} />
+          <Chain from={[304, 214]} />
+          <Limb p={[[196, 236], [262, 178], [312, 236]]} />
+          <Limb p={[[196, 236], [266, 182], [316, 238]]} far />
+          <Torso neck={[234, 170]} hip={[196, 236]} />
+          <Head at={[248, 152]} />
+          <Limb p={[[234, 174], [304, 214]]} />
+          <Limb p={[[236, 176], [306, 216]]} far />
+        </g>
+      ),
+      // finish: legs long, slight lean back, handle drawn to the ribs
+      () => (
+        <g>
+          <Erg seat={112} />
+          <Chain from={[140, 204]} />
+          <Limb p={[[112, 236], [214, 222], [312, 236]]} />
+          <Limb p={[[112, 236], [216, 226], [316, 238]]} far />
+          <Torso neck={[96, 168]} hip={[112, 236]} />
+          <Head at={[86, 150]} />
+          <Limb p={[[98, 174], [92, 210], [140, 204]]} />
+          <Limb p={[[100, 176], [96, 212], [142, 206]]} far />
+        </g>
+      ),
+    ],
+  },
+
+  // ── dead bug: opposite arm and leg lower, then switch ───────────────────
+  "dead bug": {
+    cycle: 2.4,
+    frames: [
+      () => (
+        <g>
+          <Mat />
+          <Torso neck={[132, 256]} hip={[242, 260]} />
+          <Head at={[108, 250]} />
+          <Limb p={[[136, 256], [88, 240], [46, 230]]} />
+          <Limb p={[[140, 256], [142, 176]]} far />
+          <Limb p={[[242, 260], [242, 200], [296, 200]]} />
+          <Limb p={[[242, 260], [300, 244], [356, 236]]} far />
+        </g>
+      ),
+      () => (
+        <g>
+          <Mat />
+          <Torso neck={[132, 256]} hip={[242, 260]} />
+          <Head at={[108, 250]} />
+          <Limb p={[[136, 256], [138, 176]]} />
+          <Limb p={[[140, 256], [92, 240], [50, 230]]} far />
+          <Limb p={[[242, 260], [300, 244], [356, 236]]} />
+          <Limb p={[[242, 260], [246, 200], [300, 200]]} far />
+        </g>
+      ),
+    ],
+  },
+
+  // ── plank shoulder taps: high plank, one hand to the opposite shoulder ──
+  "plank shoulder taps": {
+    cycle: 1.6,
+    frames: [
+      () => (
+        <g>
+          <Floor from={60} to={360} />
+          <Limb p={[[150, 186], [150, 262]]} w={13} />
+          <Limb p={[[158, 188], [196, 224], [170, 192]]} far />
+          <Torso neck={[176, 178]} hip={[262, 206]} />
+          <Head at={[160, 172]} />
+          <Limb p={[[262, 206], [318, 244], [350, 262]]} />
+          <Limb p={[[262, 206], [314, 246], [330, 262]]} far />
+        </g>
+      ),
+      () => (
+        <g>
+          <Floor from={60} to={360} />
+          <Limb p={[[158, 186], [158, 262]]} w={13} far />
+          <Limb p={[[150, 188], [190, 222], [166, 194]]} />
+          <Torso neck={[176, 178]} hip={[262, 206]} />
+          <Head at={[160, 172]} />
+          <Limb p={[[262, 206], [318, 244], [350, 262]]} />
+          <Limb p={[[262, 206], [314, 246], [330, 262]]} far />
+        </g>
+      ),
+    ],
+  },
+
+  // ── russian twist: leaning back, feet up, hands side to side ────────────
+  "russian twist": {
+    cycle: 1.8,
+    frames: [
+      () => (
+        <g>
+          <Floor from={60} to={360} />
+          <Torso neck={[170, 180]} hip={[214, 254]} />
+          <Head at={[158, 162]} />
+          <Limb p={[[214, 254], [272, 200], [322, 226]]} />
+          <Limb p={[[214, 254], [276, 204], [326, 230]]} far />
+          <Limb p={[[176, 188], [214, 228], [252, 254]]} />
+          <Limb p={[[178, 190], [216, 230], [254, 256]]} far />
+          <ArcArrow c={[218, 236]} r={52} from={-30} to={40} />
+        </g>
+      ),
+      () => (
+        <g>
+          <Floor from={60} to={360} />
+          <Torso neck={[170, 180]} hip={[214, 254]} />
+          <Head at={[158, 162]} />
+          <Limb p={[[214, 254], [272, 200], [322, 226]]} />
+          <Limb p={[[214, 254], [276, 204], [326, 230]]} far />
+          <Limb p={[[176, 188], [196, 230], [176, 262]]} far />
+          <Limb p={[[178, 190], [198, 232], [178, 264]]} far />
+          <ArcArrow c={[218, 236]} r={52} from={40} to={-30} />
+        </g>
+      ),
+    ],
+  },
+
+  // ── side plank: on the forearm, body one line; top arm hip → ceiling ────
+  "side plank": {
+    cycle: 3,
+    frames: [
+      () => (
+        <g>
+          <Floor from={60} to={360} />
+          <Limb p={[[154, 186], [152, 262], [106, 262]]} w={13} />
+          <Torso neck={[166, 180]} hip={[262, 224]} />
+          <Head at={[150, 166]} />
+          <Limb p={[[262, 224], [344, 262]]} />
+          <Limb p={[[262, 222], [346, 256]]} far />
+          <Limb p={[[170, 182], [216, 174], [256, 214]]} />
+        </g>
+      ),
+      () => (
+        <g>
+          <Floor from={60} to={360} />
+          <Limb p={[[154, 186], [152, 262], [106, 262]]} w={13} />
+          <Torso neck={[166, 180]} hip={[262, 224]} />
+          <Head at={[150, 166]} />
+          <Limb p={[[262, 224], [344, 262]]} />
+          <Limb p={[[262, 222], [346, 256]]} far />
+          <Limb p={[[170, 180], [176, 96]]} />
+        </g>
+      ),
+    ],
+  },
+
+  // ── bird dog: on hands and knees, opposite arm and leg long ─────────────
+  "bird dog": {
+    cycle: 2.6,
+    frames: [
+      () => (
+        <g>
+          <Floor from={40} to={380} />
+          <Torso neck={[170, 190]} hip={[262, 198]} />
+          <Head at={[146, 180]} />
+          <Limb p={[[168, 192], [112, 184], [60, 180]]} />
+          <Limb p={[[172, 194], [166, 262]]} far />
+          <Limb p={[[262, 198], [262, 262], [318, 266]]} />
+          <Limb p={[[262, 198], [318, 190], [372, 186]]} far />
+        </g>
+      ),
+      () => (
+        <g>
+          <Floor from={40} to={380} />
+          <Torso neck={[170, 190]} hip={[262, 198]} />
+          <Head at={[146, 180]} />
+          <Limb p={[[168, 192], [164, 262]]} />
+          <Limb p={[[172, 194], [116, 186], [64, 182]]} far />
+          <Limb p={[[262, 198], [318, 190], [372, 186]]} />
+          <Limb p={[[262, 198], [266, 262], [322, 266]]} far />
+        </g>
+      ),
+    ],
+  },
+
+  // ── flutter kicks: shoulders just off the mat, small alternating kicks ──
+  "flutter kicks": {
+    cycle: 1,
+    frames: [
+      () => (
+        <g>
+          <Mat />
+          <Torso neck={[130, 246]} hip={[238, 260]} />
+          <Head at={[108, 234]} />
+          <Limb p={[[134, 250], [200, 262]]} />
+          <Limb p={[[238, 260], [300, 236], [358, 220]]} />
+          <Limb p={[[238, 260], [300, 252], [360, 248]]} far />
+        </g>
+      ),
+      () => (
+        <g>
+          <Mat />
+          <Torso neck={[130, 246]} hip={[238, 260]} />
+          <Head at={[108, 234]} />
+          <Limb p={[[134, 250], [200, 262]]} />
+          <Limb p={[[238, 260], [300, 252], [360, 248]]} />
+          <Limb p={[[238, 260], [300, 236], [358, 220]]} far />
+        </g>
+      ),
+    ],
+  },
+
+  // ── glute bridge: hips down, then shoulders-hips-knees in one line ──────
+  "glute bridge": {
+    cycle: 2.4,
+    frames: [
+      () => (
+        <g>
+          <Mat />
+          <Torso neck={[124, 256]} hip={[222, 260]} />
+          <Head at={[100, 250]} />
+          <Limb p={[[128, 258], [186, 264]]} />
+          <Limb p={[[222, 260], [264, 204], [296, 264]]} />
+          <Limb p={[[222, 260], [268, 208], [302, 264]]} far />
+        </g>
+      ),
+      () => (
+        <g>
+          <Mat />
+          <Torso neck={[124, 256]} hip={[214, 210]} />
+          <Head at={[100, 250]} />
+          <Limb p={[[128, 258], [186, 264]]} />
+          <Limb p={[[214, 210], [264, 198], [296, 264]]} />
+          <Limb p={[[214, 210], [268, 202], [302, 264]]} far />
+        </g>
+      ),
+    ],
+  },
+};
+
+// The forearm plank is a hold with no variation: the same picture twice is a
+// still, which is what a hold should look like.
+const forearmPlank = () => (
+  <g>
+    <Floor from={60} to={360} />
+    <Limb p={[[160, 226], [160, 262], [110, 262]]} w={13} />
+    <Limb p={[[166, 228], [168, 262], [118, 262]]} far />
+    <Torso neck={[176, 222]} hip={[264, 236]} />
+    <Head at={[156, 212]} />
+    <Limb p={[[264, 236], [320, 252], [348, 262]]} />
+    <Limb p={[[264, 236], [316, 254], [344, 264]]} far />
+  </g>
+);
+ROW_CIRCUIT_MOVES["forearm plank"] = { cycle: 4, frames: [forearmPlank, forearmPlank] };
+
+Object.assign(MOVES, ROW_CIRCUIT_MOVES);
+
 /** The figure a movement name resolves to, or null when it has none yet. */
 export function moveFor(name: string): Move | null {
   const k = name.toLowerCase();
+  // ROW-CIRCUIT: exact names first. "Rowing machine" must win over the TRX
+  // "row" match below, and "Dead bug" over the mountain climber it borrowed.
+  if (MOVES[k]) return MOVES[k];
+  if (k.includes("rowing machine") || k === "erg") return MOVES["rowing machine"];
+  if (k.includes("shoulder tap")) return MOVES["plank shoulder taps"];
   if (k.includes("push-up")) return MOVES["push-up"];
   if (k.includes("row")) return MOVES["row"];
   if (k.includes("lunge") || k.includes("squat")) return MOVES["reverse lunge"];
-  if (k.includes("mountain climber") || k.includes("dead bug")) return MOVES["mountain climber"];
+  if (k.includes("mountain climber")) return MOVES["mountain climber"];
   if (k.includes("step-up") || k.includes("skater")) return MOVES["step-up"];
   if (k.includes("jog")) return MOVES["jog in place"];
   if (k.includes("march")) return MOVES["march in place"];

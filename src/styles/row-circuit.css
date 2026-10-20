@@ -53,3 +53,9 @@
   .rc-plan li { grid-template-columns: 36px 1fr; }
   .rc-plan li > :last-child { grid-column: 2; }
 }
+
+/* Figures: big enough to read from the floor, small enough that the stroke
+   rate and clock stay the biggest things on screen. */
+.rc-figure { max-width: 300px; max-height: 26vh; }
+.rc-run--row .rc-figure, .rc-run--rest .rc-figure { max-width: 220px; max-height: 18vh; }
+@media (max-width: 600px) { .rc-figure { max-height: 20vh; } }
