@@ -300,3 +300,53 @@ describe("Quick start (QUICK-START)", () => {
     expect(screen.queryByTestId("quick-strength")).toBeNull();
   });
 });
+
+describe("Recommended (RECOMMEND)", () => {
+  const RLIB: LibraryResponse = {
+    ...LIB,
+    locations: [{ key: "office", display: "office gym", sessions: [
+      { ...SESSION, session_type: "core", display_name: "Test Core" } as never,
+      { ...SESSION, session_type: "mobility", display_name: "Test Mobility" } as never,
+      { ...SESSION, session_type: "recovery_flow", display_name: "Test Flow", blocks: { type: "recovery_flow" } } as never,
+      { ...SESSION, session_type: "strength_c", display_name: "Test C" } as never,
+    ] }, { key: "msp_home", display: "home", sessions: [] }],
+  };
+  function stubAll(rec: unknown) {
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      const u = String(url);
+      const body = u.includes("recommend") ? rec
+        : u.includes("strength-next") ? { available: true, session_type: "strength_c", after: "strength_b" }
+        : RLIB;
+      return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+    }));
+  }
+
+  it("highlights today's recommended button and the More item not done last", async () => {
+    stubAll({ available: true, primary: "strength", label: "Strength", strength: "strength_c",
+              reason: "Row done · last lift Thu", more: ["core"] });
+    render(<LibraryScreen onLaunch={() => {}} onOpenRowLadder={() => {}} />);
+    await waitFor(() => expect(screen.getByTestId("quick-strength").className).toContain("quick-btn--rec"));
+    expect(screen.getByTestId("quick-row").className).not.toContain("quick-btn--rec");
+    expect(screen.getAllByTestId("quick-rec-tag")).toHaveLength(1);
+    expect(screen.getByTestId("quick-rec-reason").textContent).toContain("last lift Thu");
+    expect(screen.getByText("Test Core").closest("button")!.dataset.recommended).toBe("true");
+    expect(screen.getByText("Test Mobility").closest("button")!.dataset.recommended).toBeUndefined();
+  });
+
+  it("no highlight on a room picked for this launch only", async () => {
+    stubAll({ available: true, primary: "recovery", label: "Recovery", reason: "x", more: ["core"] });
+    render(<LibraryScreen onLaunch={() => {}} />);
+    await waitFor(() => screen.getByTestId("quick-recovery"));
+    fireEvent.click(screen.getByLabelText("Change location for this session"));
+    fireEvent.click(screen.getByRole("button", { name: "home" }));
+    expect(screen.queryByTestId("quick-rec-tag")).toBeNull();
+  });
+
+  it("an unavailable recommendation highlights nothing", async () => {
+    stubAll({ available: false, reason: "down" });
+    render(<LibraryScreen onLaunch={() => {}} />);
+    await waitFor(() => screen.getByTestId("quick-recovery"));
+    expect(screen.queryByTestId("quick-rec-tag")).toBeNull();
+    expect(screen.queryByTestId("quick-rec-reason")).toBeNull();
+  });
+});

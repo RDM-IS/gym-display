@@ -1,3 +1,4 @@
+import { fetchRecommend, type Recommendation } from "../lib/api";
 import { useCallback, useEffect, useState } from "react";
 import BottomBar from "../components/BottomBar";
 import GoalTiles from "../components/GoalTiles";
@@ -42,11 +43,36 @@ import { formatSetup } from "../lib/set-notes";
 
 interface Props {
   onNavigate: (target: BarTarget) => void;
+  /** RECOMMEND: the tile opens Sessions. */
+  onOpenSessions?: () => void;
+}
+
+const STRENGTH_LETTER: Record<string, string> = { strength_a: "A", strength_b: "B", strength_c: "C" };
+
+/** RECOMMEND — "Recommended now" at the top of Status, from the same endpoint
+ * Sessions reads, so the two cannot disagree. Unavailable = no tile. */
+function RecommendTile({ onOpen }: { onOpen?: () => void }) {
+  const [rec, setRec] = useState<Recommendation | null>(null);
+  useEffect(() => {
+    let live = true;
+    void fetchRecommend().then((r) => { if (live) setRec(r); });
+    return () => { live = false; };
+  }, []);
+  if (!rec?.available || !rec.label) return null;
+  const label = rec.primary === "strength" && rec.strength
+    ? `Strength ${STRENGTH_LETTER[rec.strength] ?? ""}`.trim() : rec.label;
+  return (
+    <button type="button" className="btn status-rec" data-testid="status-rec" onClick={onOpen}>
+      <span className="quick-rec-tag">Recommended now</span>
+      <span className="status-rec-label">{label}</span>
+      {rec.reason && <span className="status-rec-why">{rec.reason}</span>}
+    </button>
+  );
 }
 
 type View = { kind: "page" } | { kind: "day"; day: PlanDay } | { kind: "previous" };
 
-export default function StatusScreen({ onNavigate }: Props) {
+export default function StatusScreen({ onNavigate, onOpenSessions }: Props) {
   const [result, setResult] = useState<FetchOverviewResult | null>(null);
   const [view, setView] = useState<View>({ kind: "page" });
 
@@ -112,6 +138,7 @@ export default function StatusScreen({ onNavigate }: Props) {
             Outside .status-grid on purpose — inside it they would be penned into
             the narrower left column in landscape, which is where the iPad
             spends most of its life on the rack. */}
+        <RecommendTile onOpen={onOpenSessions} />
         {data.goals && <GoalTiles goals={data.goals} />}
         <div className="status-grid">
           <div className="status-col">
