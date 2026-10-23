@@ -59,6 +59,23 @@ describe("ready screen", () => {
     expect(screen.getByTestId("rc-why").textContent).toContain("because the test says so");
   });
 
+  it("names the time lever from the server, and flags rounds past last time", async () => {
+    stub({ ...RX, time_label: "+0:07 each round", extrapolated: [1],
+           extrapolated_note: "Round 1 is new — synthetic note" });
+    render(<RowCircuitScreen />);
+    await waitFor(() => expect(screen.getByTestId("rc-ready")).toBeDefined());
+    expect(screen.getByTestId("rc-option-time").textContent).toContain("+0:07 each round");
+    expect(screen.getByTestId("rc-extrapolated").textContent).toContain("Round 1 is new");
+    expect(screen.getByText(/R1 · new/)).toBeDefined();
+  });
+
+  it("an older server without the fields shows no extrapolation note", async () => {
+    stub(RX);
+    render(<RowCircuitScreen />);
+    await waitFor(() => expect(screen.getByTestId("rc-ready")).toBeDefined());
+    expect(screen.queryByTestId("rc-extrapolated")).toBeNull();
+  });
+
   it("an unavailable prescription says why and offers no Start", async () => {
     stub({ available: false, reason: "Couldn't read your last row circuit." });
     render(<RowCircuitScreen />);

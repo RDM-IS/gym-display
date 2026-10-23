@@ -40,7 +40,7 @@ import {
 // ---------------------------------------------------------------------------
 // ROW-CIRCUIT — the start screen, the running screen and the record card.
 //
-// Start: pick rounds, pick "+1 stroke/min" or "+1:00 each round" (the default
+// Start: pick rounds, pick "+1 stroke/min" or "+0:15 each round" (the default
 // is the lever that didn't move last time), Start. Then hands-free except one
 // record card per round, prefilled, saved with one tap when nothing changed.
 // Each round is logged as soon as its card is saved, so stopping early still
@@ -197,7 +197,7 @@ function ReadyScreen({ rx, lever, restMode, onRounds, onLever, onRestMode, onSta
               <span className="rc-option-head">
                 {lv === "rate"
                   ? (unitOf(rx) === "bpm" ? `+${rx.step ?? 5} bpm` : "+1 stroke/min")
-                  : "+1:00 each round"}
+                  : (rx.time_label ?? "+1:00 each round")}
                 {rx.default === lv && <span className="chip rc-default">default</span>}
               </span>
               <span className="rc-option-body mono">{summaryLine(o)}</span>
@@ -212,6 +212,9 @@ function ReadyScreen({ rx, lever, restMode, onRounds, onLever, onRestMode, onSta
         Same as last time · <span className="mono">{summaryLine(rx.options.repeat)}</span>
       </button>
       <p className="desc dim" data-testid="rc-why">{rx.why}</p>
+      {rx.extrapolated_note && (
+        <p className="desc rc-extrapolated" data-testid="rc-extrapolated">{rx.extrapolated_note}</p>
+      )}
 
       <button type="button" className="btn rc-restmode" data-testid="rc-restmode"
         onClick={() => onRestMode(restMode === "easy" ? "stopped" : "easy")}>
@@ -221,7 +224,7 @@ function ReadyScreen({ rx, lever, restMode, onRounds, onLever, onRestMode, onSta
       <ol className="rc-plan">
         {chosen.rounds.map((r, i) => (
           <li key={r.round}>
-            <span className="mono">R{r.round}</span>
+            <span className="mono">R{r.round}{rx.extrapolated?.includes(r.round) ? " · new" : ""}</span>
             <span>{VERB[rx.kind].act} {clock(r.work_sec)} @ {r.spm}{unitOf(rx) === "bpm" ? " bpm" : ""}</span>
             {(rx.stations[i] ?? []).length > 0 && (
               <span className="dim">{(rx.stations[i] ?? []).map((s) => s.name).join(" · ")}</span>

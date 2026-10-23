@@ -117,6 +117,14 @@ export interface RcPrescription {
   /** ROW-DNF: last session's rounds that weren't finished at their target.
    * Non-empty = both levers are off and today repeats. */
   unfinished?: RcRound[];
+  /** Rounds past last time's count (1-based): continued, not repeated. */
+  extrapolated?: number[];
+  /** Says which rounds are new; null when none are. */
+  extrapolated_note?: string | null;
+  /** The time lever's step and name ("+0:15 each round"). Older servers omit
+   * both; the screen then falls back to the old minute. */
+  time_step_sec?: number;
+  time_label?: string;
   /** {round: {move: reps}} from the last session, for prefilling. */
   last_reps: Record<string, Record<string, number>>;
 }
