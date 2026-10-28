@@ -155,7 +155,10 @@ describe("keypad + chips + flags → one session_log row", () => {
     renderLogger({ exercise: { name: "DB bench press", format: "reps", target_reps: 12 } });
     expect(screen.queryByText(/Machine setup/)).toBeNull();
     cleanup();
-    renderLogger({ exercise: { name: "Captain's chair knee raise", format: "reps", target_reps: 12 } });
+    // LOAD-UNKNOWN-ENTRY: a class-less row is "unknown" and now offers an
+    // optional weight field; a row that SAYS bodyweight offers none.
+    renderLogger({ exercise: { name: "Captain's chair knee raise", format: "reps", target_reps: 12,
+                               equipment_class: "bodyweight" } });
     expect(screen.queryByRole("button", { name: /Weight/ })).toBeNull();
     expect(screen.queryByText(/Machine setup/)).toBeNull();
   });
