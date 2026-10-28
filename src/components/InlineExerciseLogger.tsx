@@ -191,10 +191,25 @@ export default function InlineExerciseLogger({
           // LOCATION-1: the row does not say what a load means here — no class,
           // no config, or a class this gym has no equipment for. Say so and let
           // the weight be typed, rather than offering office numbers that may
-          // not exist at this gym.
-          <div className="desc" data-testid="load-unknown">
-            No load configuration — log manually.
-          </div>
+          // not exist at this gym. The field is FREE: no min/max, no snapping —
+          // ±5 only nudges; the keypad takes whatever was actually lifted.
+          <>
+            <div className="desc" data-testid="load-unknown">
+              No load configuration here — type the weight you used.
+            </div>
+            <Stepper
+              label="Weight"
+              unit="lb"
+              value={state.weight}
+              step={5}
+              min={0}
+              allowDecimal
+              blankStart={prefill.weight ?? exercise.target_load_lbs ?? lastHint?.weight_lbs ?? 0}
+              hint={lastHint?.weight_lbs ?? null}
+              disabled={isDone || skipped}
+              onChange={(v) => dispatch({ type: "set_weight", v })}
+            />
+          </>
         )}
         {w.loadMode === "numeric" && useReps && (
           <Stepper
