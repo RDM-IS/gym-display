@@ -168,3 +168,28 @@ describe("restart", () => {
     expect(s.deferred).toEqual([]);
   });
 });
+
+// FULLBODY-1: "Busy — later" works inside a segment and never swaps across one.
+describe("defer in a segmented circuit (FULLBODY-1)", () => {
+  const SEG: CircuitBlocks = {
+    type: "circuit", display_name: "Full Body", rounds: 2, rest_between_rounds_sec: 60,
+    segments: [{ title: "A", rounds: 2, rest_between_rounds_sec: 60 },
+               { title: "B", rounds: 2, rest_between_rounds_sec: 60 }],
+    exercises: [ex("Split squat", { segment: 0 }), ex("DB row", { segment: 0 }),
+                ex("Goblet squat", { segment: 1 }), ex("Push-up", { segment: 1 })],
+  };
+
+  it("swaps with the next exercise in the same segment", () => {
+    let s = toExercise(start(SEG), "Split squat");
+    s = timerReducer(s, { type: "DEFER_CURRENT", now_ms: 5 });
+    expect(label(s)).toBe("DB row");
+    expect(s.deferred).toEqual(["Split squat"]);
+  });
+
+  it("the last exercise of a segment has nothing to swap with — not the next segment's first", () => {
+    const s = toExercise(start(SEG), "DB row");
+    expect(selectCanDeferCurrent(s)).not.toBe("yes");
+    const t = timerReducer(s, { type: "DEFER_CURRENT", now_ms: 5 });
+    expect(label(t)).toBe("DB row");
+  });
+});

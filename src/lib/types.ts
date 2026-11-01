@@ -32,7 +32,10 @@ export type SessionType =
   // BW-CIRCUIT (2026-09-29). Swappable onto any day, so it reaches health.plan
   // and migration 049 widens that CHECK. The UNION goes first, as always: adding
   // it here is what breaks the build at SESSION_LABELS until the value is named.
-  | "bodyweight_circuit";
+  | "bodyweight_circuit"
+  // WEEK-TEMPLATE / FULLBODY-1 (2026-11-01): migration 058 widens the CHECK.
+  // A strength day built as a segmented circuit (blocks.segments).
+  | "strength_full";
 
 export type ExerciseFormat = "reps" | "duration";
 
@@ -50,6 +53,8 @@ export interface PlannedExercise {
   // ── Check-in adjustment (Artemis FRIDAY-1) ──
   /** Sets for THIS exercise when it differs from the circuit's rounds. */
   sets?: number | null;
+  /** FULLBODY-1: 0-based index into CircuitBlocks.segments. */
+  segment?: number | null;
   /** Per-exercise RPE ceiling. */
   rpe_cap?: number | null;
   /** Use this percent of the usual load (80 = −20%). Legacy (FRIDAY-1). */
@@ -164,10 +169,23 @@ export interface IntervalsTemplate {
   rest_settings?: string | null;
 }
 
+/** FULLBODY-1 (2026-11-01): one part of a segmented circuit. Each segment runs
+ * its own rounds with its own round-break rest, in order. */
+export interface CircuitSegment {
+  title: string;
+  rounds: number;
+  rest_between_rounds_sec: number;
+}
+
 export interface CircuitBlocks extends BlocksBase {
   type: "circuit";
   warmup?: string | null;
+  /** With `segments`, this is the largest segment's rounds, kept for older
+   * consumers — ignore it when segments are present. */
   rounds?: number | null;
+  /** FULLBODY-1: when non-empty, the body is one circuit per segment, built
+   * from the exercises whose `segment` is that index. */
+  segments?: CircuitSegment[] | null;
   rest_between_rounds_sec?: number | null;
   /** May be absent — earlier seed plans always carried this, but the
    * runtime payload is JSONB and not enforced. Treat as optional. */

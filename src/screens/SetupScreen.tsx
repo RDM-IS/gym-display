@@ -13,6 +13,7 @@ import { assertNeverBlock } from "../lib/types";
 import { dedupe, displayTitle, formatEstimate, formatPlanDate } from "../lib/format";
 import { easyZoneText, extraLabel, workZoneText } from "../lib/zones";
 import { adjustmentOf, exerciseSets, exerciseTags } from "../lib/adjustment";
+import { segmentRounds, segmentsInUse } from "../lib/segments";
 import AdjustmentBanner from "../components/AdjustmentBanner";
 import BottomBar from "../components/BottomBar";
 import type { BarTarget } from "../lib/bottom-bar";
@@ -126,9 +127,32 @@ function exerciseLine(ex: PlannedExercise): string {
   return `${target}${load}`;
 }
 
+function ExerciseList({ exercises, rounds, sessionRpe }: {
+  exercises: PlannedExercise[]; rounds: number; sessionRpe: number | null;
+}) {
+  return (
+    <ul className="list">
+      {exercises.map((ex, i) => {
+        const tags = exerciseTags(ex, sessionRpe);
+        const sets = exerciseSets(ex, rounds);
+        return (
+          <li key={`${ex.name}-${i}`} className={ex.added_by ? "exercise--added" : undefined}>
+            <strong>{ex.name}</strong>
+            {" — "}
+            {sets !== rounds ? `${sets} set${sets === 1 ? "" : "s"} × ` : ""}
+            {exerciseLine(ex)}
+            {tags.length > 0 && <span className="exercise-tags"> · {tags.join(" · ")}</span>}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 function CircuitDetail({ b, sessionRpe }: { b: CircuitBlocks; sessionRpe: number | null }) {
   const exercises = Array.isArray(b.exercises) ? b.exercises : [];
   const rounds = b.rounds ?? 1;
+  const segments = segmentsInUse(b);
   return (
     <>
       {b.warmup ? (
@@ -145,23 +169,21 @@ function CircuitDetail({ b, sessionRpe }: { b: CircuitBlocks; sessionRpe: number
           </div>
         </Section>
       ) : null}
-      {exercises.length > 0 ? (
+      {exercises.length > 0 && segments ? (
+        // FULLBODY-1: one list per segment, each with its own rounds.
+        segments.map((seg, k) => {
+          const segRounds = segmentRounds(seg);
+          const list = exercises.filter((ex) => ex.segment === k);
+          if (list.length === 0) return null;
+          return (
+            <Section key={k} title={`${seg.title} — ${segRounds} round${segRounds === 1 ? "" : "s"}`}>
+              <ExerciseList exercises={list} rounds={segRounds} sessionRpe={sessionRpe} />
+            </Section>
+          );
+        })
+      ) : exercises.length > 0 ? (
         <Section title={`Exercises — ${rounds} round${rounds === 1 ? "" : "s"}`}>
-          <ul className="list">
-            {exercises.map((ex, i) => {
-              const tags = exerciseTags(ex, sessionRpe);
-              const sets = exerciseSets(ex, rounds);
-              return (
-                <li key={`${ex.name}-${i}`} className={ex.added_by ? "exercise--added" : undefined}>
-                  <strong>{ex.name}</strong>
-                  {" — "}
-                  {sets !== rounds ? `${sets} set${sets === 1 ? "" : "s"} × ` : ""}
-                  {exerciseLine(ex)}
-                  {tags.length > 0 && <span className="exercise-tags"> · {tags.join(" · ")}</span>}
-                </li>
-              );
-            })}
-          </ul>
+          <ExerciseList exercises={exercises} rounds={rounds} sessionRpe={sessionRpe} />
         </Section>
       ) : (
         <div className="list muted">No exercises in this block.</div>

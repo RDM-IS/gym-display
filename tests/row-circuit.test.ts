@@ -340,6 +340,22 @@ describe("planned row kind (ROW-SCHEDULE)", () => {
   it("an older rower day without one is the ladder", () => {
     expect(plannedRowKind(plan({ type: "steady", duration_min: 40, cardio: { modality: "row" } }))).toBe("ladder");
   });
+  it("WEEK-TEMPLATE: a planned steady ride or run opens the heart-rate ladder", () => {
+    expect(plannedRowKind(plan({ type: "steady", duration_min: 40, cardio: { modality: "bike" } }))).toBe("ride");
+    expect(plannedRowKind(plan({ type: "steady", duration_min: 40, cardio: { modality: "treadmill" } }))).toBe("run");
+  });
+  it("a ride or run is not the rower ladder", () => {
+    expect(isPlannedRowLadder(plan({ type: "steady", duration_min: 40, cardio: { modality: "bike" } }))).toBe(false);
+    expect(isPlannedRowLadder(plan({ type: "steady", duration_min: 40, cardio: { modality: "treadmill" } }))).toBe(false);
+  });
+  it("bike/treadmill intervals, the elliptical, no modality and a skipped day open nothing", () => {
+    expect(plannedRowKind(plan({ type: "intervals", ran_as: "z2_variant", cardio: { modality: "bike" } }))).toBeNull();
+    expect(plannedRowKind(plan({ type: "intervals", ran_as: "intervals", cardio: { modality: "treadmill" } }))).toBeNull();
+    expect(plannedRowKind(plan({ type: "steady", duration_min: 40, cardio: { modality: "elliptical" } }))).toBeNull();
+    expect(plannedRowKind(plan({ type: "steady", duration_min: 40 }))).toBeNull();
+    expect(plannedRowKind({ ...(plan({ type: "steady", duration_min: 40, cardio: { modality: "bike" } }) as object),
+                            is_skipped: true } as never)).toBeNull();
+  });
   it("a row_kind on a bike day opens nothing", () => {
     expect(plannedRowKind(plan({ type: "steady", duration_min: 40, cardio: { modality: "bike" },
                                  row_kind: "circuit" }))).toBeNull();

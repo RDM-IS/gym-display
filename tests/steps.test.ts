@@ -5,6 +5,8 @@ import {
   INITIAL_CURSOR,
   nextCursor,
   prevCursor,
+  isLastCursor,
+  totalDurationSec,
   type Cursor,
   type Step,
 } from "../src/lib/steps";
@@ -338,5 +340,164 @@ describe("the exercise a rest leads into", () => {
     const s2 = flattenBlocksToSteps(withFinisher).steps;
     const rb = s2.findIndex((s) => s.isRoundBreak);
     expect(nextExerciseFor(s2, rb, 2)?.name).toBe("Plank");
+  });
+});
+
+// ── FULLBODY-1: segmented circuits (2026-11-01) ────────────────────────────
+// Synthetic plan: no loads, no real session data (PUBLIC-FIXTURES).
+describe("segmented circuit (FULLBODY-1)", () => {
+  const SEG: CircuitBlocks = {
+    type: "circuit", display_name: "Full Body", rounds: 4, rest_between_rounds_sec: 60,
+    warmup: "8 min easy on the upright bike + hip/T-spine mobility", cooldown: "5 min easy + stretch",
+    segments: [
+      { title: "Fresh — unilateral", rounds: 3, rest_between_rounds_sec: 75 },
+      { title: "Density circuit", rounds: 4, rest_between_rounds_sec: 60 },
+      { title: "Trunk", rounds: 2, rest_between_rounds_sec: 30 },
+    ],
+    exercises: [
+      { name: "DB split squat", format: "reps", target_reps: 8, rest_after_sec: 15, segment: 0, equipment_class: "dumbbell" },
+      { name: "DB goblet squat", format: "reps", target_reps: 12, rest_after_sec: 15, segment: 1, equipment_class: "dumbbell" },
+      { name: "1-arm DB row", format: "reps", target_reps: 10, rest_after_sec: 60, segment: 0, equipment_class: "dumbbell" },
+      { name: "Upright bike — Z3", format: "duration", duration_sec: 180, rest_after_sec: 60, segment: 1, equipment_class: "cardio" },
+      { name: "Side plank", format: "duration", duration_sec: 30, rest_after_sec: 10, segment: 2, equipment_class: "bodyweight" },
+    ],
+  };
+  const session = flattenBlocksToSteps(SEG);
+  const steps = session.steps;
+  const idx = (pred: (s: Step) => boolean) => steps.findIndex(pred);
+  const exAt = (name: string) => idx((s) => s.kind === "exercise" && s.exerciseRef?.name === name);
+  const breakOf = (id: string) => idx((s) => !!s.isRoundBreak && s.circuitId === id);
+
+  /** Walk the whole session from the start: "label@round" per cursor. */
+  function walk(st: Step[]): string[] {
+    const out: string[] = [];
+    let c: Cursor | null = INITIAL_CURSOR;
+    for (let i = 0; c && i < 500; i++) {
+      out.push(`${st[c.stepIndex].label}@${c.currentRound}`);
+      c = nextCursor(st, c);
+    }
+    return out;
+  }
+
+  it("emits one circuit body per segment, in order, each with its own id, rounds and break", () => {
+    expect(session.sections.map((x) => x.title)).toEqual([
+      "8:00 warmup", "3 × Fresh — unilateral", "4 × Density circuit", "2 × Trunk", "5:00 cool down",
+    ]);
+    expect(session.sections.filter((x) => x.kind === "circuit").map((x) => x.totalRounds)).toEqual([3, 4, 2]);
+    expect(steps.map((s) => `${s.kind}:${s.circuitId ?? "-"}:${s.totalRounds ?? "-"}`)).toEqual([
+      "warmup:-:-",
+      "exercise:seg0:3", "rest:seg0:3", "exercise:seg0:3", "rest:seg0:3",
+      "exercise:seg1:4", "rest:seg1:4", "exercise:seg1:4", "rest:seg1:4",
+      "exercise:seg2:2", "rest:seg2:2",
+      "cooldown:-:-",
+    ]);
+    // relative order kept within a segment, even though the list interleaves them
+    expect(steps.filter((s) => s.circuitId === "seg0" && s.kind === "exercise").map((s) => s.label))
+      .toEqual(["DB split squat", "1-arm DB row"]);
+    expect(steps[breakOf("seg0")].duration_sec).toBe(75);
+    expect(steps[breakOf("seg1")].duration_sec).toBe(60);
+    expect(steps[breakOf("seg2")].duration_sec).toBe(30);
+  });
+
+  it("the cursor runs each segment its own number of rounds, skipping each last round-break", () => {
+    const w = walk(steps);
+    const count = (label: string) => w.filter((x) => x.startsWith(`${label}@`)).length;
+    expect(count("DB split squat")).toBe(3);
+    expect(count("DB goblet squat")).toBe(4);
+    expect(count("Side plank")).toBe(2);
+    expect(w.filter((x) => x === "Between rounds@3")).toHaveLength(1);     // seg1 only
+    expect(w).not.toContain("Between rounds@4");
+    // seg0's last round leads straight into seg1 round 1 — no break, round reset
+    const i = w.indexOf("1-arm DB row@3");
+    expect(w[i + 1]).toBe("DB goblet squat@1");
+    expect(w[w.length - 1]).toBe("5 min easy + stretch@1");
+    expect(w[w.length - 2]).toBe("Side plank@2");
+  });
+
+  it("on a segment's last round its round-break is skipped and the cursor enters the next segment", () => {
+    const next = nextCursor(steps, { stepIndex: exAt("1-arm DB row"), currentRound: 3 })!;
+    expect(next).toEqual({ stepIndex: exAt("DB goblet squat"), currentRound: 1 });
+    // not the last round: the break wraps within the segment
+    expect(nextCursor(steps, { stepIndex: breakOf("seg0"), currentRound: 2 }))
+      .toEqual({ stepIndex: exAt("DB split squat"), currentRound: 3 });
+    expect(isLastCursor(steps, { stepIndex: idx((s) => s.kind === "cooldown"), currentRound: 1 })).toBe(true);
+    expect(isLastCursor(steps, { stepIndex: exAt("Side plank"), currentRound: 1 })).toBe(false);
+  });
+
+  it("activeRounds applies within a segment (a check-in can cut one exercise's sets)", () => {
+    const cut: CircuitBlocks = {
+      ...SEG,
+      exercises: SEG.exercises!.map((e) => (e.name === "DB goblet squat" ? { ...e, sets: 2 } : e)),
+    };
+    const st = flattenBlocksToSteps(cut).steps;
+    const goblet = st.find((s) => s.exerciseRef?.name === "DB goblet squat")!;
+    expect(goblet.activeRounds).toBe(2);
+    const w = walk(st);
+    expect(w.filter((x) => x.startsWith("DB goblet squat@"))).toEqual(["DB goblet squat@1", "DB goblet squat@2"]);
+    expect(w.filter((x) => x.startsWith("Upright bike — Z3@"))).toHaveLength(4);
+    // sets ≥ the segment's rounds is not a cut
+    const notCut = flattenBlocksToSteps({ ...SEG, exercises: SEG.exercises!.map((e) =>
+      (e.name === "Side plank" ? { ...e, sets: 3 } : e)) }).steps;
+    expect(notCut.find((s) => s.exerciseRef?.name === "Side plank")!.activeRounds).toBeUndefined();
+  });
+
+  it("nextExerciseFor crosses a segment boundary on the last round only", () => {
+    expect(nextExerciseFor(steps, breakOf("seg0"), 1)?.name).toBe("DB split squat");
+    expect(nextExerciseFor(steps, breakOf("seg0"), 3)?.name).toBe("DB goblet squat");
+    expect(nextExerciseFor(steps, breakOf("seg1"), 4)?.name).toBe("Side plank");
+    // seg2 has a single exercise: its round break leads to itself, then nowhere
+    expect(nextExerciseFor(steps, breakOf("seg2"), 1)?.name).toBe("Side plank");
+    expect(nextExerciseFor(steps, breakOf("seg2"), 2)).toBeNull();
+  });
+
+  it("totalDurationSec counts each segment by its own rounds", () => {
+    const work = (reps: number) => Math.max(30, reps * 4);
+    const seg0 = (work(8) + 15 + work(10)) * 3 + 75 * 2;
+    const seg1 = (work(12) + 15 + 180) * 4 + 60 * 3;
+    const seg2 = 30 * 2 + 30 * 1;
+    expect(totalDurationSec(session)).toBe(480 + seg0 + seg1 + seg2 + 300);
+  });
+
+  it("prevCursor steps back across a segment boundary onto the last round of the one before", () => {
+    expect(prevCursor(steps, { stepIndex: exAt("DB goblet squat"), currentRound: 1 }))
+      .toEqual({ stepIndex: exAt("1-arm DB row"), currentRound: 3 });
+    expect(prevCursor(steps, { stepIndex: idx((s) => s.kind === "cooldown"), currentRound: 1 }))
+      .toEqual({ stepIndex: exAt("Side plank"), currentRound: 2 });
+    // and forward again from there leaves the segment, as on the way in
+    expect(nextCursor(steps, { stepIndex: exAt("1-arm DB row"), currentRound: 3 })!.stepIndex)
+      .toBe(exAt("DB goblet squat"));
+    // within a segment the round is kept
+    expect(prevCursor(steps, { stepIndex: exAt("1-arm DB row"), currentRound: 2 }))
+      .toEqual({ stepIndex: exAt("1-arm DB row") - 1, currentRound: 2 });
+  });
+
+  it("an exercise naming no valid segment builds the legacy single body (nothing dropped)", () => {
+    const bad = { ...SEG, exercises: [...SEG.exercises!, { name: "Stray", format: "reps", target_reps: 5 }] } as CircuitBlocks;
+    const st = flattenBlocksToSteps(bad).steps;
+    expect(new Set(st.filter((s) => s.circuitId).map((s) => s.circuitId))).toEqual(new Set(["main"]));
+    expect(st.filter((s) => s.kind === "exercise")).toHaveLength(6);
+  });
+
+  it("without segments (absent, null or empty) a circuit flattens exactly as before", () => {
+    const legacy = flattenBlocksToSteps(circuit);
+    expect(flattenBlocksToSteps({ ...circuit, segments: null })).toEqual({ ...legacy, source: { ...circuit, segments: null } });
+    expect(flattenBlocksToSteps({ ...circuit, segments: [] }).steps).toEqual(legacy.steps);
+    expect(flattenBlocksToSteps({ ...circuit, segments: [] }).sections).toEqual(legacy.sections);
+    // and a segmented plan's `segment` tags are ignored when segments is absent
+    const { segments: _drop, ...noSeg } = SEG;
+    const flat = flattenBlocksToSteps(noSeg as CircuitBlocks);
+    expect(new Set(flat.steps.filter((s) => s.circuitId).map((s) => s.circuitId))).toEqual(new Set(["main"]));
+    expect(flat.sections.find((x) => x.kind === "circuit")?.title).toBe("4 × Circuit");
+  });
+});
+
+describe("strength_full labels (WEEK-TEMPLATE)", () => {
+  it("names the session and the strength button", async () => {
+    const { sessionLabel, strengthLabel, STRENGTH_TYPES } = await import("../src/lib/format");
+    expect(sessionLabel({ session_type: "strength_full" })).toBe("Full Body");
+    expect(strengthLabel("strength_full")).toBe("Strength — Full Body");
+    expect(strengthLabel("strength_b")).toBe("Strength B");
+    expect(strengthLabel(null)).toBe("Strength");
+    expect(STRENGTH_TYPES.has("strength_full")).toBe(true);
   });
 });

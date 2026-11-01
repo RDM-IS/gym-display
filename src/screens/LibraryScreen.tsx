@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchLibrary, fetchRecommend, fetchStrengthNext, postMakeup, type Recommendation } from "../lib/api";
 import { ADHOC_PLAN_ID } from "../lib/adhoc";
+import { STRENGTH_TYPES, strengthLabel } from "../lib/format";
 import type { LibraryLocation, LibraryResponse, LibrarySession, Plan } from "../lib/types";
 
 // ---------------------------------------------------------------------------
@@ -32,10 +33,8 @@ interface Props {
 
 /** QUICK-START buttons for these library session types; the Extras list below
  * leaves out strength, which only the Strength button opens. */
-const STRENGTH_TYPES = new Set(["strength_a", "strength_b", "strength_c"]);
 /** On a Start button, so not repeated under More. */
 const ON_A_BUTTON = new Set(["recovery_flow", "yoga_strength"]);
-const STRENGTH_LETTER: Record<string, string> = { strength_a: "A", strength_b: "B", strength_c: "C" };
 
 /** On a pain day off, only these extras. */
 const DAY_OFF_TYPES = new Set(["mobility"]);
@@ -300,7 +299,7 @@ function QuickStart({ rec, location, today, nextStrength, strengthErr, onLaunch,
       <div className="quick-row" role="group" aria-label="Strength, yoga and recovery">
         {strength ? (
           <button type="button" className={cls("strength")} data-testid="quick-strength" onClick={() => launch(strength)}>
-            <span className="quick-name">Strength {STRENGTH_LETTER[strength.session_type]}</span>{tag("strength")}
+            <span className="quick-name">{strengthLabel(strength.session_type)}</span>{tag("strength")}
             <span className="quick-sub">next · {location.display}</span>
           </button>
         ) : hasAnyStrength && strengthErr ? (

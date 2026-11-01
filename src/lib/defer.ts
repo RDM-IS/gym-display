@@ -15,16 +15,24 @@ import { flattenBlocksToSteps, type Cursor, type Step } from "./steps";
 
 export const MAIN = "main";
 
+/** The bodies a defer works inside: the main circuit, or one segment of a
+ * segmented circuit (FULLBODY-1: "seg0", "seg1", …). Never the finisher. */
+export function isDeferBody(circuitId: string | undefined): boolean {
+  return circuitId === MAIN || (!!circuitId && /^seg\d+$/.test(circuitId));
+}
+
 function inactiveIn(step: Step, round: number): boolean {
   return step.activeRounds != null && round > step.activeRounds;
 }
 
-/** Index of the next exercise step after `fromIdx` in the main circuit that
- * runs in `round`, or null when there is none left in this round. */
+/** Index of the next exercise step after `fromIdx` in the same (main or
+ * segment) circuit that runs in `round`, or null when none is left this round. */
 export function nextActiveExercise(steps: Step[], fromIdx: number, round: number): number | null {
+  const body = steps[fromIdx]?.circuitId;
+  if (!isDeferBody(body)) return null;
   for (let i = fromIdx + 1; i < steps.length; i++) {
     const s = steps[i];
-    if (s.circuitId !== MAIN) return null;
+    if (s.circuitId !== body) return null;
     if (s.kind === "exercise" && !inactiveIn(s, round)) return i;
   }
   return null;
@@ -33,14 +41,14 @@ export function nextActiveExercise(steps: Step[], fromIdx: number, round: number
 /** The exercise step that follows a (non round-break) rest in this round. */
 export function upcomingExercise(steps: Step[], restIdx: number, round: number): number | null {
   const rest = steps[restIdx];
-  if (!rest || rest.kind !== "rest" || rest.isRoundBreak || rest.circuitId !== MAIN) return null;
+  if (!rest || rest.kind !== "rest" || rest.isRoundBreak || !isDeferBody(rest.circuitId)) return null;
   return nextActiveExercise(steps, restIdx, round);
 }
 
 /** A strength (reps) exercise in the main circuit — the only kind a machine
  * can be "busy" for. */
 export function isDeferrable(step: Step | undefined): boolean {
-  return !!step && step.kind === "exercise" && step.circuitId === MAIN
+  return !!step && step.kind === "exercise" && isDeferBody(step.circuitId)
     && step.exerciseRef?.format === "reps";
 }
 
@@ -80,10 +88,10 @@ export function deferExercise(blocks: Blocks, steps: Step[], exIdx: number, roun
 }
 
 /** True when moving from `from` to `to` leaves the current round of the main
- * circuit (round wrap, or out of the circuit) — the plan order comes back. */
+ * circuit or segment (round wrap, or out of it) — the plan order comes back. */
 export function leavesRound(steps: Step[], from: Cursor, to: Cursor): boolean {
   const a = steps[from.stepIndex];
   const b = steps[to.stepIndex];
-  if (a?.circuitId !== MAIN) return false;
-  return b?.circuitId !== MAIN || to.currentRound !== from.currentRound;
+  if (!isDeferBody(a?.circuitId)) return false;
+  return b?.circuitId !== a?.circuitId || to.currentRound !== from.currentRound;
 }

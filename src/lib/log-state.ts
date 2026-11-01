@@ -1,4 +1,5 @@
 import { exerciseSets } from "./adjustment";
+import { roundsForExercise } from "./segments";
 import type { Step } from "./steps";
 import type { LastLoggedEntry, Plan } from "./types";
 import { parseSetup, type MachineSetup } from "./set-notes";
@@ -39,10 +40,10 @@ export function totalSetsFor(plan: Plan, exerciseName: string): number {
   let total = 0;
   const blocks = plan.blocks;
   if (blocks?.type === "circuit") {
-    const rounds = Math.max(1, blocks.rounds ?? 1);
     // A check-in adjustment can give one exercise fewer sets than the rounds.
+    // FULLBODY-1: in a segmented circuit the rounds are its segment's.
     for (const e of Array.isArray(blocks.exercises) ? blocks.exercises : []) {
-      if (e.name === exerciseName) total += exerciseSets(e, rounds);
+      if (e.name === exerciseName) total += exerciseSets(e, roundsForExercise(blocks, e));
     }
   }
   const fin = blocks?.finisher;

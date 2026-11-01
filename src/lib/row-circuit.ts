@@ -10,11 +10,19 @@ export function isPlannedRowLadder(plan: Plan | null | undefined): boolean {
 
 /** ROW-SCHEDULE: which row screen a planned day opens, or null for none.
  * `blocks.row_kind` decides when the row carries it (every MSP morning from
- * 2026-10-20); an older rower cardio day without it runs as the ladder. */
+ * 2026-10-20); an older rower cardio day without it runs as the ladder.
+ *
+ * WEEK-TEMPLATE (2026-11-01): a planned steady ride or run opens the same
+ * heart-rate ladder QUICK-START does — bike → "ride", treadmill → "run".
+ * Only a plain `steady` day without a row_kind; intervals keep their screen. */
 export function plannedRowKind(plan: Plan | null | undefined): RcKind | null {
   if (!plan || plan.is_skipped) return null;
   const b = plan.blocks;
   if (b.type !== "steady" && b.type !== "intervals") return null;
+  if (b.type === "steady" && b.row_kind == null) {
+    if (b.cardio?.modality === "bike") return "ride";
+    if (b.cardio?.modality === "treadmill") return "run";
+  }
   if (b.cardio?.modality !== "row") return null;
   if (b.row_kind === "ladder" || b.row_kind === "circuit") return b.row_kind;
   return b.type === "steady" || b.ran_as !== "intervals" ? "ladder" : null;

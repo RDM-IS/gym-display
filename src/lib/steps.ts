@@ -1,6 +1,7 @@
 import type {
   Blocks,
   CircuitBlocks,
+  CircuitSegment,
   Finisher,
   IntervalsBlocks,
   MobilityBlocks,
@@ -11,6 +12,7 @@ import type {
 } from "./types";
 import { assertNeverBlock } from "./types";
 import { buildFlowTimeline } from "./flow";
+import { segmentRounds, segmentsInUse } from "./segments";
 
 // ---------------------------------------------------------------------------
 // Single source of truth for the workout sequence.
@@ -34,7 +36,8 @@ export interface Step {
   precedingExerciseRef?: PlannedExercise;
   /** Set on every step inside a circuit body. */
   totalRounds?: number;
-  /** Identifies which circuit body this step belongs to: "main" | "finisher". */
+  /** Identifies which circuit body this step belongs to: "main" | "finisher",
+   * or "seg0", "seg1", … for a segmented circuit (FULLBODY-1). */
   circuitId?: string;
   /** Distinguishes the inter-round rest from regular inter-exercise rests. */
   isRoundBreak?: boolean;
@@ -188,53 +191,21 @@ function buildCircuit(b: Builder, blocks: CircuitBlocks): void {
     endSection(sec, b);
   }
 
-  // Circuit body — ONE pass with totalRounds metadata.
+  // Circuit body — ONE pass with totalRounds metadata. A segmented circuit
+  // (FULLBODY-1) is one body per segment, in order, each with its own rounds.
   const exercises = exerciseListOf(blocks);
-  const rounds = Math.max(1, blocks.rounds ?? 1);
-  if (exercises.length > 0) {
-    const sec = startSection(b, "circuit", `${rounds} × Circuit`, rounds);
-    for (let i = 0; i < exercises.length; i++) {
-      const ex = exercises[i];
-      const isLastEx = i === exercises.length - 1;
-      const activeRounds =
-        ex.sets != null && ex.sets > 0 && ex.sets < rounds ? ex.sets : undefined;
-      b.steps.push({
-        kind: "exercise",
-        label: ex.name,
-        duration_sec: workDurationForExercise(ex),
-        exerciseRef: ex,
-        totalRounds: rounds,
-        circuitId: "main",
-        holdAtEnd: ex.format === "reps",
-        activeRounds,
-      });
-      if (!isLastEx) {
-        b.steps.push({
-          kind: "rest",
-          label: "Rest",
-          duration_sec: ex.rest_after_sec ?? DEFAULT_EXERCISE_REST_SEC,
-          precedingExerciseRef: ex,
-          totalRounds: rounds,
-          circuitId: "main",
-          holdAtEnd: ex.format === "reps",
-          activeRounds,
-        });
-      } else if (rounds > 1) {
-        // Round-break rest. Lives at the END of the circuit body. On the
-        // last round, the cursor skips this step and lands on cooldown.
-        b.steps.push({
-          kind: "rest",
-          label: "Between rounds",
-          duration_sec: blocks.rest_between_rounds_sec ?? 60,
-          precedingExerciseRef: ex,
-          totalRounds: rounds,
-          circuitId: "main",
-          holdAtEnd: ex.format === "reps",
-          isRoundBreak: true,
-        });
-      }
-    }
-    endSection(sec, b);
+  const segmented = segmentedExercises(blocks, exercises);
+  if (segmented) {
+    segmented.forEach(({ seg, list }, k) => {
+      const rounds = segmentRounds(seg);
+      appendCircuitBody(b, list, rounds,
+        seg.rest_between_rounds_sec ?? blocks.rest_between_rounds_sec ?? 60,
+        `seg${k}`, `${rounds} × ${seg.title}`);
+    });
+  } else {
+    const rounds = Math.max(1, blocks.rounds ?? 1);
+    appendCircuitBody(b, exercises, rounds, blocks.rest_between_rounds_sec ?? 60,
+      "main", `${rounds} × Circuit`);
   }
 
   // Cooldown.
@@ -252,6 +223,73 @@ function buildCircuit(b: Builder, blocks: CircuitBlocks): void {
 
   // Finisher — same circuit expansion, distinct circuitId.
   appendFinisher(b, blocks.finisher);
+}
+
+/** FULLBODY-1: each segment with its exercises (original relative order), or
+ * null to build the legacy single body (see segmentsInUse). */
+function segmentedExercises(
+  blocks: CircuitBlocks,
+  exercises: PlannedExercise[],
+): { seg: CircuitSegment; list: PlannedExercise[] }[] | null {
+  const segments = segmentsInUse(blocks);
+  if (!segments) return null;
+  return segments.map((seg, k) => ({ seg, list: exercises.filter((ex) => ex.segment === k) }));
+}
+
+/** One circuit body: a single pass of `exercises` carrying totalRounds, with a
+ * round-break rest at the end when there is more than one round. */
+function appendCircuitBody(
+  b: Builder,
+  exercises: PlannedExercise[],
+  rounds: number,
+  roundBreakSec: number,
+  circuitId: string,
+  title: string,
+): void {
+  if (exercises.length === 0) return;
+  const sec = startSection(b, "circuit", title, rounds);
+  for (let i = 0; i < exercises.length; i++) {
+    const ex = exercises[i];
+    const isLastEx = i === exercises.length - 1;
+    const activeRounds =
+      ex.sets != null && ex.sets > 0 && ex.sets < rounds ? ex.sets : undefined;
+    b.steps.push({
+      kind: "exercise",
+      label: ex.name,
+      duration_sec: workDurationForExercise(ex),
+      exerciseRef: ex,
+      totalRounds: rounds,
+      circuitId,
+      holdAtEnd: ex.format === "reps",
+      activeRounds,
+    });
+    if (!isLastEx) {
+      b.steps.push({
+        kind: "rest",
+        label: "Rest",
+        duration_sec: ex.rest_after_sec ?? DEFAULT_EXERCISE_REST_SEC,
+        precedingExerciseRef: ex,
+        totalRounds: rounds,
+        circuitId,
+        holdAtEnd: ex.format === "reps",
+        activeRounds,
+      });
+    } else if (rounds > 1) {
+      // Round-break rest. Lives at the END of the circuit body. On the
+      // last round, the cursor skips this step and moves on.
+      b.steps.push({
+        kind: "rest",
+        label: "Between rounds",
+        duration_sec: roundBreakSec,
+        precedingExerciseRef: ex,
+        totalRounds: rounds,
+        circuitId,
+        holdAtEnd: ex.format === "reps",
+        isRoundBreak: true,
+      });
+    }
+  }
+  endSection(sec, b);
 }
 
 /** Mobility added by a check-in adjustment ("10 min mobility (shoulder)"). */
@@ -580,14 +618,22 @@ export function prevCursor(steps: Step[], cur: Cursor): Cursor {
   const prevIdx = cur.stepIndex - 1;
   const prevStep = steps[prevIdx];
   const curStep = steps[cur.stepIndex];
-  // If we're crossing a circuit boundary backwards, keep the round of the
-  // circuit we're entering (1 if unknown).
   if (!curStep || !prevStep) return { stepIndex: prevIdx, currentRound: 1 };
   const sameCircuit = !!curStep.circuitId && curStep.circuitId === prevStep.circuitId;
-  return {
-    stepIndex: prevIdx,
-    currentRound: sameCircuit ? cur.currentRound : 1,
-  };
+  if (sameCircuit) return { stepIndex: prevIdx, currentRound: cur.currentRound };
+  // Crossing backwards INTO a FULLBODY-1 segment (from the next segment or the
+  // cooldown): that segment was left on its LAST round, so re-enter it there —
+  // on the last step that round runs, never on its (skipped) round break.
+  // Scoped to segments so main/finisher keep their existing behaviour.
+  const body = prevStep.circuitId;
+  const rounds = prevStep.totalRounds;
+  if (body && /^seg\d+$/.test(body) && rounds && rounds > 1) {
+    let i = prevIdx;
+    while (i > 0 && steps[i].circuitId === body
+           && (steps[i].isRoundBreak || inactive(steps[i], rounds))) i--;
+    if (steps[i].circuitId === body) return { stepIndex: i, currentRound: rounds };
+  }
+  return { stepIndex: prevIdx, currentRound: 1 };
 }
 
 export function isFirstCursor(_steps: Step[], cur: Cursor): boolean {

@@ -14,6 +14,7 @@ const SESSION_LABELS: Record<SessionType, string> = {
   strength_a: "Strength A",
   strength_b: "Strength B",
   strength_c: "Strength C",
+  strength_full: "Full Body",
   cardio_intervals: "Intervals",
   cardio_z2: "Zone 2",
   walk: "Walk",
@@ -24,6 +25,23 @@ const SESSION_LABELS: Record<SessionType, string> = {
   mobility: "Mobility",
   bodyweight_circuit: "Bodyweight circuit",
 };
+
+/** Strength session types (WEEK-TEMPLATE adds strength_full, 2026-11-01). One
+ * list for every screen that has to tell strength from everything else. */
+export const STRENGTH_TYPES: ReadonlySet<string> = new Set<SessionType>([
+  "strength_a", "strength_b", "strength_c", "strength_full",
+]);
+
+const STRENGTH_SUFFIX: Record<string, string> = {
+  strength_a: "A", strength_b: "B", strength_c: "C", strength_full: "— Full Body",
+};
+
+/** Button/tile label for a strength session: "Strength A" … "Strength — Full
+ * Body". An unknown type reads plain "Strength" rather than a raw key. */
+export function strengthLabel(sessionType: string | null | undefined): string {
+  const suffix = sessionType ? STRENGTH_SUFFIX[sessionType] : undefined;
+  return suffix ? `Strength ${suffix}` : "Strength";
+}
 
 export function sessionLabel(plan: Plan | { session_type: SessionType }): string {
   return SESSION_LABELS[plan.session_type] ?? plan.session_type;
