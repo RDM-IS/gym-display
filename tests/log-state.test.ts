@@ -58,6 +58,22 @@ const STRAIGHT_SETS_HYPOTHETICAL: Plan = {
 };
 
 describe("totalSetsFor", () => {
+  it("FULLBODY-1: a segmented circuit counts each exercise by its segment's rounds", () => {
+    const seg: Plan = { ...CIRCUIT, session_type: "strength_full", blocks: {
+      type: "circuit", rounds: 4, rest_between_rounds_sec: 60,
+      segments: [{ title: "A", rounds: 3, rest_between_rounds_sec: 60 },
+                 { title: "B", rounds: 4, rest_between_rounds_sec: 60 },
+                 { title: "C", rounds: 2, rest_between_rounds_sec: 30 }],
+      exercises: [
+        { name: "Split squat", format: "reps", target_reps: 8, segment: 0 },
+        { name: "Goblet squat", format: "reps", target_reps: 12, segment: 1, sets: 2 },
+        { name: "Side plank", format: "duration", duration_sec: 30, segment: 2 },
+      ] } };
+    expect(totalSetsFor(seg, "Split squat")).toBe(3);
+    expect(totalSetsFor(seg, "Goblet squat")).toBe(2);
+    expect(totalSetsFor(seg, "Side plank")).toBe(2);
+  });
+
   it("circuit with rounds=3 and one occurrence → 3 sets", () => {
     expect(totalSetsFor(CIRCUIT, "Goblet squat")).toBe(3);
   });

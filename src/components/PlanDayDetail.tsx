@@ -5,6 +5,7 @@ import type {
   RecoveryFlowBlocks,
 } from "../lib/types";
 import { exerciseSets } from "../lib/adjustment";
+import { roundsForExercise } from "../lib/segments";
 import { buildFlowTimeline, flowTotalSec, formatClock, stepsForRound } from "../lib/flow";
 import { formatEstimate } from "../lib/format";
 import { extraLabel, workZoneText } from "../lib/zones";
@@ -159,14 +160,13 @@ export default function PlanDayDetail({ day, today }: Props) {
 }
 
 function CircuitPlan({ b, sessionRpe }: { b: CircuitBlocks; sessionRpe: number | null }) {
-  const rounds = b.rounds ?? 1;
   return (
     <>
       {b.warmup && <div className="dim">Warmup: {b.warmup}</div>}
       <ol className="list plan-exercises">
         {(b.exercises ?? []).map((ex, i) => (
           <li key={`${ex.name}-${i}`} className={ex.added_by ? "exercise--added" : undefined}>
-            <strong>{ex.name}</strong> — {exercisePlanLine(ex, rounds, sessionRpe)}
+            <strong>{ex.name}</strong> — {exercisePlanLine(ex, roundsForExercise(b, ex), sessionRpe)}
           </li>
         ))}
       </ol>

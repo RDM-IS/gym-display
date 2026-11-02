@@ -35,6 +35,7 @@ import type {
 } from "../lib/types";
 import { addDays, asOfLabel, dayLabel, groupByDate, statusIcon } from "../lib/week";
 import { formatSetup } from "../lib/set-notes";
+import { strengthLabel } from "../lib/format";
 
 // ---------------------------------------------------------------------------
 // STATUS-1 — the Status page. One read (/api/health/overview), scoped to the
@@ -47,8 +48,6 @@ interface Props {
   onOpenSessions?: () => void;
 }
 
-const STRENGTH_LETTER: Record<string, string> = { strength_a: "A", strength_b: "B", strength_c: "C" };
-
 /** RECOMMEND — "Recommended now" at the top of Status, from the same endpoint
  * Sessions reads, so the two cannot disagree. Unavailable = no tile. */
 function RecommendTile({ onOpen }: { onOpen?: () => void }) {
@@ -60,7 +59,7 @@ function RecommendTile({ onOpen }: { onOpen?: () => void }) {
   }, []);
   if (!rec?.available || !rec.label) return null;
   const label = rec.primary === "strength" && rec.strength
-    ? `Strength ${STRENGTH_LETTER[rec.strength] ?? ""}`.trim() : rec.label;
+    ? strengthLabel(rec.strength) : rec.label;
   return (
     <button type="button" className="btn status-rec" data-testid="status-rec" onClick={onOpen}>
       <span className="quick-rec-tag">Recommended now</span>
