@@ -313,9 +313,9 @@ function QuickStart({ rec, location, today, nextStrength, strengthErr, onLaunch,
           </p>
         ) : null}
         {bodyweight && (
-          <button type="button" className="btn quick-btn" data-testid="quick-bodyweight"
+          <button type="button" className={cls("bodyweight")} data-testid="quick-bodyweight"
                   onClick={() => launch(bodyweight)}>
-            <span className="quick-name">Bodyweight</span>
+            <span className="quick-name">Bodyweight</span>{tag("bodyweight")}
             <span className="quick-sub">
               {bodyweight.est_duration_min ? `${bodyweight.est_duration_min} min` : "full body"} · no equipment needed
             </span>

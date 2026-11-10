@@ -425,3 +425,37 @@ describe("Bodyweight (SESSION-OPEN 3a)", () => {
     }
   });
 });
+
+describe("Recommended: Bodyweight (SESSION-OPEN 3a)", () => {
+  const BW = { ...SESSION, session_type: "strength_bw", display_name: "Bodyweight", est_duration_min: 60,
+               blocks: { type: "circuit", rounds: 4, exercises: [] } };
+  const BDLIB: LibraryResponse = {
+    ...LIB, today_location_key: "brown_deer",
+    locations: [{ key: "brown_deer", display: "Brown Deer", sessions: [SESSION as never, BW as never] }],
+  };
+  function stubAll(rec: unknown) {
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      const u = String(url);
+      const body = u.includes("recommend") ? rec
+        : u.includes("strength-next") ? { available: true, session_type: "strength_full", after: null }
+        : BDLIB;
+      return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+    }));
+  }
+
+  it("highlights the Bodyweight button when the recommendation says so", async () => {
+    stubAll({ available: true, primary: "bodyweight", label: "Bodyweight", strength: null,
+              reason: "Row done · no lift logged yet · this room can't hold the next lift", more: [] });
+    render(<LibraryScreen onLaunch={() => {}} />);
+    await waitFor(() => expect(screen.getByTestId("quick-bodyweight").className).toContain("quick-btn--rec"));
+    expect(screen.getByTestId("quick-bodyweight").textContent).toContain("Recommended");
+    expect(screen.queryByTestId("quick-strength")).toBeNull();   // Brown Deer can't hold Full Body
+  });
+
+  it("is not highlighted otherwise", async () => {
+    stubAll({ available: true, primary: "recovery", label: "Recovery", strength: null, reason: "x", more: [] });
+    render(<LibraryScreen onLaunch={() => {}} />);
+    await waitFor(() => screen.getByTestId("quick-bodyweight"));
+    expect(screen.getByTestId("quick-bodyweight").className).not.toContain("quick-btn--rec");
+  });
+});

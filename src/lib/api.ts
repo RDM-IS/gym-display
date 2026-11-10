@@ -374,7 +374,9 @@ export async function fetchStrengthNext(): Promise<FetchStrengthNextResult> {
  * highlight. `available: false` = highlight nothing — never a guess. */
 export interface Recommendation {
   available: boolean;
-  primary?: "row" | "row_circuit" | "ride" | "run" | "strength" | "yoga" | "recovery";
+  // SESSION-OPEN 3a (2026-11-10): "bodyweight" when no lift in 48 h and the
+  // room can't hold the next strength session but lists Bodyweight.
+  primary?: "row" | "row_circuit" | "ride" | "run" | "strength" | "bodyweight" | "yoga" | "recovery";
   label?: string;
   strength?: string | null;
   reason?: string;
