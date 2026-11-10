@@ -823,6 +823,8 @@ export interface OverviewResponse {
   sleep_recovery?: SleepRecovery | null;
   /** SESSION-OPEN. Optional for the same reason as STATUS-2's keys. */
   strength_quota?: StrengthQuota | null;
+  /** STATUS-3. Optional for the same reason. */
+  grid?: GridInfo | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -845,6 +847,9 @@ export interface WeightGoal {
   change_since_start: number | null;
   lb_per_week: number | null;
   days_7d: number;
+  /** STATUS-3: 7-day rolling mean, one point per day for 30 days. Optional:
+   * an older Lambda doesn't send it. */
+  trend_7d?: TrendPoint[];
 }
 
 export interface CardioGoal {
@@ -869,6 +874,12 @@ export interface CardioGoal {
   interval_gate: "intervals" | "z2_variant" | "unresolved" | null;
   interval_gate_reason: string | null;
   interval_gate_date: string | null;
+  /** STATUS-3: TOTAL cardio minutes in the last 7 local days vs the planned
+   * minutes in the same days (zone minutes are unavailable — see the Lambda). */
+  minutes_7d?: number | null;
+  planned_minutes_7d?: number | null;
+  /** Rolling 7-day total; the last point equals minutes_7d. */
+  trend_7d?: TrendPoint[];
 }
 
 export interface StrengthGoal {
@@ -889,6 +900,22 @@ export interface NutritionGoal {
   target_protein_g: number | null;
   target_fiber_g: number | null;
   target_set_by: string | null;
+  /** STATUS-3: calories against the PLAN (Ryan's own provisional
+   * nutrition.target row) — labelled "plan", never a dietitian target. */
+  avg_kcal_7d?: number | null;
+  plan_kcal?: number | null;
+  plan_set_by?: string | null;
+  plan_provisional?: boolean | null;
+  /** Rolling 7-day mean over LOGGED days. */
+  trend_7d?: TrendPoint[];
+}
+
+/** STATUS-3: lifted volume (load × reps, lb). Its own read and status. */
+export interface StrengthVolume {
+  section: SectionStatus;
+  total_7d: number | null;
+  /** Rolling 7-day total; the last point equals total_7d. */
+  trend_7d: TrendPoint[];
 }
 
 export interface Goals {
@@ -896,6 +923,26 @@ export interface Goals {
   cardio: CardioGoal;
   strength: StrengthGoal;
   nutrition: NutritionGoal;
+  /** STATUS-3. Optional: an older Lambda doesn't send it. */
+  strength_volume?: StrengthVolume;
+}
+
+/** STATUS-3: Watch workout calories for one date and slot (local start hour;
+ * workouts are not matched to plan rows). */
+export interface BurnInfo {
+  date: string;
+  slot: "morning" | "evening";
+  kcal: number;
+  workouts: number;
+}
+
+/** STATUS-3: the 7-day grid — yesterday, today, the next five. */
+export interface GridInfo {
+  section: SectionStatus;
+  start: string | null;
+  end: string | null;
+  days: PlanDay[];
+  burn: BurnInfo[];
 }
 
 export interface CardioWeek {

@@ -36,6 +36,16 @@ import type {
 import { addDays, asOfLabel, dayLabel, groupByDate, statusIcon } from "../lib/week";
 import { formatSetup } from "../lib/set-notes";
 import { strengthLabel } from "../lib/format";
+import StatusGrid from "../components/StatusGrid";
+import TrendTiles from "../components/TrendTiles";
+import {
+  checkinBanner,
+  gridColumns,
+  goalLines,
+  milestones,
+  recentSessions,
+  shortDow,
+} from "../lib/status3";
 
 // ---------------------------------------------------------------------------
 // STATUS-1 — the Status page. One read (/api/health/overview), scoped to the
@@ -50,13 +60,9 @@ interface Props {
 
 /** RECOMMEND — "Recommended now" at the top of Status, from the same endpoint
  * Sessions reads, so the two cannot disagree. Unavailable = no tile. */
-function RecommendTile({ onOpen }: { onOpen?: () => void }) {
-  const [rec, setRec] = useState<Recommendation | null>(null);
-  useEffect(() => {
-    let live = true;
-    void fetchRecommend().then((r) => { if (live) setRec(r); });
-    return () => { live = false; };
-  }, []);
+function RecommendTile({ rec, onOpen }: { rec: Recommendation | null; onOpen?: () => void }) {
+  // STATUS-3: the screen fetches /recommend once and hands it to both this
+  // tile and the grid's Recommended row, so the two cannot disagree.
   if (!rec?.available || !rec.label) return null;
   const label = rec.primary === "strength" && rec.strength
     ? strengthLabel(rec.strength) : rec.label;
@@ -71,9 +77,46 @@ function RecommendTile({ onOpen }: { onOpen?: () => void }) {
 
 type View = { kind: "page" } | { kind: "day"; day: PlanDay } | { kind: "previous" };
 
+/** STATUS-3: one collapsed section. Closed by default; an open one spans the
+ * row so its body is never penned into a quarter of the screen. */
+function Fold({ title, summary, testId, children }: {
+  title: string; summary: string; testId: string; children: React.ReactNode;
+}) {
+  return (
+    <details className="st3-fold" data-testid={testId}>
+      <summary data-testid={`${testId}-summary`}>
+        <span className="st3-fold-title">{title}</span>
+        <span className="st3-fold-sum">{summary}</span>
+      </summary>
+      <div className="st3-fold-body">{children}</div>
+    </details>
+  );
+}
+
+/** STATUS-3: the @artemis check-in alert. Amber until 04:30 in the ACTIVE
+ * timezone, red from then on; gone once today's check-in is logged. */
+function CheckinBanner({ data }: { data: OverviewResponse }) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    // A clock, not a poll: it only re-evaluates the colour. The check-in
+    // itself is re-read on focus, like the rest of the page.
+    const t = window.setInterval(() => setNow(new Date()), 30_000);
+    return () => window.clearInterval(t);
+  }, []);
+  const state = checkinBanner(data, now);
+  if (!state) return null;
+  return (
+    <div className={`st3-checkin st3-checkin--${state}`} data-testid="checkin-banner"
+         data-state={state} role="alert">
+      <strong>No check-in yet.</strong> Tell @artemis how you slept, your weight and anything sore.
+    </div>
+  );
+}
+
 export default function StatusScreen({ onNavigate, onOpenSessions }: Props) {
   const [result, setResult] = useState<FetchOverviewResult | null>(null);
   const [view, setView] = useState<View>({ kind: "page" });
+  const [rec, setRec] = useState<Recommendation | null>(null);
 
   const load = useCallback(async () => {
     setResult(await fetchOverview());
@@ -94,6 +137,16 @@ export default function StatusScreen({ onNavigate, onOpenSessions }: Props) {
   }, [load]);
 
   const data = result?.status === "ok" ? result.data : null;
+
+  // /recommend once the page has something to show, as RecommendTile always
+  // did — one read, shared by the grid and the tile in "More detail".
+  const loaded = data != null;
+  useEffect(() => {
+    if (!loaded) return;
+    let live = true;
+    void fetchRecommend().then((r) => { if (live) setRec(r); });
+    return () => { live = false; };
+  }, [loaded]);
 
   if (view.kind === "day") {
     return (
@@ -132,12 +185,32 @@ export default function StatusScreen({ onNavigate, onOpenSessions }: Props) {
       )}
       {data && (
         <>
-        {/* STATUS-2: the goals come FIRST and span the page. They are the
-            question it exists to answer; everything below is how it is going.
-            Outside .status-grid on purpose — inside it they would be penned into
-            the narrower left column in landscape, which is where the iPad
-            spends most of its life on the rack. */}
-        <RecommendTile onOpen={onOpenSessions} />
+        {/* STATUS-3: one screen, no scrolling for daily use. The check-in
+            alert, the 7-day grid, four trend tiles, then everything else
+            folded shut. */}
+        <CheckinBanner data={data} />
+        {data.grid?.section.ok === false ? (
+          <div className="status-error" data-testid="grid-unreadable">
+            {data.grid.section.reason ?? "couldn't read the plan"}
+          </div>
+        ) : data.grid ? (
+          <StatusGrid
+            columns={gridColumns(data.grid, data.date, rec)}
+            onOpenDay={(day) => setView({ kind: "day", day })}
+            onOpenSessions={onOpenSessions}
+          />
+        ) : (
+          <div className="muted" data-testid="grid-missing">The 7-day grid needs the newer API.</div>
+        )}
+        <TrendTiles goals={data.goals} />
+        <div className="st3-folds">
+          <MilestonesFold data={data} />
+          <GoalsFold data={data} />
+          <RecentFold data={data} onOpen={(day) => setView({ kind: "day", day })} />
+          <Fold title="More detail" summary="program, week, check-ins, flags" testId="st3-more">
+        {/* Everything the page showed before STATUS-3, intact, behind one
+            fold: nothing was dropped, it is just not daily. */}
+        <RecommendTile rec={rec} onOpen={onOpenSessions} />
         {data.goals && <GoalTiles goals={data.goals} />}
         <div className="status-grid">
           <div className="status-col">
@@ -185,10 +258,58 @@ export default function StatusScreen({ onNavigate, onOpenSessions }: Props) {
             )}
           </div>
         </div>
+          </Fold>
+        </div>
         </>
       )}
       <BottomBar view="status" onNavigate={onNavigate} />
     </div>
+  );
+}
+
+function MilestonesFold({ data }: { data: OverviewResponse }) {
+  const items = milestones(data);
+  return (
+    <Fold title="PRs and milestones" testId="st3-prs"
+          summary={items.length ? items[0].text : "keep logging — bests show up here"}>
+      {items.length ? (
+        <ul className="st-list">{items.map((m) => <li key={m.key}>{m.text}</li>)}</ul>
+      ) : <div className="muted">No new bests or streaks yet.</div>}
+    </Fold>
+  );
+}
+
+function GoalsFold({ data }: { data: OverviewResponse }) {
+  const lines = goalLines(data);
+  return (
+    <Fold title="Goals and targets" testId="st3-goals"
+          summary={lines.length ? lines[0].text : "progress shows here"}>
+      {lines.length ? (
+        <ul className="st-list">{lines.map((l) => <li key={l.key}>{l.text}</li>)}</ul>
+      ) : <div className="muted">Nothing to report yet.</div>}
+    </Fold>
+  );
+}
+
+function RecentFold({ data, onOpen }: { data: OverviewResponse; onOpen: (d: PlanDay) => void }) {
+  const rows = recentSessions(data);
+  return (
+    <Fold title="Recent sessions" testId="st3-recent"
+          summary={rows.length ? `${rows.length} done · latest ${rows[0].name}` : "none logged yet"}>
+      {rows.length ? (
+        <ul className="st-list">
+          {rows.map((r) => (
+            <li key={r.row.plan_id}>
+              <button type="button" className="st3-recent" onClick={() => onOpen(r.row)}>
+                <span>{shortDow(r.row.plan_date)} {md(r.row.plan_date)}</span>
+                <span>{r.name}</span>
+                <span className="dim">{r.row.status === "done" ? "Done" : "Partial"}{r.kcal != null ? ` · ${r.kcal} kcal` : ""}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : <div className="muted">No sessions logged in this window.</div>}
+    </Fold>
   );
 }
 

@@ -46,9 +46,18 @@ async function shot(page: Page, name: string) {
   await page.screenshot({ path: `e2e/screenshots/${test.info().project.name}-${name}.png` });
 }
 
+/** STATUS-3 folded the pre-existing page into "More detail". Every check in
+ * this file is about that content, so it opens the fold first. */
+async function openMore(page: Page) {
+  await expect(page.getByTestId("st3-more")).toBeVisible();
+  await page.getByTestId("st3-more-summary").click();
+  await expect(page.getByTestId("st3-more")).toHaveAttribute("open", "");
+  await expect(page.getByTestId("st-program")).toBeVisible();
+}
+
 async function openStatus(page: Page) {
   await page.goto("/status");
-  await expect(page.getByTestId("st-program")).toBeVisible();
+  await openMore(page);
 }
 
 /** Scroll the page to `sel` and check it is fully on screen above the bar. */
@@ -224,7 +233,7 @@ test("a tile opens the day detail; Previous program is a read-only list", async 
 
   // The Status tab brings the page back.
   await page.getByRole("link", { name: "Status" }).tap();
-  await expect(page.getByTestId("st-program")).toBeVisible();
+  await openMore(page);
 
   await page.getByTestId("previous-program").tap();
   await expect(page.getByTestId("status-previous")).toBeVisible();
@@ -233,7 +242,7 @@ test("a tile opens the day detail; Previous program is a read-only list", async 
   await expect(page.getByTestId("status-previous").getByRole("button", { name: "Start" })).toHaveCount(0);
   await shot(page, "status-4-previous");
   await page.getByRole("button", { name: "Back to Status" }).tap();
-  await expect(page.getByTestId("st-program")).toBeVisible();
+  await openMore(page);
 });
 
 test("offline: last data, marked 'as of'", async ({ page }) => {
@@ -243,5 +252,5 @@ test("offline: last data, marked 'as of'", async ({ page }) => {
   offline = true;
   await page.reload();
   await expect(page.getByTestId("status-stale")).toHaveText(/^Offline — as of \d\d:\d\d$/);
-  await expect(page.getByTestId("st-program")).toBeVisible();
+  await openMore(page);
 });

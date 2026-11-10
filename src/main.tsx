@@ -10,6 +10,7 @@ import "./styles/status-page.css";
 import "./styles/flow.css";
 import "./styles/week.css";
 import "./styles/status2.css";
+import "./styles/status3.css";
 import "./styles/music.css";
 import "./styles/circuit.css";
 import "./styles/prep.css";

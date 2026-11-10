@@ -319,6 +319,8 @@ test("rest_mobility: redirects to Status; Today shows the rest-day screen", asyn
   await mockApi(page, { plan: MOBILITY_PLAN, status: statusFor({ plan_id: 103, session_type: "rest_mobility", exists: true }) });
   await page.goto("/today");
   await expect(page).toHaveURL(/\/status$/);
+  // STATUS-3: the week list is in the "More detail" fold, closed by default.
+  await page.getByTestId("st3-more-summary").tap();
   await expect(page.getByRole("heading", { name: "This week" })).toBeVisible();
   await expectSaneLayout(page);
   await expectTouchTargets(page);
