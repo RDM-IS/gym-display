@@ -35,7 +35,11 @@ export type SessionType =
   | "bodyweight_circuit"
   // WEEK-TEMPLATE / FULLBODY-1 (2026-11-01): migration 058 widens the CHECK.
   // A strength day built as a segmented circuit (blocks.segments).
-  | "strength_full";
+  | "strength_full"
+  // SESSION-OPEN 3a (2026-11-09): the bodyweight full-body session, same
+  // segmented-circuit shape, no load fields (every class is no-load). Migration
+  // 059 widens the CHECK; the UNION goes first, as always.
+  | "strength_bw";
 
 export type ExerciseFormat = "reps" | "duration";
 

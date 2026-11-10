@@ -260,6 +260,11 @@ function QuickStart({ rec, location, today, nextStrength, strengthErr, onLaunch,
 }) {
   const find = (t: string) => location.sessions.find((s) => s.session_type === t) ?? null;
   const strength = nextStrength ? find(nextStrength) : null;
+  // SESSION-OPEN 3a: Bodyweight is its own button, shown wherever the library
+  // lists it for this room — it is never "next" in the rotation, so it does not
+  // ride on nextStrength. Same Setup / Workout / Done screens as Full Body; every
+  // exercise is a no-load class, so there are no load fields.
+  const bodyweight = find("strength_bw");
   const hasAnyStrength = location.sessions.some((s) => STRENGTH_TYPES.has(s.session_type));
   const yoga = find("yoga_strength");
   const recovery = find("recovery_flow");
@@ -307,6 +312,15 @@ function QuickStart({ rec, location, today, nextStrength, strengthErr, onLaunch,
             Strength: couldn't tell which session is next ({strengthErr}).
           </p>
         ) : null}
+        {bodyweight && (
+          <button type="button" className={cls("bodyweight")} data-testid="quick-bodyweight"
+                  onClick={() => launch(bodyweight)}>
+            <span className="quick-name">Bodyweight</span>{tag("bodyweight")}
+            <span className="quick-sub">
+              {bodyweight.est_duration_min ? `${bodyweight.est_duration_min} min` : "full body"} · no equipment needed
+            </span>
+          </button>
+        )}
         {yoga && (
           <button type="button" className={cls("yoga")} data-testid="quick-yoga" onClick={() => launch(yoga)}>
             <span className="quick-name">Yoga — Intense</span>{tag("yoga")}

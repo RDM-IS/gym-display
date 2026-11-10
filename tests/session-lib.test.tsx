@@ -350,3 +350,112 @@ describe("Recommended (RECOMMEND)", () => {
     expect(screen.queryByTestId("quick-rec-reason")).toBeNull();
   });
 });
+
+describe("Bodyweight (SESSION-OPEN 3a)", () => {
+  // Synthetic: 2027 dates, no loads at all (every class is no-load).
+  const BW_EXERCISES = [
+    { name: "Reverse lunge", format: "reps", target_reps: 8, segment: 0, equipment_class: "bodyweight" },
+    { name: "TRX row", format: "reps", target_reps: 15, segment: 1, equipment_class: "trx" },
+    { name: "Bike — Z3", format: "duration", duration_sec: 180, segment: 1, equipment_class: "cardio" },
+    { name: "Dead bug", format: "reps", target_reps: 10, segment: 2, equipment_class: "bodyweight" },
+  ];
+  const BW = { ...SESSION, session_type: "strength_bw", display_name: "Bodyweight", est_duration_min: 60,
+               blocks: { type: "circuit", rounds: 4, exercises: BW_EXERCISES,
+                         segments: [{ rounds: 3 }, { rounds: 4 }, { rounds: 2 }] } };
+  const STRENGTH = (t: string) => ({ ...SESSION, session_type: t, display_name: `Test ${t}`,
+                                    blocks: { type: "circuit", rounds: 1, exercises: [] } });
+  const BLIB: LibraryResponse = {
+    ...LIB,
+    locations: [
+      { key: "office", display: "office gym", sessions: [
+        SESSION as never, STRENGTH("strength_full") as never, BW as never,
+      ] },
+      { key: "msp_home", display: "home", sessions: [
+        { ...SESSION, session_type: "recovery_flow", display_name: "Test Flow", blocks: { type: "recovery_flow" } } as never,
+      ] },
+    ],
+  };
+  function stubBoth(next: unknown) {
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      const body = String(url).includes("strength-next") ? next : BLIB;
+      return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+    }));
+  }
+
+  it("shows a Bodyweight button where the library lists it, and launches strength_bw", async () => {
+    stubBoth({ available: true, session_type: "strength_full", after: null });
+    const onLaunch = vi.fn();
+    render(<LibraryScreen onLaunch={onLaunch} />);
+    await waitFor(() => screen.getByTestId("quick-bodyweight"));
+    expect(screen.getByTestId("quick-bodyweight").textContent).toContain("Bodyweight");
+    expect(screen.getByTestId("quick-bodyweight").textContent).toContain("60 min");
+    // The rotation's button is untouched: Full Body is still "next".
+    expect(screen.getByTestId("quick-strength").textContent).toContain("Full Body");
+    fireEvent.click(screen.getByTestId("quick-bodyweight"));
+    const [plan, type] = onLaunch.mock.calls[0] as [Plan, string];
+    expect(type).toBe("strength_bw");
+    expect(plan.session_type).toBe("strength_bw");
+    // Never also in "More": it has its own button.
+    expect(screen.queryAllByText("Bodyweight").filter((n) => n.className === "library-name")).toHaveLength(0);
+  });
+
+  it("is absent in a room the library doesn't list it for", async () => {
+    stubBoth({ available: true, session_type: "strength_full", after: null });
+    render(<LibraryScreen onLaunch={() => {}} />);
+    await waitFor(() => screen.getByTestId("quick-bodyweight"));
+    fireEvent.click(screen.getByLabelText("Change location for this session"));
+    fireEvent.click(screen.getByRole("button", { name: "home" }));
+    expect(screen.queryByTestId("quick-bodyweight")).toBeNull();
+  });
+
+  it("does not depend on the rotation: shown even when /strength-next can't be read", async () => {
+    stubBoth({ available: false, reason: "down" });
+    render(<LibraryScreen onLaunch={() => {}} />);
+    await waitFor(() => screen.getByTestId("quick-strength-error"));
+    expect(screen.getByTestId("quick-bodyweight")).toBeDefined();
+  });
+
+  it("names it everywhere and carries no load fields", async () => {
+    const { sessionLabel, STRENGTH_TYPES } = await import("../src/lib/format");
+    const { weightStepFor } = await import("../src/lib/weight-step");
+    expect(sessionLabel({ session_type: "strength_bw" })).toBe("Bodyweight");
+    expect(STRENGTH_TYPES.has("strength_bw")).toBe(true);
+    for (const ex of BW_EXERCISES) {
+      expect(weightStepFor(ex as never, null).loadMode, ex.name).toBe("none");
+    }
+  });
+});
+
+describe("Recommended: Bodyweight (SESSION-OPEN 3a)", () => {
+  const BW = { ...SESSION, session_type: "strength_bw", display_name: "Bodyweight", est_duration_min: 60,
+               blocks: { type: "circuit", rounds: 4, exercises: [] } };
+  const BDLIB: LibraryResponse = {
+    ...LIB, today_location_key: "brown_deer",
+    locations: [{ key: "brown_deer", display: "Brown Deer", sessions: [SESSION as never, BW as never] }],
+  };
+  function stubAll(rec: unknown) {
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      const u = String(url);
+      const body = u.includes("recommend") ? rec
+        : u.includes("strength-next") ? { available: true, session_type: "strength_full", after: null }
+        : BDLIB;
+      return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+    }));
+  }
+
+  it("highlights the Bodyweight button when the recommendation says so", async () => {
+    stubAll({ available: true, primary: "bodyweight", label: "Bodyweight", strength: null,
+              reason: "Row done · no lift logged yet · this room can't hold the next lift", more: [] });
+    render(<LibraryScreen onLaunch={() => {}} />);
+    await waitFor(() => expect(screen.getByTestId("quick-bodyweight").className).toContain("quick-btn--rec"));
+    expect(screen.getByTestId("quick-bodyweight").textContent).toContain("Recommended");
+    expect(screen.queryByTestId("quick-strength")).toBeNull();   // Brown Deer can't hold Full Body
+  });
+
+  it("is not highlighted otherwise", async () => {
+    stubAll({ available: true, primary: "recovery", label: "Recovery", strength: null, reason: "x", more: [] });
+    render(<LibraryScreen onLaunch={() => {}} />);
+    await waitFor(() => screen.getByTestId("quick-bodyweight"));
+    expect(screen.getByTestId("quick-bodyweight").className).not.toContain("quick-btn--rec");
+  });
+});
