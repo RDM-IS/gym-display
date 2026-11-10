@@ -575,7 +575,7 @@
    "location": "home",
    "is_skipped": false,
    "adjusted": false,
-   "status": "missed",
+   "status": "not_done",
    "blocks": {
     "type": "recovery_flow",
     "display_name": "Recovery Flow",
@@ -1434,11 +1434,6 @@
    "date": "2026-09-21",
    "kind": "pain",
    "text": "Pain chip: low back 3 on DB Romanian deadlift (9/21)"
-  },
-  {
-   "date": "2026-09-19",
-   "kind": "missed",
-   "text": "Missed: Recovery Flow (9/19)"
   },
   {
    "date": "2026-09-18",

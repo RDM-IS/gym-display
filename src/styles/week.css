@@ -132,7 +132,8 @@
 .day-status { font-weight: 700; }
 .ds--done { color: var(--ok); }
 .ds--partial { color: var(--accent); }
-.ds--missed { color: var(--danger); }
+/* SESSION-OPEN: a suggestion not taken is neutral, never an alarm. */
+.ds--not_done, .ds--skipped, .ds--missed { color: var(--fg-dim); }
 .ds--upcoming, .ds--today { color: var(--fg-dim); }
 
 /* Portrait: the list only (a tapped day opens as its own view).

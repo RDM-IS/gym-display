@@ -455,6 +455,24 @@ export interface StatusResponse {
   same_type_history: LoggedSession[];
   rpe_trend: TrendPoint[];
   weight_trend: TrendPoint[];
+  /** SESSION-OPEN. Optional: an older Lambda doesn't send it. */
+  strength_quota?: StrengthQuota | null;
+}
+
+/** SESSION-OPEN: strength days this Sun..Sat week toward 3 (one read on the
+ *  Lambda; `section.ok === false` means unreadable — never read it as zero). */
+export type StrengthQuotaStatus = "met" | "on_track" | "tight" | "short" | "not_counted";
+
+export interface StrengthQuota {
+  section: { ok: boolean; reason: string | null };
+  week_start: string | null;
+  week_end: string | null;
+  strength_days: string[];
+  count: number | null;
+  required: number | null;
+  needed: number | null;
+  days_left: number | null;
+  status: StrengthQuotaStatus | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -648,7 +666,13 @@ export interface SessionsResponse {
 
 // ── GD-WEEK: GET /api/health/plan ───────────────────────────────────────────
 
-export type PlanDayStatus = "done" | "partial" | "missed" | "upcoming" | "today";
+// SESSION-OPEN (artemis, 2026-11-09): plan rows are suggestions, so a past day
+// not taken is `not_done` (neutral), never "missed". `skipped` was already sent
+// by the Lambda (MAKEUP-1) and was missing here — the ENUM-EXPAND gap a `never`
+// default cannot see. `missed` stays only for a Lambda older than SESSION-OPEN
+// (Pages can deploy first); it renders exactly like `not_done`.
+export type PlanDayStatus =
+  | "done" | "partial" | "not_done" | "skipped" | "missed" | "upcoming" | "today";
 
 export interface LoggedExerciseSummary {
   exercise: string;
@@ -790,6 +814,8 @@ export interface OverviewResponse {
   cardio_detail?: CardioDetail | null;
   nutrition_7d?: NutritionDetail | null;
   sleep_recovery?: SleepRecovery | null;
+  /** SESSION-OPEN. Optional for the same reason as STATUS-2's keys. */
+  strength_quota?: StrengthQuota | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -940,6 +966,8 @@ export interface MakeupState {
   offer: MakeupOffer | null;
   repeat: boolean;
   offer_blocked?: string;
+  /** SESSION-OPEN: MAKEUP-2 is retired; `offer` is always null. */
+  retired?: boolean;
 }
 
 export type LibraryResponse =

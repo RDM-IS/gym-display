@@ -73,6 +73,6 @@ describe("date line", () => {
     expect(dateLineStatus(statusIcon("upcoming"))).toBe("Upcoming");
     expect(dateLineStatus(statusIcon("today"))).toBe("Today");
     expect(dateLineStatus(statusIcon("done"))).toBe("✓ Done");
-    expect(dateLineStatus(statusIcon("missed"))).toBe("✕ Missed");
+    expect(dateLineStatus(statusIcon("not_done"))).toBe("○ Not done");
   });
 });
