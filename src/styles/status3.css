@@ -1,0 +1,187 @@
+/* STATUS-3 — the one-screen Status page. Daily use must not scroll on the iPad
+ * in either orientation: banner + grid + tiles + one row of folds fit between
+ * the top tabs and the bottom bar. An OPEN fold may scroll the page; that is a
+ * deliberate act, not daily use. */
+
+.status2 > * + * { margin-top: var(--gap); }
+
+/* ── Check-in alert ─────────────────────────────────────────────────────── */
+.st3-checkin {
+  border-radius: 12px;
+  padding: 10px 16px;
+  font-size: 17px;
+  line-height: 1.3;
+  border: 1px solid;
+}
+.st3-checkin--amber { color: var(--accent); border-color: var(--accent); background: rgba(255, 209, 102, 0.1); }
+.st3-checkin--red { color: #fff; border-color: var(--danger); background: rgba(247, 139, 139, 0.28); }
+
+/* ── 7-day grid ─────────────────────────────────────────────────────────── */
+.sg {
+  display: grid;
+  grid-template-columns: 88px repeat(7, minmax(0, 1fr));
+  grid-auto-rows: auto;
+  gap: 4px;
+}
+.sg-corner { min-height: 0; }
+.sg-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 0;
+  border-radius: 8px 8px 0 0;
+  line-height: 1.15;
+}
+.sg-dow { font-size: 15px; font-weight: 800; }
+.sg-date { font-size: 13px; color: var(--fg-dim); }
+.sg-label {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+.sg-cell {
+  min-height: 64px;
+  min-width: 0;
+  padding: 6px 7px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(245, 245, 245, 0.03);
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 2px;
+  overflow: hidden;
+}
+button.sg-cell { cursor: pointer; }
+button.sg-cell:active:not(:disabled) { transform: scale(0.97); }
+.sg-cell--empty { border-style: dashed; border-color: rgba(245, 245, 245, 0.08); background: none; }
+.sg-name {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.sg-meta, .sg-why { font-size: 12px; color: var(--fg-dim); line-height: 1.2; }
+.sg-why { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sg-kcal { font-weight: 700; color: var(--fg); }
+
+.sg-tone--green { border-color: rgba(109, 213, 140, 0.55); border-left: 4px solid var(--ok); }
+.sg-tone--yellow { border-color: rgba(255, 209, 102, 0.55); border-left: 4px solid var(--accent); }
+.sg-tone--neutral .sg-name { color: var(--fg-dim); font-weight: 600; }
+.sg-tone--muted { opacity: 0.55; }
+.sg-rec { background: rgba(245, 245, 245, 0.06); }
+.sg-rec--plan { background: none; }
+.sg-rec--plan .sg-name { font-weight: 600; color: var(--fg-dim); }
+.sg-rec:disabled { cursor: default; }
+
+/* Today: the column is lifted, not just its header. */
+.sg-col--today.sg-head { background: rgba(255, 209, 102, 0.16); color: var(--accent); }
+.sg-col--today.sg-cell { box-shadow: 0 0 0 1px rgba(255, 209, 102, 0.6) inset; }
+.sg-col--past.sg-head { opacity: 0.7; }
+/* Mon–Sun goal weeks: the divider where Sunday meets Monday. */
+.sg-col--week { position: relative; margin-left: 6px; }
+.sg-col--week::before {
+  content: "";
+  position: absolute;
+  left: -7px;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--fg-faint);
+}
+
+/* ── Trend tiles ────────────────────────────────────────────────────────── */
+.tt-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--gap);
+}
+.tt {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 12px;
+  background: rgba(245, 245, 245, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tt-title { font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-dim); }
+.tt-value { font-size: 26px; font-weight: 800; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tt-unit { font-size: 14px; font-weight: 600; color: var(--fg-dim); }
+.tt-sub { font-size: 12px; color: var(--fg-dim); line-height: 1.25; min-height: 2.5em; }
+.tt-spark { width: 100%; height: 36px; display: block; }
+.tt-spark--empty { height: 36px; display: flex; align-items: center; font-size: 12px; color: var(--fg-faint); font-style: italic; }
+.tt-line { fill: none; stroke: var(--accent); stroke-width: 2; }
+.tt-dot { fill: var(--accent); }
+
+/* ── Folds ──────────────────────────────────────────────────────────────── */
+.st3-folds {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--gap);
+  align-items: start;
+}
+.st3-fold {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(245, 245, 245, 0.03);
+}
+.st3-fold[open] { grid-column: 1 / -1; order: 1; }
+.st3-fold > summary {
+  min-height: var(--tap);
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  cursor: pointer;
+  list-style: none;
+}
+.st3-fold > summary::-webkit-details-marker { display: none; }
+.st3-fold-title { font-size: 15px; font-weight: 800; }
+.st3-fold-title::after { content: " ▸"; color: var(--fg-dim); }
+.st3-fold[open] .st3-fold-title::after { content: " ▾"; }
+.st3-fold-sum {
+  font-size: 12px;
+  color: var(--fg-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.st3-fold-body { padding: 4px 12px 12px; display: flex; flex-direction: column; gap: var(--gutter); }
+.st3-recent {
+  display: grid;
+  grid-template-columns: 90px 1fr auto;
+  gap: 12px;
+  width: 100%;
+  min-height: var(--tap);
+  align-items: center;
+  background: none;
+  border: none;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+@media (orientation: portrait) {
+  .st3-folds { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sg { grid-template-columns: 64px repeat(7, minmax(0, 1fr)); }
+  .sg-label { font-size: 10px; letter-spacing: 0.04em; }
+  .sg-cell { min-height: 76px; padding: 6px 5px; }
+  .sg-name { font-size: 13px; -webkit-line-clamp: 3; }
+  .tt-value { font-size: 22px; }
+}

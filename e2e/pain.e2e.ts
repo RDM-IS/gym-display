@@ -135,6 +135,8 @@ test("pain chip: region + rating, no keyboard, posted note, Status still flags i
   });
 
   await page.goto("/status");
+  // STATUS-3: flags live in the "More detail" fold, closed by default.
+  await page.getByTestId("st3-more-summary").tap();
   const row = page.getByTestId("st-flags").locator("li", { hasText: "Pain chip: shoulder 2 on Seated DB shoulder press" });
   await expect(row).toBeVisible();
   await row.scrollIntoViewIfNeeded();
