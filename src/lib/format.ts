@@ -15,6 +15,7 @@ const SESSION_LABELS: Record<SessionType, string> = {
   strength_b: "Strength B",
   strength_c: "Strength C",
   strength_full: "Full Body",
+  strength_bw: "Bodyweight",
   cardio_intervals: "Intervals",
   cardio_z2: "Zone 2",
   walk: "Walk",
@@ -26,14 +27,16 @@ const SESSION_LABELS: Record<SessionType, string> = {
   bodyweight_circuit: "Bodyweight circuit",
 };
 
-/** Strength session types (WEEK-TEMPLATE adds strength_full, 2026-11-01). One
- * list for every screen that has to tell strength from everything else. */
+/** Strength session types (WEEK-TEMPLATE adds strength_full, 2026-11-01;
+ * SESSION-OPEN 3a adds strength_bw, 2026-11-09). One list for every screen that
+ * has to tell strength from everything else — it keeps them all out of "More". */
 export const STRENGTH_TYPES: ReadonlySet<string> = new Set<SessionType>([
-  "strength_a", "strength_b", "strength_c", "strength_full",
+  "strength_a", "strength_b", "strength_c", "strength_full", "strength_bw",
 ]);
 
 const STRENGTH_SUFFIX: Record<string, string> = {
   strength_a: "A", strength_b: "B", strength_c: "C", strength_full: "— Full Body",
+  strength_bw: "— Bodyweight",
 };
 
 /** Button/tile label for a strength session: "Strength A" … "Strength — Full

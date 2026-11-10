@@ -129,11 +129,29 @@ async function mockApi(page: Page) {
     if (path.endsWith("/today/logged")) return route.fulfill({ json: { logged: [] } });
     if (path.endsWith("/last_logged")) return route.fulfill({ json: { exercises: {} } });
     if (path.endsWith("/library")) {
-      return route.fulfill({ json: { location: "office gym", location_key: "office",
-        sessions: Array.from({ length: N_LONG }, (_, i) => ({
-          key: `s${i}`, display_name: `Session ${i + 1}`, session_type: "yoga",
-          duration_min: 20, equipment: [], blocks: { type: "flow" } })) } });
+      // The REAL LibraryResponse shape (SESSION-LIB). The mock used to be an
+      // older one ({location, sessions}), so this route rendered "library not
+      // available" and the layout check never saw the session list (found
+      // 2026-11-09 adding SESSION-OPEN 3a's Bodyweight button).
+      const s = (t: string, name: string, extra = {}) => ({
+        session_type: t, display_name: name, week_num: 1, phase: 2, target_rpe: 4,
+        target_hr_zone: null, est_duration_min: 20,
+        blocks: { type: "circuit", rounds: 1, exercises: [] }, ...extra });
+      return route.fulfill({ json: {
+        available: true, stale: false, today: TODAY, generated_on: TODAY, week_num: 1,
+        today_location_key: "office",
+        locations: [{ key: "office", display: "office gym", sessions: [
+          s("recovery_flow", "Recovery Flow", { blocks: { type: "recovery_flow" } }),
+          s("yoga_strength", "Yoga — Strength & Balance", { blocks: { type: "recovery_flow" } }),
+          s("strength_full", "Full Body"),
+          s("strength_bw", "Bodyweight", { est_duration_min: 60 }),
+          ...Array.from({ length: N_LONG }, (_, i) => s(i % 2 ? "core" : "mobility", `Extra ${i + 1}`)),
+        ] }] } });
     }
+    if (path.endsWith("/strength-next")) {
+      return route.fulfill({ json: { available: true, session_type: "strength_full", after: null } });
+    }
+    if (path.endsWith("/recommend")) return route.fulfill({ json: { available: false, reason: "test" } });
     if (path.endsWith("/overview")) {
       return route.fulfill({ json: {
         today: TODAY, timezone: "America/Chicago",
@@ -305,6 +323,22 @@ test.describe("every route: nothing under the nav, and it scrolls", () => {
         await assertNothingUnderTheNav(page, `${route} scrolled to the end`, true);
       });
   }
+});
+
+test.describe("Sessions: the Bodyweight button (SESSION-OPEN 3a)", () => {
+  test("is shown, tappable and clear of the nav in the real shell", async ({ page }) => {
+    await mockApi(page);
+    await page.goto("/library");
+    const bw = page.getByTestId("quick-bodyweight");
+    await expect(bw).toBeVisible();
+    await expect(bw).toContainText("Bodyweight");
+    await expect(page.getByTestId("quick-strength")).toContainText("Full Body");
+    const box = (await bw.boundingBox())!;
+    for (const n of await navBoxes(page)) {
+      expect(overlaps(box, n), "Bodyweight sits under the nav").toBe(false);
+    }
+    expect(box.y + box.height).toBeLessThan(page.viewportSize()!.height);
+  });
 });
 
 test.describe("prep sub-tabs", () => {
