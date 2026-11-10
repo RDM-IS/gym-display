@@ -60,9 +60,9 @@ function week(from: string) {
       logged: [{ exercise: "DB goblet squat", log_type: "strength_set", sets: 1, reps: [12],
                  top_weight_lbs: 25, duration_sec: null, skipped: 0 }] },
     { session_type: "recovery_flow", display_name: "Recovery Flow", location: "home",
-      est_duration_min: 30, status: "missed",
+      est_duration_min: 30, status: "not_done",
       blocks: { ...office.blocks, location: "home", pre: [] } },
-    { session_type: "walk", display_name: "Walk", location: "outside", est_duration_min: 30, status: "missed",
+    { session_type: "walk", display_name: "Walk", location: "outside", est_duration_min: 30, status: "not_done",
       blocks: { type: "steady", display_name: "Walk", duration_min: 30, intensity: "easy",
                 equipment: ["walking shoes"] } },
     { session_type: "strength_c", display_name: "Office Strength C", est_duration_min: 40, status: "today",
@@ -75,7 +75,7 @@ function week(from: string) {
     today: TODAY, timezone: "America/Chicago", range_from: from, range_to: addDays(from, 6),
     days: rows.map((r, i) => {
       const d = addDays(from, i);
-      const status = from === "2026-09-16" ? r.status : d < TODAY ? "missed" : "upcoming";
+      const status = from === "2026-09-16" ? r.status : d < TODAY ? "not_done" : "upcoming";
       return planDay(d, { ...r, plan_id: 300 + i, week_num: w, status,
                           logged: from === "2026-09-16" ? r.logged ?? [] : [] });
     }),
@@ -205,9 +205,14 @@ test("Week: statuses, adjusted badge, today, past detail, navigation", async ({ 
   await expect(row("2026-09-17")).toContainText("41 min");   // YOGA-4 office flow: 40:32
   await expect(row("2026-09-18").locator(".week-status")).toHaveText("◐");
   await expect(row("2026-09-18")).toContainText("Adjusted");
-  await expect(row("2026-09-19").locator(".week-status")).toHaveText("✕");
-  await expect(row("2026-09-21")).toHaveAttribute("aria-current", "date");
-  await expect(row("2026-09-21")).toHaveClass(/week-row--today/);
+  // SESSION-OPEN: not_done (what the Lambda sends since 2026-11-10) is ○, never ✕.
+  await expect(row("2026-09-19").locator(".week-status")).toHaveText("○");
+  // EVENING-1: a date can carry two slot rows, so "today" marks the DATE
+  // header and its group, not each row.
+  const todayGroup = page.locator(".week-day-group--today");
+  await expect(todayGroup).toHaveCount(1);
+  await expect(todayGroup.locator(".week-day")).toHaveAttribute("aria-current", "date");
+  await expect(todayGroup.getByTestId("week-row-2026-09-21")).toHaveCount(1);
   await expect(row("2026-09-22").locator(".week-status")).toHaveText("•");
   await expect(page.getByRole("button", { name: /start/i })).toHaveCount(0);
 

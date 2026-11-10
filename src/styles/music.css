@@ -64,7 +64,14 @@
 
 /* The fixed bar would otherwise sit on top of the last row of content. */
 .flow-run,
-.flow-ready,
 .screen--workout {
   padding-bottom: calc(var(--tap) + var(--safe-bottom) + 16px);
+}
+/* .flow-ready also has the GD-NAV bottom bar, which is TALLER than the music
+   bar. This rule used to set the music bar's padding alone and, loading after
+   week.css, overrode the bottom bar's — so the last pose sat 8px under the bar
+   (found 2026-11-10 by e2e/nav.e2e.ts). Clear whichever is taller. */
+.flow-ready {
+  padding-bottom: max(calc(var(--bottom-bar-h) + var(--gap)),
+                      calc(var(--tap) + var(--safe-bottom) + 16px));
 }

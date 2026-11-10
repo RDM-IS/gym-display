@@ -97,6 +97,14 @@
   max-width: calc(var(--vvh, 100dvh) * 0.4 * 4 / 3);
 }
 .flow-body--figure .flow-text { flex: 1; justify-content: center; gap: 10px; }
+/* Portrait: the FIGURE gives way, never the text. MUSIC-1's fixed player
+   reserves its height at the bottom of .flow-run, and with the figure pinned
+   at 40% (flex: none from .pose-figure) the text overflowed onto the Next
+   strip — "Easier: …" drew under it mid-hold (found 2026-11-10 by
+   e2e/flow.e2e.ts). Shrinking is fixed per screen size, so nothing moves
+   during a hold. Landscape overrides this below. */
+.flow-body--figure .flow-figure { flex: 0 1 auto; min-height: 120px; }
+.flow-body--figure .flow-text { flex-shrink: 0; }
 
 /* Landscape: figure left, text right. */
 @media (orientation: landscape) and (min-width: 900px) {

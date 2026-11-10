@@ -207,6 +207,9 @@ describe("Week view", () => {
     fireEvent.click(within(screen.getByTestId("week-list")).getAllByRole("button")[1]);
     expect(screen.getByTestId("peek-day")).toBeDefined();
     expect(screen.getByTestId("plan-detail").textContent).toContain("Thu 9/24");
+    // The title is the date, not the "<date>#<plan_id>" key (rendered
+    // "undefined NaN/NaN" from EVENING-1 until 2026-11-10).
+    expect(screen.getByTestId("peek-day").querySelector(".peek-title")!.textContent).toBe("Thu 9/24");
     expect(bar()).toEqual(["Today", "Week"]);
     fireEvent.click(within(screen.getByTestId("bottom-bar")).getByRole("button", { name: "Week" }));
     expect(screen.getByTestId("peek-week")).toBeDefined();

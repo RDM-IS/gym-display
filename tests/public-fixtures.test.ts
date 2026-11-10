@@ -36,7 +36,9 @@ function walk(dir: string): string[] {
   return out;
 }
 
-const FILES = walk("tests").filter((f) => !f.endsWith("public-fixtures.test.ts"));
+// e2e/ too (2026-11-10): status.e2e.ts asserted "Weight 282.6 lb · RHR 58 bpm"
+// — in-range, and invisible to a scan that only walked tests/.
+const FILES = [...walk("tests"), ...walk("e2e")].filter((f) => !f.endsWith("public-fixtures.test.ts"));
 
 describe("no real physiology in fixtures", () => {
   it("has no weight inside the real range", () => {
@@ -64,6 +66,11 @@ describe("no real physiology in fixtures", () => {
       });
     }
     expect(bad).toEqual([]);
+  });
+
+  it("scans e2e/ as well as tests/", () => {
+    expect(FILES.some((f) => f.startsWith("e2e"))).toBe(true);
+    expect(FILES.some((f) => f.startsWith("tests"))).toBe(true);
   });
 
   it("bites on a value that would slip through", () => {
