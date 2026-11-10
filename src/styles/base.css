@@ -39,6 +39,9 @@
   --accent: #ffd166;
   --ok: #6dd58c;
   --danger: #f78b8b;
+  /* SESSION-OPEN 5a: the week counter's "tight" — distinct from --accent,
+     which is RECOMMEND's highlight. */
+  --warn: #ffa94d;
 
   color-scheme: dark;
 }
@@ -429,6 +432,16 @@ input, textarea, select { font-size: max(16px, 1rem); }
 /* SESSION-LIB — the on-demand session library */
 .library { gap: 12px; }
 .library-loc { margin: 4px 0; }
+/* SESSION-OPEN 5a: the week counter. Colour follows the quota's status. */
+.strength-counter { font-size: 20px; font-weight: 700; margin: 2px 0 8px; color: var(--fg); }
+.strength-counter--met { color: var(--ok); }
+.strength-counter--tight { color: var(--warn); }
+.strength-counter--short { color: var(--danger); }
+.strength-counter--neutral, .strength-counter--loading { color: var(--fg); }
+.strength-counter--unreadable { color: var(--fg-dim); font-weight: 500; }
+.counts-tag { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ok); margin-left: 6px; }
+.library-dayoff { color: var(--warn); }
 .library-loc-pick { flex-wrap: wrap; gap: 8px; }
 .library-list { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
 .library-item { display: flex; justify-content: space-between; align-items: center; }

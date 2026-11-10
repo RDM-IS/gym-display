@@ -74,7 +74,9 @@ export default function RestDayScreen({ plan, onNavigate, onOpenLibrary }: Props
       ) : (
         <div className="desc">Nothing scheduled in the next two weeks.</div>
       )}
-      {onOpenLibrary && !dayOff && (
+      {/* SESSION-OPEN 5a: a day off warns, it does not hide — the Sessions
+          page opens on a day off too, under its banner. */}
+      {onOpenLibrary && (
         <button type="button" className="btn" onClick={onOpenLibrary}>
           Start a session
         </button>

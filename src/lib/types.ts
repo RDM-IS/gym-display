@@ -477,6 +477,9 @@ export interface StrengthQuota {
   needed: number | null;
   days_left: number | null;
   status: StrengthQuotaStatus | null;
+  /** SESSION-OPEN 5a: STRENGTH_DAY_TYPES as the Lambda serves it — the buttons
+   *  tagged "counts". Optional: an older Lambda doesn't send it. */
+  strength_day_types?: string[];
 }
 
 // ---------------------------------------------------------------------------

@@ -80,7 +80,7 @@ describe("LibraryScreen", () => {
   it("flags a stale library", async () => {
     stubLibrary({ ...LIB, stale: true, generated_on: "2027-03-01" });
     render(<LibraryScreen onLaunch={() => {}} />);
-    await waitFor(() => expect(screen.getByText(/Built for 2027-03-01, not today/)).toBeDefined());
+    await waitFor(() => expect(screen.getByText(/Built for 2027-03-01 — send "rebuild sessions" to Artemis/)).toBeDefined());
   });
 });
 
@@ -201,8 +201,8 @@ describe("makeup (MAKEUP-2)", () => {
   });
 });
 
-describe("day off (PAIN-1)", () => {
-  it("offers only mobility and no makeup", async () => {
+describe("day off (PAIN-1, SESSION-OPEN 5a: warns, never hides)", () => {
+  it("shows every session under the banner, and still no makeup", async () => {
     stubLibrary({ ...LIB,
       locations: [{ key: "office", display: "office gym", sessions: [
         { ...SESSION } as never,
@@ -213,9 +213,11 @@ describe("day off (PAIN-1)", () => {
                  session_type: "strength_a", display_name: "Test A" } } });
     render(<LibraryScreen onLaunch={() => {}} dayOff />);
     await waitFor(() => screen.getByText("Test Mobility"));
-    expect(screen.queryByText("Test Core")).toBeNull();
+    expect(screen.getByText("Test Core")).toBeDefined();          // not filtered to mobility
+    expect(screen.getByTestId("quick-start")).toBeDefined();      // QuickStart not hidden
     expect(screen.queryByText(/Make up/)).toBeNull();
-    expect(screen.getByText(/gentle mobility only/)).toBeDefined();
+    expect(screen.getByTestId("day-off-banner").textContent)
+      .toBe("Day off from the check-in — gentle mobility suggested.");
   });
 });
 
