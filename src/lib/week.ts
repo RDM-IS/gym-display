@@ -50,7 +50,10 @@ export function dayLabel(iso: string): string {
 export const STATUS_ICONS: Record<PlanDayStatus, { icon: string; label: string }> = {
   done: { icon: "✓", label: "Done" },
   partial: { icon: "◐", label: "Partial" },
-  missed: { icon: "✕", label: "Missed" },
+  not_done: { icon: "○", label: "Not done" },
+  skipped: { icon: "–", label: "Skipped" },
+  // Pre-SESSION-OPEN Lambda only; shown neutrally, like not_done.
+  missed: { icon: "○", label: "Not done" },
   upcoming: { icon: "•", label: "Upcoming" },
   today: { icon: "•", label: "Today" },
 };

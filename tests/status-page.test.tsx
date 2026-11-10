@@ -182,7 +182,7 @@ describe("labels", () => {
     render(<WeekSection data={OV} onOpen={() => {}} />);
     expect(screen.getByTestId("st-tile-2026-09-16").textContent).toContain("✓");
     expect(screen.getByTestId("st-tile-2026-09-17").textContent).toContain("◐");
-    expect(screen.getByTestId("st-tile-2026-09-19").textContent).toContain("✕");
+    expect(screen.getByTestId("st-tile-2026-09-19").textContent).toContain("○");
     expect(screen.getByTestId("st-tile-2026-09-22").textContent).toContain("•");
     expect(screen.getByTestId("st-tile-2026-09-18").textContent).toContain("Adjusted");
     // EVENING-1: the DATE now heads the group, so today is marked on the day

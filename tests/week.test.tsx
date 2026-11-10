@@ -63,7 +63,10 @@ describe("week math", () => {
   it("status icons", () => {
     expect(statusIcon("done")).toEqual({ icon: "✓", label: "Done" });
     expect(statusIcon("partial")).toEqual({ icon: "◐", label: "Partial" });
-    expect(statusIcon("missed")).toEqual({ icon: "✕", label: "Missed" });
+    expect(statusIcon("not_done")).toEqual({ icon: "○", label: "Not done" });
+    expect(statusIcon("skipped")).toEqual({ icon: "–", label: "Skipped" });
+    // SESSION-OPEN: an older Lambda's "missed" is shown neutrally, like not_done.
+    expect(statusIcon("missed")).toEqual(statusIcon("not_done"));
     expect(statusIcon("upcoming")).toEqual({ icon: "•", label: "Upcoming" });
     expect(statusIcon("today").icon).toBe("•");
   });
@@ -151,7 +154,7 @@ function weekPayload(url: string): PlanRangeResponse {
   const days = weekDates(from).map((d, i) => day(d, {
     plan_id: 200 + i,
     week_num: from >= "2026-10-28" ? 7 : 1,
-    status: d < "2026-09-21" ? (i === 0 ? "done" : "missed") : d === "2026-09-21" ? "today" : "upcoming",
+    status: d < "2026-09-21" ? (i === 0 ? "done" : "not_done") : d === "2026-09-21" ? "today" : "upcoming",
     adjusted: d === "2026-09-18",
   }));
   return resp("2026-09-21", days);
@@ -186,7 +189,7 @@ describe("Week view", () => {
     expect(dayText(0)).toContain("Wed 9/16");
     expect(rows[0].textContent).not.toContain("Wed 9/16");   // the date is not repeated per slot
     expect(rows[0].textContent).toContain("✓");
-    expect(rows[1].textContent).toContain("✕");
+    expect(rows[1].textContent).toContain("○");
     expect(rows[2].textContent).toContain("Adjusted");
     expect(within(list.children[5] as HTMLElement).getByText("Mon 9/21")
       .getAttribute("aria-current")).toBe("date");
