@@ -480,7 +480,20 @@ export interface StrengthQuota {
   /** SESSION-OPEN 5a: STRENGTH_DAY_TYPES as the Lambda serves it — the buttons
    *  tagged "counts". Optional: an older Lambda doesn't send it. */
   strength_day_types?: string[];
+  /** STATUS-3 phase 2 — feasibility (Mon–Sun goal weeks). Optional: an older
+   *  Lambda doesn't send them, and the grid then falls back to the plan. */
+  counted?: boolean | null;
+  away?: boolean | null;
+  capacity?: number | null;
+  /** The remaining strength days placed as LATE as feasible; [0] is the real
+   *  last chance. */
+  placements?: string[];
+  last_chance?: string | null;
+  urgency?: Record<string, Urgency>;
+  blocked_days?: string[];
 }
+
+export type Urgency = "red" | "orange";
 
 // ---------------------------------------------------------------------------
 // POST /api/health/log — write path
@@ -943,6 +956,23 @@ export interface GridInfo {
   end: string | null;
   days: PlanDay[];
   burn: BurnInfo[];
+  /** STATUS-3 phase 2: each grid date's day type and location, from the same
+   *  cycle the box reads. Optional for an older Lambda. */
+  cycle?: GridDay[];
+  cycle_section?: SectionStatus;
+  /** One strength quota per goal week the grid touches, in date order. */
+  quotas?: StrengthQuota[];
+}
+
+/** ENUM-EXPAND: mirrors knowledge/cycle_days.DAY_TYPES. */
+export type CycleDayType = "msp_work" | "msp_home" | "wi" | "travel";
+
+export interface GridDay {
+  date: string;
+  day_type: CycleDayType;
+  /** cycle location key: office | msp_home | richfield | brown_deer | outside … */
+  location: string;
+  away: boolean;
 }
 
 export interface CardioWeek {

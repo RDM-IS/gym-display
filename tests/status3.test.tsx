@@ -47,11 +47,12 @@ describe("grid columns", () => {
     expect(fromMonday.some((c) => c.weekBreak)).toBe(false);
   });
 
-  it("splits morning and evening rows", () => {
+  it("splits morning and evening rows; the Evening row shows mandatory items only", () => {
     const sat = cols[1];
     expect(sat.morning?.name).toBe("Adjusting ladder");
-    expect(sat.evening?.name).toBe("Recovery flow");
-    expect(cols[3].evening?.name).toBe("Recovery flow");
+    // Phase 2, amendment 1: Recovery Flow never fills the Evening row.
+    expect(sat.evening).toBeNull();
+    expect(cols[3].evening).toBeNull();
     expect(cols[4].evening).toBeNull();
   });
 
