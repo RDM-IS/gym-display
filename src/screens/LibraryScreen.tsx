@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchLibrary, fetchRecommend, fetchStrengthNext, postMakeup, type Recommendation } from "../lib/api";
+import { fetchLibrary, fetchRecommend, fetchStrengthNext, postMakeup, type FetchStatusResult,
+         type Recommendation } from "../lib/api";
 import { ADHOC_PLAN_ID } from "../lib/adhoc";
 import { STRENGTH_TYPES, strengthLabel } from "../lib/format";
+import { counterView, countsTypes } from "../lib/strengthCounter";
 import type { LibraryLocation, LibraryResponse, LibrarySession, Plan } from "../lib/types";
 
 // ---------------------------------------------------------------------------
@@ -19,10 +21,13 @@ interface Props {
   onLaunch: (plan: Plan, sessionType: string) => void;
   /** MAKEUP-2: today's rest row is now the made-up session — go run it. */
   onMadeUp?: () => void;
-  /** PAIN-1: today is a check-in day off — only gentle mobility is offered.
-   * Read live from today's row: the library is built at 00:20, before the
-   * check-in could have made the day a day off. */
+  /** PAIN-1: today is a check-in day off. SESSION-OPEN 5a: it warns, it does
+   * not hide — every session stays launchable under a banner. Read live from
+   * today's row: the library may have been built before the check-in. */
   dayOff?: boolean;
+  /** SESSION-OPEN 5a: App's one /status read (null while loading). The week
+   * counter and the "counts" tags both come from its `strength_quota`. */
+  status?: FetchStatusResult | null;
   /** ROW-CIRCUIT: open the rower circuit. Absent = not offered. */
   onOpenRowCircuit?: () => void;
   /** ROW-LADDER: open the rower-only ladder. */
@@ -35,9 +40,6 @@ interface Props {
  * leaves out strength, which only the Strength button opens. */
 /** On a Start button, so not repeated under More. */
 const ON_A_BUTTON = new Set(["recovery_flow", "yoga_strength"]);
-
-/** On a pain day off, only these extras. */
-const DAY_OFF_TYPES = new Set(["mobility"]);
 
 function dayName(iso: string): string {
   const d = new Date(`${iso}T12:00:00`);
@@ -64,8 +66,10 @@ export function planFromLibrary(s: LibrarySession, today: string): Plan {
   };
 }
 
-export default function LibraryScreen({ onLaunch, onMadeUp, dayOff = false, onOpenRowCircuit, onOpenRowLadder,
-                                       onOpenLadder }: Props) {
+export default function LibraryScreen({ onLaunch, onMadeUp, dayOff = false, status = null, onOpenRowCircuit,
+                                       onOpenRowLadder, onOpenLadder }: Props) {
+  const counter = counterView(status);
+  const counts = countsTypes(status);
   const [nextStrength, setNextStrength] = useState<string | null>(null);
   const [strengthErr, setStrengthErr] = useState<string | null>(null);
   const [rec, setRec] = useState<Recommendation | null>(null);
@@ -129,6 +133,10 @@ export default function LibraryScreen({ onLaunch, onMadeUp, dayOff = false, onOp
   return (
     <div className="screen screen--scroll library">
       <div className="h1">Start a session</div>
+      <div className={`strength-counter strength-counter--${counter.tone}`} data-testid="strength-counter"
+           data-tone={counter.tone} role="status">
+        {counter.text}
+      </div>
       {data.makeup?.offer && !dayOff && (
         <div className="log-card library-makeup">
           <div className="log-card-name">Make up {data.makeup.offer.display_name}</div>
@@ -164,7 +172,9 @@ export default function LibraryScreen({ onLaunch, onMadeUp, dayOff = false, onOp
         </p>
       )}
       {dayOff && (
-        <p className="desc">Day off from the check-in — gentle mobility only today.</p>
+        <p className="desc library-dayoff" data-testid="day-off-banner">
+          Day off from the check-in — gentle mobility suggested.
+        </p>
       )}
       <div className="library-loc">
         <button
@@ -193,10 +203,10 @@ export default function LibraryScreen({ onLaunch, onMadeUp, dayOff = false, onOp
       )}
       {data.stale && (
         <p className="desc dim">
-          Built for {data.generated_on}, not today — the program week may have moved.
+          Built for {data.generated_on} — send "rebuild sessions" to Artemis.
         </p>
       )}
-      {location && !dayOff && (
+      {location && (
         <QuickStart
           // RECOMMEND: only for TODAY'S room -- a highlight on a room he has
           // picked for this launch only would be a recommendation for a day
@@ -204,7 +214,7 @@ export default function LibraryScreen({ onLaunch, onMadeUp, dayOff = false, onOp
           rec={isToday && rec?.available ? rec : null}
           location={location} today={data.today} nextStrength={nextStrength} strengthErr={strengthErr}
           onLaunch={onLaunch} onOpenRowCircuit={onOpenRowCircuit} onOpenRowLadder={onOpenRowLadder}
-          onOpenLadder={onOpenLadder}
+          onOpenLadder={onOpenLadder} counts={counts}
         />
       )}
       <h3 className="section-title library-extras-title">More</h3>
@@ -215,8 +225,7 @@ export default function LibraryScreen({ onLaunch, onMadeUp, dayOff = false, onOp
       ) : (
         <div className="library-list">
           {location.sessions.filter((s) => !STRENGTH_TYPES.has(s.session_type)
-                                  && (dayOff || !ON_A_BUTTON.has(s.session_type)))
-            .filter((s) => !dayOff || DAY_OFF_TYPES.has(s.session_type)).map((s) => (
+                                  && !ON_A_BUTTON.has(s.session_type)).map((s) => (
             <button
               key={s.session_type}
               type="button"
@@ -225,6 +234,7 @@ export default function LibraryScreen({ onLaunch, onMadeUp, dayOff = false, onOp
               onClick={() => onLaunch(planFromLibrary(s, data.today), s.session_type)}
             >
               <span className="library-name">{s.display_name}</span>
+              <CountsTag type={s.session_type} counts={counts} />
               {s.est_duration_min ? <span className="library-min mono">{s.est_duration_min} min</span> : null}
             </button>
           ))}
@@ -251,12 +261,19 @@ export default function LibraryScreen({ onLaunch, onMadeUp, dayOff = false, onOp
 // standing next to the machine.
 // ---------------------------------------------------------------------------
 
+/** SESSION-OPEN 5a: a button whose session type is in the Lambda's
+ * STRENGTH_DAY_TYPES is tagged — doing it moves the week counter. */
+function CountsTag({ type, counts }: { type: string; counts: ReadonlySet<string> }) {
+  return counts.has(type) ? <span className="counts-tag" data-testid="counts-tag">counts</span> : null;
+}
+
 function QuickStart({ rec, location, today, nextStrength, strengthErr, onLaunch, onOpenRowCircuit,
-                      onOpenRowLadder, onOpenLadder }: {
+                      onOpenRowLadder, onOpenLadder, counts }: {
   rec: Recommendation | null;
   location: LibraryLocation; today: string; nextStrength: string | null; strengthErr: string | null;
   onLaunch: Props["onLaunch"]; onOpenRowCircuit?: () => void; onOpenRowLadder?: () => void;
   onOpenLadder?: (kind: "ride" | "run") => void;
+  counts: ReadonlySet<string>;
 }) {
   const find = (t: string) => location.sessions.find((s) => s.session_type === t) ?? null;
   const strength = nextStrength ? find(nextStrength) : null;
@@ -287,7 +304,8 @@ function QuickStart({ rec, location, today, nextStrength, strengthErr, onLaunch,
         )}
         {onOpenRowCircuit && (
           <button type="button" className={cls("row_circuit")} data-testid="quick-row-circuit" onClick={onOpenRowCircuit}>
-            <span className="quick-name">Row + floor</span>{tag("row_circuit")}<span className="quick-sub">circuit</span>
+            <span className="quick-name">Row + floor</span>{tag("row_circuit")}
+            <CountsTag type="row_circuit" counts={counts} /><span className="quick-sub">circuit</span>
           </button>
         )}
         {onOpenLadder && (
@@ -305,6 +323,7 @@ function QuickStart({ rec, location, today, nextStrength, strengthErr, onLaunch,
         {strength ? (
           <button type="button" className={cls("strength")} data-testid="quick-strength" onClick={() => launch(strength)}>
             <span className="quick-name">{strengthLabel(strength.session_type)}</span>{tag("strength")}
+            <CountsTag type={strength.session_type} counts={counts} />
             <span className="quick-sub">next · {location.display}</span>
           </button>
         ) : hasAnyStrength && strengthErr ? (
@@ -316,6 +335,7 @@ function QuickStart({ rec, location, today, nextStrength, strengthErr, onLaunch,
           <button type="button" className={cls("bodyweight")} data-testid="quick-bodyweight"
                   onClick={() => launch(bodyweight)}>
             <span className="quick-name">Bodyweight</span>{tag("bodyweight")}
+            <CountsTag type={bodyweight.session_type} counts={counts} />
             <span className="quick-sub">
               {bodyweight.est_duration_min ? `${bodyweight.est_duration_min} min` : "full body"} · no equipment needed
             </span>
@@ -324,12 +344,14 @@ function QuickStart({ rec, location, today, nextStrength, strengthErr, onLaunch,
         {yoga && (
           <button type="button" className={cls("yoga")} data-testid="quick-yoga" onClick={() => launch(yoga)}>
             <span className="quick-name">Yoga — Intense</span>{tag("yoga")}
+            <CountsTag type={yoga.session_type} counts={counts} />
             <span className="quick-sub">{yoga.est_duration_min ? `${yoga.est_duration_min} min` : "strength & balance"}</span>
           </button>
         )}
         {recovery && (
           <button type="button" className={cls("recovery")} data-testid="quick-recovery" onClick={() => launch(recovery)}>
             <span className="quick-name">Recovery</span>{tag("recovery")}
+            <CountsTag type={recovery.session_type} counts={counts} />
             <span className="quick-sub">{recovery.est_duration_min ? `${recovery.est_duration_min} min` : "flow"}</span>
           </button>
         )}

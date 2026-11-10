@@ -210,6 +210,12 @@ export default function App() {
     void refreshStatus();
   }, [refreshPlan, refreshStatus]);
 
+  // SESSION-OPEN 5a: the Sessions page's week counter reads /status, so read
+  // it fresh on the way in — a session logged since the app opened must show.
+  useEffect(() => {
+    if (route === "library") void refreshStatus();
+  }, [route, refreshStatus]);
+
   // Keyboard-safe layout vars (--vvh / --kb-inset) + any unsynced logs a
   // previous load of this tab left behind.
   useEffect(() => {
@@ -430,6 +436,7 @@ export default function App() {
           onOpenRowLadder={() => navigate("ladder")}
           onOpenLadder={(k) => navigate(k)}
           dayOff={isDayOff(plan)}
+          status={statusLoad.loading ? null : statusLoad.result}
           onMadeUp={() => {
             // Today's row is now the session: reload it and go run it as planned work.
             autoRedirectedRef.current = true;

@@ -168,8 +168,13 @@ async function mockApi(page: Page) {
         range_from: TODAY, range_to: "2026-10-18", days: [] } });
     }
     if (path.endsWith("/status")) {
+      // SESSION-OPEN 5a: the week counter reads strength_quota from here.
+      // Synthetic: the counts list is whatever this mock serves.
       return route.fulfill({ json: { today: TODAY, timezone: "America/Chicago",
-        window_days: 14, sessions: [], checkins: [] } });
+        window_days: 14, sessions: [], checkins: [],
+        strength_quota: { section: { ok: true, reason: null }, week_start: null, week_end: null,
+          strength_days: [], count: 1, required: 3, needed: 2, days_left: 2, status: "tight",
+          strength_day_types: ["strength_full", "strength_bw", "row_circuit"] } } });
     }
     return route.fulfill({ json: {} });
   });
@@ -338,6 +343,23 @@ test.describe("Sessions: the Bodyweight button (SESSION-OPEN 3a)", () => {
       expect(overlaps(box, n), "Bodyweight sits under the nav").toBe(false);
     }
     expect(box.y + box.height).toBeLessThan(page.viewportSize()!.height);
+  });
+});
+
+test.describe("Sessions: the week counter (SESSION-OPEN 5a)", () => {
+  test("shows the count, coloured by status, clear of the nav; strength buttons say counts", async ({ page }) => {
+    await mockApi(page);
+    await page.goto("/library");
+    const c = page.getByTestId("strength-counter");
+    await expect(c).toHaveText("Strength 1 of 3 · 2 days left");
+    await expect(c).toHaveAttribute("data-tone", "tight");
+    const box = (await c.boundingBox())!;
+    for (const n of await navBoxes(page)) {
+      expect(overlaps(box, n), "the counter sits under the nav").toBe(false);
+    }
+    await expect(page.getByTestId("quick-strength").getByTestId("counts-tag")).toBeVisible();
+    await expect(page.getByTestId("quick-bodyweight").getByTestId("counts-tag")).toBeVisible();
+    await expect(page.getByTestId("quick-recovery").getByTestId("counts-tag")).toHaveCount(0);
   });
 });
 
