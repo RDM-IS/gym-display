@@ -94,7 +94,7 @@ describe("Ryan's example: week of 11/9, 0 done after Tue", () => {
 
 describe("today's cell never says 'plan done, extra' while the goal is owed", () => {
   it("names the next required session and its day", () => {
-    const days = grid(quota()).days.map((r) => r.plan_date === D(12) ? { ...r, status: "done" } : r);
+    const days = grid(quota()).days.map((r) => r.plan_date === D(12) ? ({ ...r, status: "done" } as PlanDay) : r);
     // Thursday, its own row done but not a strength day yet (synthetic): the
     // goal still needs Fri and Sun.
     const q = quota({ placements: [D(13), D(15)], last_chance: D(13), needed: 2,
@@ -107,7 +107,7 @@ describe("today's cell never says 'plan done, extra' while the goal is owed", ()
   });
 
   it("offers the extra once the goal is met and the plan is done", () => {
-    const days = grid(null).days.map((r) => r.plan_date === D(12) ? { ...r, status: "done" } : r);
+    const days = grid(null).days.map((r) => r.plan_date === D(12) ? ({ ...r, status: "done" } as PlanDay) : r);
     const q = quota({ needed: 0, count: 3, status: "met", placements: [], last_chance: null, urgency: {} });
     const c = byDate(grid(q, days), D(12));
     expect(c[D(12)].rec?.label).toBe("Extra: yoga or a light row");
