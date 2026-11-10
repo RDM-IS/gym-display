@@ -366,7 +366,10 @@ test("active pose shows its figure, mirrored per side, with no layout shift", as
     expect(later.figure.width / vp.width).toBeGreaterThan(0.35);
   } else {
     expect(later.figure.y + later.figure.height).toBeLessThanOrEqual(later.name.y);
-    expect(later.figure.height / vp.height).toBeGreaterThan(0.37);
+    // "About 40%" (YOGA-2). Since MUSIC-1's player reserves the bottom of the
+    // screen, the figure gives way so the text clears the Next strip: ~36% on
+    // an 11" iPad in portrait (2026-11-10). The floor guards against it collapsing.
+    expect(later.figure.height / vp.height).toBeGreaterThan(0.34);
     expect(later.figure.height / vp.height).toBeLessThan(0.43);
   }
   // The whole screen still fits: the cue isn't pushed off the bottom.

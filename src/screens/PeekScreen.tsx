@@ -163,7 +163,9 @@ function WeekView({ guess, onNavigate }: { guess: string; onNavigate: (t: BarTar
   if (openDay && opened) {
     return (
       <PeekFrame
-        title={dayLabel(openDay)}
+        // openDay is "<date>#<plan_id>" (EVENING-1); the title is the date alone.
+        // Passing the whole key rendered "undefined NaN/NaN".
+        title={dayLabel(openDay.split("#")[0])}
         view="day"
         testId="peek-day"
         onNavigate={(t) => (t === "week" ? setOpenDay(null) : onNavigate(t))}
