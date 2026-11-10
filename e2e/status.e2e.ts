@@ -3,7 +3,7 @@ import overview from "../tests/fixtures/overview.json" with { type: "json" };
 
 // STATUS-1 — the rebuilt Status page on iPad WebKit (landscape + portrait).
 // Fixture: a done strength day (9/16), a partial flow (9/17), an adjusted day
-// (9/18), a missed flow (9/19), pain + soreness check-ins, one pattern, flags.
+// (9/18), a not-done flow (9/19), pain + soreness check-ins, one pattern, flags.
 
 const SECTIONS = ["st-program", "st-week", "st-today", "st-strength", "st-checkins",
                   "st-patterns", "st-flags", "st-weight"];
@@ -74,7 +74,7 @@ async function expectFullyVisible(page: Page, sel: string) {
   const box = (await el.boundingBox())!;
   const bar = (await page.getByTestId("bottom-bar").boundingBox())!;
   expect(box.height).toBeGreaterThan(0);
-  expect(box.y + box.height).toBeLessThanOrEqual(bar.y + 0.5);
+  expect(box.y + box.height, `${sel} ends under the bottom bar`).toBeLessThanOrEqual(bar.y + 0.5);
   // Short elements must be wholly on screen; a tall one (the strength table)
   // must at least show its end above the bar.
   const top = (await page.getByTestId("status-page").boundingBox())!.y;
@@ -118,12 +118,17 @@ test("every section renders fully, nothing clipped, no horizontal page scroll", 
   await expect(page.getByTestId("st-tile-2026-09-16")).toContainText("✓");
   await expect(page.getByTestId("st-tile-2026-09-17")).toContainText("◐");
   await expect(page.getByTestId("st-tile-2026-09-18")).toContainText("Adjusted");
-  await expect(page.getByTestId("st-tile-2026-09-19")).toContainText("✕");
-  await expect(page.getByTestId("st-tile-2026-09-21")).toHaveAttribute("aria-current", "date");
+  // SESSION-OPEN: a past unlogged suggestion is not_done (○), never a red ✕.
+  await expect(page.getByTestId("st-tile-2026-09-19")).toContainText("○");
+  // EVENING-1: "today" marks the date header of its group, not each slot tile.
+  const todayGroup = page.locator(".st-tile-group--today");
+  await expect(todayGroup).toHaveCount(1);
+  await expect(todayGroup.locator(".st-tile-day")).toHaveAttribute("aria-current", "date");
+  await expect(todayGroup.getByTestId("st-tile-2026-09-21")).toHaveCount(1);
 
   // Today
   await expect(page.getByTestId("st-progress")).toHaveText("Sets 1 / 12");
-  await expect(page.getByTestId("st-checkin")).toContainText("Sleep 7.5 h · Energy 4/5 · Weight 282.6 lb · RHR 58 bpm");
+  await expect(page.getByTestId("st-checkin")).toContainText("Sleep 7.5 h · Energy 4/5 · Weight 342.6 lb · RHR 88 bpm");
   await expect(page.getByTestId("st-checkin")).toContainText("low back 3/5");
 
   // Layout: landscape = two columns (1–3 | 4–8); portrait = one column.
@@ -141,6 +146,10 @@ test("every section renders fully, nothing clipped, no horizontal page scroll", 
   for (const id of SECTIONS) {
     await expectFullyVisible(page, `[data-testid="${id}"] .st-body > :last-child`);
   }
+  // STATUS-2 (#47) folds the strength table into a closed <details>; open it
+  // before measuring its rows — a closed row's box is meaningless.
+  await page.getByTestId("st-strength-summary").click();
+  await expect(page.getByTestId("st-strength-details")).toHaveAttribute("open", "");
   await expectFullyVisible(page, '[data-testid="st-strength"] tbody tr');
   await expectFullyVisible(page, '[data-testid="st-flags"] li');
   await expectFullyVisible(page, '[data-testid="weight-summary"] li');
@@ -176,7 +185,8 @@ test("every section renders fully, nothing clipped, no horizontal page scroll", 
   await expect(page.getByTestId("weight-chart")).toContainText("lb");
   await expect(page.getByTestId("st-patterns")).toContainText("3 of 4 sessions");
   await expect(page.getByTestId("st-patterns")).toContainText("Last reflection 9/20");
-  await expect(page.getByTestId("st-flags")).toContainText("Missed: Recovery Flow (9/19)");
+  // SESSION-OPEN: plan rows are suggestions, so a not-done day is never flagged.
+  await expect(page.getByTestId("st-flags")).not.toContainText("Missed");
   await expect(page.getByTestId("st-flags")).toContainText("Pain chip: shoulder 2 on Incline DB press (9/18)");
   // Soreness vs pain are visually distinct.
   const kinds = await page.locator(".st-cell--pain[data-level='3'], .st-cell--sore[data-level='3']")

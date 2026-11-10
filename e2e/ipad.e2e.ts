@@ -26,13 +26,23 @@ const STRENGTH_PLAN = {
     cooldown: "5 min Stretch Trainer",
     rest_between_rounds_sec: 90,
     equipment: ["leg press", "DBs", "flat bench", "pulldown", "leg curl", "functional trainer (rope)", "captain's chair"],
+    // LOCATION-1 (2026-09-25): the ROW decides the load — every exercise
+    // carries its equipment class and the row carries the room's load config.
+    // This fixture predated that, so the logger had no class for Leg press and
+    // (correctly) offered no machine setup. Synthetic values, not a real room.
+    load_config: {
+      dumbbell: { mode: "numeric", step: 5, min: 5, max: 45 },
+      machine: { mode: "numeric", step: 10, min: 0, max: 300 },
+      cable: { mode: "numeric", step: 10, min: 0, max: 200 },
+      bodyweight: { mode: "none" },
+    },
     exercises: [
-      { name: "Leg press", format: "reps", target_reps: 12, target_load_lbs: null, rest_after_sec: 60, notes: "2×10-12; log seat + pin setting" },
-      { name: "DB bench press", format: "reps", target_reps: 12, target_load_lbs: null, rest_after_sec: 60, notes: "2×8-12" },
-      { name: "Lat pulldown", format: "reps", target_reps: 12, target_load_lbs: null, rest_after_sec: 60 },
-      { name: "Seated leg curl", format: "reps", target_reps: 12, target_load_lbs: null, rest_after_sec: 60 },
-      { name: "Cable face pull (rope)", format: "reps", target_reps: 15, target_load_lbs: null, rest_after_sec: 60 },
-      { name: "Captain's chair knee raise", format: "reps", target_reps: 12, target_load_lbs: null, rest_after_sec: 60 },
+      { name: "Leg press", format: "reps", target_reps: 12, target_load_lbs: null, rest_after_sec: 60, notes: "2×10-12; log seat + pin setting", equipment_class: "machine" },
+      { name: "DB bench press", format: "reps", target_reps: 12, target_load_lbs: null, rest_after_sec: 60, notes: "2×8-12", equipment_class: "dumbbell" },
+      { name: "Lat pulldown", format: "reps", target_reps: 12, target_load_lbs: null, rest_after_sec: 60, equipment_class: "cable" },
+      { name: "Seated leg curl", format: "reps", target_reps: 12, target_load_lbs: null, rest_after_sec: 60, equipment_class: "machine" },
+      { name: "Cable face pull (rope)", format: "reps", target_reps: 15, target_load_lbs: null, rest_after_sec: 60, equipment_class: "cable" },
+      { name: "Captain's chair knee raise", format: "reps", target_reps: 12, target_load_lbs: null, rest_after_sec: 60, equipment_class: "bodyweight" },
     ],
   },
 };
@@ -315,7 +325,10 @@ test("rest_mobility: redirects to Status; Today shows the rest-day screen", asyn
   await shot(page, "5-rest-mobility-status");
 
   await page.getByRole("link", { name: "Workout" }).tap();
-  await expect(page.getByText("See you tomorrow.")).toBeVisible();
+  // "See you tomorrow." was retired (26c8d91); the rest-day screen names the
+  // day and its mobility, and offers the Sessions page.
+  await expect(page.getByText("Mobility · 20 min")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start a session" })).toBeVisible();
   await expectSaneLayout(page);
   await shot(page, "6-rest-mobility-today");
 });
