@@ -80,6 +80,11 @@ button.sg-cell:active:not(:disabled) { transform: scale(0.97); }
 .sg-tone--yellow { border-color: rgba(255, 209, 102, 0.55); border-left: 4px solid var(--accent); }
 .sg-tone--neutral .sg-name { color: var(--fg-dim); font-weight: 600; }
 .sg-tone--muted { opacity: 0.55; }
+/* Phase 2: the Recommended row's urgency, from the strength quota. */
+.sg-tone--red { border-color: rgba(247, 139, 139, 0.7); border-left: 6px solid var(--danger);
+  background: rgba(247, 139, 139, 0.12); }
+.sg-tone--orange { border-color: rgba(255, 169, 77, 0.6); border-left: 6px solid var(--warn);
+  background: rgba(255, 169, 77, 0.08); }
 .sg-rec { background: rgba(245, 245, 245, 0.06); }
 .sg-rec--plan { background: none; }
 .sg-rec--plan .sg-name { font-weight: 600; color: var(--fg-dim); }

@@ -91,12 +91,13 @@ test("the grid: 7 columns, today highlighted, Mon–Sun divider, colours, kcal",
 
   await expect(page.getByTestId("sg-morning-2026-11-13")).toContainText("321 kcal");
   await expect(page.getByTestId("sg-morning-2026-11-13")).toHaveAttribute("data-tone", "green");
-  await expect(page.getByTestId("sg-evening-2026-11-13")).toHaveAttribute("data-tone", "muted");
+  // Phase 2, amendment 1: Recovery Flow never fills the Evening row.
+  await expect(page.getByTestId("sg-evening-2026-11-13")).toHaveClass(/sg-cell--empty/);
   await expect(page.getByTestId("sg-morning-2026-11-16")).toHaveAttribute("data-tone", "yellow");
   await expect(page.getByTestId("sg-morning-2026-11-15")).toContainText("Rest");
   await expect(page.getByTestId("sg-rec-2026-11-14")).toContainText("Row ladder");
   await expect(page.getByTestId("sg-rec-2026-11-16")).toContainText("Full body B");
-  // Phase 1 never paints urgency colours.
+  // Without the Lambda's quotas (an older Lambda) nothing is urgency-coloured.
   await expect(page.locator('[data-tone="red"], [data-tone="orange"]')).toHaveCount(0);
 
   // Every grid button is a real touch target.
@@ -151,4 +152,71 @@ test("today's Recommended cell opens Sessions", async ({ page }) => {
   await open(page);
   await page.getByTestId("sg-rec-2026-11-14").tap();
   await expect(page.getByTestId("status-grid")).toHaveCount(0);
+});
+
+// ── Phase 2 — the Recommended row follows the weekly strength goal ─────────
+
+const DAY = (date: string, day_type: string, location: string) => ({ date, day_type, location, away: false });
+const PHASE2 = {
+  ...overview,
+  grid: {
+    ...overview.grid,
+    cycle: [DAY("2026-11-13", "msp_work", "office"), DAY("2026-11-14", "msp_home", "msp_home"),
+            DAY("2026-11-15", "msp_home", "msp_home"), DAY("2026-11-16", "msp_work", "office"),
+            DAY("2026-11-17", "msp_work", "office"), DAY("2026-11-18", "msp_work", "office"),
+            DAY("2026-11-19", "msp_work", "office")],
+    cycle_section: { ok: true, reason: null },
+    quotas: [
+      { section: { ok: true, reason: null }, week_start: "2026-11-09", week_end: "2026-11-15",
+        strength_days: ["2026-11-13"], count: 1, required: 3, needed: 2, days_left: 2,
+        status: "short", counted: true, away: false, capacity: 1, placements: ["2026-11-15"],
+        last_chance: "2026-11-15", urgency: { "2026-11-15": "red" }, blocked_days: [] },
+      { section: { ok: true, reason: null }, week_start: "2026-11-16", week_end: "2026-11-22",
+        strength_days: [], count: 0, required: 3, needed: 3, days_left: 7, status: "on_track",
+        counted: true, away: false, capacity: 4,
+        placements: ["2026-11-18", "2026-11-20", "2026-11-22"], last_chance: "2026-11-18",
+        urgency: { "2026-11-18": "red", "2026-11-17": "orange" }, blocked_days: [] },
+    ],
+  },
+};
+
+test("phase 2: last chance red, the day before orange, today names the next session", async ({ page }) => {
+  await page.clock.setFixedTime(cst("05:10"));
+  await mockApi(page, PHASE2);
+  await page.goto("/status");
+  await expect(page.getByTestId("status-grid")).toBeVisible();
+  // This week: Fri done, Sat is next to it, so Sunday is the only day left -> red.
+  await expect(page.getByTestId("sg-rec-2026-11-15")).toHaveAttribute("data-tone", "red");
+  await expect(page.getByTestId("sg-rec-2026-11-15")).toContainText("Row + floor or Bodyweight");
+  // Today: never "plan done, extra" while the goal is owed.
+  await expect(page.getByTestId("sg-rec-2026-11-14")).toContainText("Next: Sun");
+  await expect(page.getByTestId("sg-rec-2026-11-14")).toContainText("Row + floor or Bodyweight");
+  await expect(page.getByTestId("sg-rec-2026-11-14")).not.toContainText("Extra");
+  // Next week: Wed is the last chance (red), Tue orange, Mon's planned lift optional.
+  await expect(page.getByTestId("sg-rec-2026-11-18")).toHaveAttribute("data-tone", "red");
+  await expect(page.getByTestId("sg-rec-2026-11-17")).toHaveAttribute("data-tone", "orange");
+  await expect(page.getByTestId("sg-rec-2026-11-16")).toHaveAttribute("data-tone", "neutral");
+  await expect(page.getByTestId("sg-rec-2026-11-16")).toContainText("Full body B");
+
+  // Still one screen with every fold closed, and every button a real target.
+  const m = await page.getByTestId("status-page").evaluate((el) => ({
+    sh: el.scrollHeight, ch: el.clientHeight,
+    doc: document.documentElement.scrollWidth - window.innerWidth,
+  }));
+  expect(m.sh, "the page scrolls with every fold closed").toBeLessThanOrEqual(m.ch + 1);
+  expect(m.doc).toBeLessThanOrEqual(0);
+  const bad = await page.getByTestId("status-grid").evaluate((g) =>
+    Array.from(g.querySelectorAll<HTMLElement>("button")).filter((b) => {
+      const r = b.getBoundingClientRect();
+      return r.width < 56 || r.height < 56 || b.scrollWidth > b.clientWidth + 1;
+    }).map((b) => b.dataset.testid));
+  expect(bad, "small or clipped grid buttons").toEqual([]);
+  // Line-clamped text clips inside the span, so the button check cannot see it:
+  // measure every name and reason in the Recommended row.
+  const cut = await page.getByTestId("status-grid").evaluate((g) =>
+    Array.from(g.querySelectorAll<HTMLElement>(".sg-rec .sg-name, .sg-rec .sg-why"))
+      .filter((e) => e.scrollHeight > e.clientHeight + 1)
+      .map((e) => e.textContent));
+  expect(cut, "truncated Recommended text").toEqual([]);
+  await shot(page, "4-phase2");
 });
